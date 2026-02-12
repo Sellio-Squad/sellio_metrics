@@ -65,7 +65,54 @@ team_metrics_dashboard/
 🎨 **Consistency**: Centralized theme and strings  
 ⚙️ **Customization**: User-configurable settings  
 
+
 ---
+
+## 🔄 Data Pipeline Architecture
+
+The metrics system operates on a separation of concerns between **Data Collection** and **Data Visualization**.
+
+```mermaid
+graph TD
+    User([Developer]) -->|Opens/Updates PR| GitHub[GitHub Repository]
+    GitHub -->|Triggers Event| Bot[Sellio Metrics Bot<br>(GitHub Action)]
+    
+    subgraph "Data Collection Layer"
+        Bot -->|Fetches Data| API[GitHub API]
+        API -- Returns PR Details --> Bot
+        Bot -->|Calculates| Metrics[Metrics Calculation]
+        Metrics -->|Updates| JSON[pr_metrics.json]
+    end
+    
+    subgraph "Storage Layer"
+        JSON -->|Committed to| Branch[metrics Branch]
+    end
+    
+    subgraph "Presentation Layer"
+        Branch -->|Served via| Pages[GitHub Pages]
+        Pages -->|Fetches JSON| Dashboard[Dashboard App]
+        Dashboard -->|Renders| UI[User Interface]
+    end
+```
+
+### How It Works
+
+1.  **Data Collection (The Bot)**
+    *   The **Sellio Metrics Bot** (a GitHub Action defined in `.github/workflows/sellio-metrics-bot.yml`) listens for PR events (open, close, review, comment).
+    *   It fetches real-time data from the GitHub API.
+    *   It calculates complex metrics like *Time to First Approval* and *Review Velocity*.
+    *   It effectively builds a "database" in the `pr_metrics.json` file.
+
+2.  **Data Storage**
+    *   The processed data is stored in `pr_metrics.json` on the orphan `metrics` branch.
+    *   This decoupling ensures the main codebase remains light and the dashboard loads quickly without hitting GitHub API rate limits directly from the client.
+
+3.  **Data Visualization (The Dashboard)**
+    *   The frontend dashboard fetches this pre-computed `pr_metrics.json`.
+    *   It uses `AnalyticsService` to aggregate and display the KPIs, Bottlenecks, and Charts.
+
+---
+
 
 ## 📊 Features
 
