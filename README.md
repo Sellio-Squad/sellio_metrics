@@ -75,7 +75,7 @@ The metrics system operates on a separation of concerns between **Data Collectio
 ```mermaid
 graph TD
     User([Developer]) -->|Opens/Updates PR| GitHub[GitHub Repository]
-    GitHub -->|Triggers Event| Bot[Sellio Metrics Bot<br>(GitHub Action)]
+    GitHub -->|Triggers Event| Bot["Sellio Metrics Bot<br>(GitHub Action)"]
     
     subgraph "Data Collection Layer"
         Bot -->|Fetches Data| API[GitHub API]
