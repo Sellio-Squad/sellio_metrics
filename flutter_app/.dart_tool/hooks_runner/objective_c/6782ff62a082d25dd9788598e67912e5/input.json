@@ -1,0 +1,12 @@
+{
+  "assets": {},
+  "config": {
+    "build_asset_types": [],
+    "linking_enabled": true
+  },
+  "out_dir_shared": "C:\\Users\\20180\\AndroidStudioProjects\\sellio_mobile\\team_metrics_dashboard\\flutter_app\\.dart_tool\\hooks_runner\\shared\\objective_c\\build\\",
+  "out_file": "C:\\Users\\20180\\AndroidStudioProjects\\sellio_mobile\\team_metrics_dashboard\\flutter_app\\.dart_tool\\hooks_runner\\objective_c\\6782ff62a082d25dd9788598e67912e5\\output.json",
+  "package_name": "objective_c",
+  "package_root": "C:\\Users\\20180\\AppData\\Local\\Pub\\Cache\\hosted\\pub.dev\\objective_c-9.2.4\\",
+  "user_defines": {}
+}
