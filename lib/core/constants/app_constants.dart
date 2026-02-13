@@ -1,9 +1,5 @@
-/// Sellio Metrics Dashboard — Application Constants
-///
-/// Centralized configuration values for thresholds, patterns, and keys.
 library;
 
-/// Bottleneck analysis thresholds
 class BottleneckConfig {
   const BottleneckConfig._();
 
@@ -13,7 +9,6 @@ class BottleneckConfig {
   static const double severityMediumMultiplier = 1.5;
 }
 
-/// Analytics configuration
 class AnalyticsConfig {
   const AnalyticsConfig._();
 
@@ -24,7 +19,6 @@ class AnalyticsConfig {
   static const double mergeTimeSlowThreshold = 1440; // minutes (24h)
 }
 
-/// PR type classification patterns
 class PrTypePatterns {
   const PrTypePatterns._();
 
@@ -40,7 +34,6 @@ class PrTypePatterns {
   };
 }
 
-/// Local storage keys
 class StorageKeys {
   const StorageKeys._();
 
@@ -49,7 +42,6 @@ class StorageKeys {
   static const String filters = 'sellio_filters';
 }
 
-/// Tab identifiers
 class AppTabs {
   const AppTabs._();
 
@@ -61,7 +53,6 @@ class AppTabs {
   static const List<String> all = [analytics, openPrs, team, settings];
 }
 
-/// PR status values
 class PrStatus {
   const PrStatus._();
 

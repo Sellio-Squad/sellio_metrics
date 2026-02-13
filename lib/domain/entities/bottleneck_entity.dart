@@ -1,6 +1,7 @@
 library;
 
-class BottleneckModel {
+/// A PR that is stuck in review too long.
+class BottleneckEntity {
   final int prNumber;
   final String title;
   final String url;
@@ -9,7 +10,7 @@ class BottleneckModel {
   final double waitTimeDays;
   final String severity; // 'low', 'medium', 'high'
 
-  const BottleneckModel({
+  const BottleneckEntity({
     required this.prNumber,
     required this.title,
     required this.url,

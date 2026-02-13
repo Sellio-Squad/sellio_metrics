@@ -4,27 +4,28 @@ library;
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_utils.dart';
-import '../../data/models/pr_model.dart';
+import '../../domain/entities/pr_entity.dart';
 
 class PrListTile extends StatelessWidget {
-  final PrModel pr;
+  final PrEntity pr;
 
   const PrListTile({super.key, required this.pr});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        color: context.isDark ? SellioColors.darkSurface : SellioColors.lightSurface,
         borderRadius: AppRadius.mdAll,
         border: Border.all(
-          color: isDark ? const Color(0xFF2E2E3E) : const Color(0xFFE5E7EB),
+          color: context.isDark ? Colors.white10 : SellioColors.gray300,
         ),
       ),
       child: Row(
@@ -43,7 +44,7 @@ class PrListTile extends StatelessWidget {
                   pr.title,
                   style: AppTypography.body.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                    color: context.isDark ? Colors.white : SellioColors.gray700,
                   ),
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
@@ -55,21 +56,21 @@ class PrListTile extends StatelessWidget {
                   children: [
                     _infoChip(
                       '#${pr.prNumber}',
-                      isDark,
+                      context.isDark,
                     ),
                     _infoChip(
                       pr.creator.login,
-                      isDark,
+                      context.isDark,
                       icon: Icons.person_outline,
                     ),
                     _infoChip(
                       formatRelativeTime(pr.openedAt),
-                      isDark,
+                      context.isDark,
                       icon: Icons.schedule,
                     ),
                     _infoChip(
                       '+${pr.diffStats.additions} / -${pr.diffStats.deletions}',
-                      isDark,
+                      context.isDark,
                       icon: Icons.code,
                     ),
                   ],
@@ -87,7 +88,7 @@ class PrListTile extends StatelessWidget {
     );
   }
 
-  Widget _infoChip(String text, bool isDark, {IconData? icon}) {
+  Widget _infoChip(String text, bool contextIsDark, {IconData? icon}) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -95,14 +96,14 @@ class PrListTile extends StatelessWidget {
           Icon(
             icon,
             size: 12,
-            color: isDark ? Colors.white38 : const Color(0xFF9CA3AF),
+            color: contextIsDark ? Colors.white38 : SellioColors.textTertiary,
           ),
           const SizedBox(width: 3),
         ],
         Text(
           text,
           style: AppTypography.caption.copyWith(
-            color: isDark ? Colors.white54 : const Color(0xFF6B7280),
+            color: contextIsDark ? Colors.white54 : SellioColors.textSecondary,
             fontSize: 11,
           ),
         ),

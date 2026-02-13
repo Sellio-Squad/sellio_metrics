@@ -1,14 +1,16 @@
 /// Sellio Metrics — Open PRs Page
 ///
 /// Lists open pull requests with search and status filtering.
+/// Uses domain entities, localized strings, and theme extension.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
-import '../../l10n/app_strings.dart';
+import '../../l10n/app_localizations.dart';
 import '../providers/dashboard_provider.dart';
 import '../widgets/pr_list_tile.dart';
 
@@ -17,7 +19,7 @@ class OpenPrsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return Consumer<DashboardProvider>(
       builder: (context, provider, _) {
@@ -33,7 +35,7 @@ class OpenPrsPage extends StatelessWidget {
                 children: [
                   Expanded(
                     child: HuxInput(
-                      hint: AppStrings.searchPlaceholder,
+                      hint: l10n.searchPlaceholder,
                       onChanged: (value) => provider.setSearchTerm(value),
                       prefixIcon: const Icon(Icons.search),
                     ),
@@ -44,36 +46,37 @@ class OpenPrsPage extends StatelessWidget {
                       horizontal: AppSpacing.md,
                     ),
                     decoration: BoxDecoration(
-                      color: isDark
-                          ? const Color(0xFF2A2A3E)
-                          : const Color(0xFFF3F4F6),
+                      color: context.isDark
+                          ? SellioColors.darkSurface
+                          : SellioColors.lightBackground,
                       borderRadius: AppRadius.mdAll,
                     ),
                     child: DropdownButton<String>(
                       value: provider.statusFilter,
-                      items: const [
+                      items: [
                         DropdownMenuItem(
                           value: 'all',
-                          child: Text('All Status'),
+                          child: Text(l10n.filterAllTime),
                         ),
                         DropdownMenuItem(
                           value: 'pending',
-                          child: Text('Pending'),
+                          child: Text(l10n.statusPending),
                         ),
                         DropdownMenuItem(
                           value: 'approved',
-                          child: Text('Approved'),
+                          child: Text(l10n.statusApproved),
                         ),
                       ],
                       onChanged: (v) =>
                           provider.setStatusFilter(v ?? 'all'),
                       underline: const SizedBox.shrink(),
-                      dropdownColor:
-                          isDark ? const Color(0xFF2A2A3E) : Colors.white,
+                      dropdownColor: context.isDark
+                          ? SellioColors.darkSurface
+                          : SellioColors.lightSurface,
                       style: AppTypography.caption.copyWith(
-                        color: isDark
+                        color: context.isDark
                             ? Colors.white
-                            : const Color(0xFF1a1a2e),
+                            : SellioColors.gray700,
                       ),
                     ),
                   ),
@@ -85,11 +88,11 @@ class OpenPrsPage extends StatelessWidget {
               Row(
                 children: [
                   Text(
-                    AppStrings.sectionOpenPrs,
+                    l10n.sectionOpenPrs,
                     style: AppTypography.title.copyWith(
-                      color: isDark
+                      color: context.isDark
                           ? Colors.white
-                          : const Color(0xFF1a1a2e),
+                          : SellioColors.gray700,
                     ),
                   ),
                   const SizedBox(width: AppSpacing.sm),
@@ -111,17 +114,17 @@ class OpenPrsPage extends StatelessWidget {
                             Icon(
                               Icons.check_circle_outline,
                               size: 48,
-                              color: isDark
+                              color: context.isDark
                                   ? Colors.white24
-                                  : const Color(0xFFD1D5DB),
+                                  : SellioColors.gray300,
                             ),
                             const SizedBox(height: AppSpacing.md),
                             Text(
-                              AppStrings.searchNoResults,
+                              l10n.searchNoResults,
                               style: AppTypography.body.copyWith(
-                                color: isDark
+                                color: context.isDark
                                     ? Colors.white38
-                                    : const Color(0xFF9CA3AF),
+                                    : SellioColors.textTertiary,
                               ),
                             ),
                           ],

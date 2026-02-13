@@ -4,25 +4,26 @@ library;
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
-import '../../data/models/bottleneck_model.dart';
+import '../../domain/entities/bottleneck_entity.dart';
 
 class BottleneckItem extends StatelessWidget {
-  final BottleneckModel bottleneck;
+  final BottleneckEntity bottleneck;
 
   const BottleneckItem({super.key, required this.bottleneck});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     final severityColor = _getSeverityColor(bottleneck.severity);
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        color: context.isDark ? SellioColors.darkSurface : SellioColors.lightSurface,
         borderRadius: AppRadius.mdAll,
         border: Border(
           left: BorderSide(color: severityColor, width: 3),
@@ -38,14 +39,14 @@ class BottleneckItem extends StatelessWidget {
                   truncateText(bottleneck.title, 60),
                   style: AppTypography.body.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                    color: context.isDark ? Colors.white : SellioColors.gray700,
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   '#${bottleneck.prNumber} by ${bottleneck.author}',
                   style: AppTypography.caption.copyWith(
-                    color: isDark ? Colors.white54 : const Color(0xFF9CA3AF),
+                    color: context.isDark ? Colors.white54 : SellioColors.textTertiary,
                   ),
                 ),
               ],

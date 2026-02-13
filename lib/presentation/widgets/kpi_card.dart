@@ -4,6 +4,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 
 class KpiCard extends StatelessWidget {
@@ -24,10 +25,9 @@ class KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark
-        ? const Color(0xFF1E1E2E)
-        : Colors.white;
+    final cardColor = context.isDark
+        ? SellioColors.darkSurface
+        : SellioColors.lightSurface;
 
     return HuxCard(
       child: Container(
@@ -41,7 +41,7 @@ class KpiCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: accentColor.withValues(alpha: isDark ? 0.1 : 0.05),
+              color: accentColor.withValues(alpha: context.isDark ? 0.1 : 0.05),
               blurRadius: 20,
               offset: const Offset(0, 4),
             ),
@@ -63,16 +63,16 @@ class KpiCard extends StatelessWidget {
             Text(
               value,
               style: AppTypography.kpiValue.copyWith(
-                color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                color: context.isDark ? Colors.white : SellioColors.gray700,
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               label,
               style: AppTypography.caption.copyWith(
-                color: isDark
+                color: context.isDark
                     ? Colors.white70
-                    : const Color(0xFF6B7280),
+                    : SellioColors.textSecondary,
               ),
             ),
             if (subtitle != null) ...[

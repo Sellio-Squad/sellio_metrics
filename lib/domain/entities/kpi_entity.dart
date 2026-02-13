@@ -1,6 +1,8 @@
+/// Sellio Metrics — KPI Domain Entities
 library;
 
-class KpiModel {
+/// Computed KPI metrics.
+class KpiEntity {
   final int totalPrs;
   final int mergedPrs;
   final int closedPrs;
@@ -11,7 +13,7 @@ class KpiModel {
   final String avgApprovalTime;
   final String avgLifespan;
 
-  const KpiModel({
+  const KpiEntity({
     required this.totalPrs,
     required this.mergedPrs,
     required this.closedPrs,
@@ -25,8 +27,7 @@ class KpiModel {
 
   String get avgPrSize => '+$avgAdditions / -$avgDeletions';
 
-  double get mergeRate =>
-      totalPrs > 0 ? (mergedPrs / totalPrs) * 100 : 0;
+  double get mergeRate => totalPrs > 0 ? (mergedPrs / totalPrs) * 100 : 0;
 }
 
 /// Spotlight metric (hot streak, fastest reviewer, etc.)
@@ -43,12 +44,12 @@ class SpotlightMetric {
 }
 
 /// Spotlight metrics collection.
-class SpotlightModel {
+class SpotlightEntity {
   final SpotlightMetric? hotStreak;
   final SpotlightMetric? fastestReviewer;
   final SpotlightMetric? topCommenter;
 
-  const SpotlightModel({
+  const SpotlightEntity({
     this.hotStreak,
     this.fastestReviewer,
     this.topCommenter,

@@ -3,8 +3,9 @@ library;
 
 import 'package:flutter/material.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/kpi_model.dart';
+import '../../domain/entities/kpi_entity.dart';
 
 class SpotlightCard extends StatelessWidget {
   final String title;
@@ -22,15 +23,15 @@ class SpotlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [
-            accentColor.withValues(alpha: isDark ? 0.15 : 0.08),
-            accentColor.withValues(alpha: isDark ? 0.05 : 0.02),
+            accentColor.withValues(alpha: context.isDark ? 0.15 : 0.08),
+            accentColor.withValues(alpha: context.isDark ? 0.05 : 0.02),
           ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -62,21 +63,21 @@ class SpotlightCard extends StatelessWidget {
             Text(
               metric!.user,
               style: AppTypography.subtitle.copyWith(
-                color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                color: context.isDark ? Colors.white : SellioColors.gray700,
               ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               metric!.label,
               style: AppTypography.caption.copyWith(
-                color: isDark ? Colors.white54 : const Color(0xFF6B7280),
+                color: context.isDark ? Colors.white54 : SellioColors.textSecondary,
               ),
             ),
           ] else
             Text(
               'No data',
               style: AppTypography.caption.copyWith(
-                color: isDark ? Colors.white38 : const Color(0xFF9CA3AF),
+                color: context.isDark ? Colors.white38 : SellioColors.textTertiary,
               ),
             ),
         ],

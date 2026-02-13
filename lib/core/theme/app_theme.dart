@@ -1,11 +1,6 @@
-/// Sellio Metrics Dashboard — App Theme Configuration
-///
-/// Extends Hux theme with Sellio brand colors and custom design tokens.
 library;
-
 import 'package:flutter/material.dart';
 
-/// Sellio brand color palette
 class SellioColors {
   const SellioColors._();
 
@@ -13,6 +8,21 @@ class SellioColors {
   static const Color primaryIndigo = Color(0xFF4F46E5);
   static const Color primaryPurple = Color(0xFF7C3AED);
   static const Color primaryViolet = Color(0xFF8B5CF6);
+
+  // Backgrounds
+  static const Color darkBackground = Color(0xFF12121A);
+  static const Color lightBackground = Color(0xFFF5F5F7);
+  static const Color darkSurface = Color(0xFF1A1A2E);
+  static const Color lightSurface = Color(0xFFFFFFFF);
+
+  // Text
+  static const Color textSecondary = Color(0xFF6B7280);
+  static const Color textTertiary = Color(0xFF9CA3AF);
+
+  // Grays
+  static const Color gray300 = Color(0xFFD1D5DB);
+  static const Color gray500 = Color(0xFF6B7280);
+  static const Color gray700 = Color(0xFF374151);
 
   // Semantic colors
   static const Color success = Color(0xFF10B981);
@@ -126,9 +136,21 @@ class AppTypography {
     fontWeight: FontWeight.w500,
   );
 
+  static const TextStyle heading = TextStyle(
+    fontSize: 24,
+    fontWeight: FontWeight.w700,
+    letterSpacing: -0.5,
+  );
+
   static const TextStyle kpiValue = TextStyle(
     fontSize: 32,
     fontWeight: FontWeight.w800,
     letterSpacing: -1,
+  );
+
+  static const TextStyle overline = TextStyle(
+    fontSize: 10,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.5,
   );
 }

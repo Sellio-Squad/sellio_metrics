@@ -4,8 +4,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/collaboration_model.dart';
+import '../../domain/entities/collaboration_entity.dart';
 
 class LeaderboardCard extends StatelessWidget {
   final List<LeaderboardEntry> entries;
@@ -14,15 +15,15 @@ class LeaderboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        color: context.isDark ? SellioColors.darkSurface : SellioColors.lightSurface,
         borderRadius: AppRadius.lgAll,
         border: Border.all(
-          color: isDark ? const Color(0xFF2E2E3E) : const Color(0xFFE5E7EB),
+          color: context.isDark ? Colors.white10 : SellioColors.gray300,
         ),
       ),
       child: Column(
@@ -35,7 +36,7 @@ class LeaderboardCard extends StatelessWidget {
               Text(
                 'Leaderboard',
                 style: AppTypography.title.copyWith(
-                  color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                  color: context.isDark ? Colors.white : SellioColors.gray700,
                 ),
               ),
             ],
@@ -44,7 +45,7 @@ class LeaderboardCard extends StatelessWidget {
           ...entries.asMap().entries.map((entry) {
             final index = entry.key;
             final item = entry.value;
-            return _buildRow(context, index, item, isDark);
+            return _buildRow(context, index, item);
           }),
         ],
       ),
@@ -55,7 +56,6 @@ class LeaderboardCard extends StatelessWidget {
     BuildContext context,
     int index,
     LeaderboardEntry entry,
-    bool isDark,
   ) {
     final medals = ['🥇', '🥈', '🥉'];
     final medal = index < 3 ? medals[index] : '${index + 1}';
@@ -70,7 +70,7 @@ class LeaderboardCard extends StatelessWidget {
               medal,
               style: TextStyle(
                 fontSize: index < 3 ? 18 : 14,
-                color: isDark ? Colors.white54 : const Color(0xFF6B7280),
+                color: context.isDark ? Colors.white54 : SellioColors.textSecondary,
               ),
               textAlign: TextAlign.center,
             ),
@@ -86,13 +86,13 @@ class LeaderboardCard extends StatelessWidget {
                   entry.developer,
                   style: AppTypography.body.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                    color: context.isDark ? Colors.white : SellioColors.gray700,
                   ),
                 ),
                 Text(
                   '${entry.prsCreated} PRs · ${entry.reviewsGiven} reviews · ${entry.commentsGiven} comments',
                   style: AppTypography.caption.copyWith(
-                    color: isDark ? Colors.white38 : const Color(0xFF9CA3AF),
+                    color: context.isDark ? Colors.white38 : SellioColors.textTertiary,
                     fontSize: 11,
                   ),
                 ),

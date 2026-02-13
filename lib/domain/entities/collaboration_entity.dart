@@ -1,5 +1,7 @@
+/// Sellio Metrics — Collaboration Domain Entities
 library;
 
+/// A paired collaboration between a reviewer and their collaborators.
 class CollaborationPair {
   final String reviewer;
   final int totalReviews;
@@ -12,6 +14,7 @@ class CollaborationPair {
   });
 }
 
+/// Review load entry for an individual developer.
 class ReviewLoadEntry {
   final String developer;
   final int reviewsGiven;
@@ -26,6 +29,7 @@ class ReviewLoadEntry {
   });
 }
 
+/// Leaderboard entry for an individual developer.
 class LeaderboardEntry {
   final String developer;
   final int prsCreated;
