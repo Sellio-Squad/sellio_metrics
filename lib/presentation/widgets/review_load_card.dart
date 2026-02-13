@@ -4,8 +4,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
-import '../../data/models/collaboration_model.dart';
+import '../../domain/entities/collaboration_entity.dart';
 
 class ReviewLoadCard extends StatelessWidget {
   final List<ReviewLoadEntry> entries;
@@ -14,15 +15,15 @@ class ReviewLoadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        color: context.isDark ? SellioColors.darkSurface : SellioColors.lightSurface,
         borderRadius: AppRadius.lgAll,
         border: Border.all(
-          color: isDark ? const Color(0xFF2E2E3E) : const Color(0xFFE5E7EB),
+          color: context.isDark ? Colors.white10 : SellioColors.gray300,
         ),
       ),
       child: Column(
@@ -35,19 +36,19 @@ class ReviewLoadCard extends StatelessWidget {
               Text(
                 'Review Load',
                 style: AppTypography.title.copyWith(
-                  color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                  color: context.isDark ? Colors.white : SellioColors.gray700,
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          ...entries.take(8).map((entry) => _buildRow(context, entry, isDark)),
+          ...entries.take(8).map((entry) => _buildRow(context, entry)),
         ],
       ),
     );
   }
 
-  Widget _buildRow(BuildContext context, ReviewLoadEntry entry, bool isDark) {
+  Widget _buildRow(BuildContext context, ReviewLoadEntry entry) {
     final maxReviews = entries.isNotEmpty
         ? entries.map((e) => e.reviewsGiven).reduce((a, b) => a > b ? a : b)
         : 1;
@@ -70,13 +71,13 @@ class ReviewLoadCard extends StatelessWidget {
                       entry.developer,
                       style: AppTypography.caption.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                        color: context.isDark ? Colors.white : SellioColors.gray700,
                       ),
                     ),
                     Text(
                       '${entry.reviewsGiven} reviews',
                       style: AppTypography.caption.copyWith(
-                        color: isDark ? Colors.white54 : const Color(0xFF6B7280),
+                        color: context.isDark ? Colors.white54 : SellioColors.textSecondary,
                         fontSize: 11,
                       ),
                     ),

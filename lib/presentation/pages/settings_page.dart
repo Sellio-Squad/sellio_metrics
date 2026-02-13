@@ -1,23 +1,25 @@
 /// Sellio Metrics — Settings Page
 ///
-/// Configuration panel for thresholds, theme, and notifications.
+/// Configuration panel for thresholds, theme, locale, and about info.
+/// Uses AppSettingsProvider instead of ThemeProvider, localized strings.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
-import '../../l10n/app_strings.dart';
+import '../../l10n/app_localizations.dart';
 import '../providers/dashboard_provider.dart';
-import '../providers/theme_provider.dart';
+import '../providers/app_settings_provider.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -25,50 +27,56 @@ class SettingsPage extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            AppStrings.navSettings,
+            l10n.navSettings,
             style: AppTypography.headline.copyWith(
-              color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+              color: context.isDark ? Colors.white : SellioColors.gray700,
             ),
           ),
           const SizedBox(height: AppSpacing.xxl),
 
-          // Theme Settings
+          // Appearance
           _buildSection(
             context,
-            title: 'Appearance',
+            title: l10n.settingsTheme,
             icon: Icons.palette_outlined,
-            isDark: isDark,
             children: [
-              _buildThemeToggle(context, isDark),
+              _buildThemeToggle(context, l10n),
             ],
           ),
-
           const SizedBox(height: AppSpacing.xl),
 
-          // Bottleneck Settings
+          // Language
           _buildSection(
             context,
-            title: 'Bottleneck Analysis',
+            title: l10n.settingsLanguage,
+            icon: Icons.translate,
+            children: [
+              _buildLanguageToggle(context, l10n),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xl),
+
+          // Bottleneck Analysis
+          _buildSection(
+            context,
+            title: l10n.settingsThreshold,
             icon: Icons.warning_amber_outlined,
-            isDark: isDark,
             children: [
-              _buildThresholdSlider(context, isDark),
+              _buildThresholdSlider(context, l10n),
             ],
           ),
-
           const SizedBox(height: AppSpacing.xl),
 
-          // About Section
+          // About
           _buildSection(
             context,
-            title: 'About',
+            title: l10n.navAbout,
             icon: Icons.info_outline,
-            isDark: isDark,
             children: [
-              _buildInfoRow('Version', '3.0.0', isDark),
-              _buildInfoRow('UI Framework', 'Hux v0.25.0', isDark),
-              _buildInfoRow('Built with', 'Flutter Web', isDark),
-              _buildInfoRow('Data Source', 'pr_metrics.json (CI Bot)', isDark),
+              _buildInfoRow(context, 'Version', '3.0.0'),
+              _buildInfoRow(context, 'UI Framework', 'Hux v0.25.0'),
+              _buildInfoRow(context, 'Built with', 'Flutter Web'),
+              _buildInfoRow(context, 'Data Source', 'pr_metrics.json (CI Bot)'),
             ],
           ),
         ],
@@ -80,16 +88,17 @@ class SettingsPage extends StatelessWidget {
     BuildContext context, {
     required String title,
     required IconData icon,
-    required bool isDark,
     required List<Widget> children,
   }) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+        color: context.isDark
+            ? SellioColors.darkSurface
+            : SellioColors.lightSurface,
         borderRadius: AppRadius.lgAll,
         border: Border.all(
-          color: isDark ? const Color(0xFF2E2E3E) : const Color(0xFFE5E7EB),
+          color: context.isDark ? Colors.white10 : SellioColors.gray300,
         ),
       ),
       child: Column(
@@ -102,7 +111,7 @@ class SettingsPage extends StatelessWidget {
               Text(
                 title,
                 style: AppTypography.subtitle.copyWith(
-                  color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+                  color: context.isDark ? Colors.white : SellioColors.gray700,
                 ),
               ),
             ],
@@ -114,21 +123,23 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildThemeToggle(BuildContext context, bool isDark) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, _) {
+  Widget _buildThemeToggle(BuildContext context, AppLocalizations l10n) {
+    return Consumer<AppSettingsProvider>(
+      builder: (context, settings, _) {
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              AppStrings.settingsTheme,
+              l10n.settingsTheme,
               style: AppTypography.body.copyWith(
-                color: isDark ? Colors.white70 : const Color(0xFF374151),
+                color: context.isDark
+                    ? Colors.white70
+                    : SellioColors.textSecondary,
               ),
             ),
             HuxSwitch(
-              value: themeProvider.isDark,
-              onChanged: (_) => themeProvider.toggleTheme(),
+              value: settings.isDarkMode,
+              onChanged: (_) => settings.toggleTheme(),
             ),
           ],
         );
@@ -136,7 +147,31 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildThresholdSlider(BuildContext context, bool isDark) {
+  Widget _buildLanguageToggle(BuildContext context, AppLocalizations l10n) {
+    return Consumer<AppSettingsProvider>(
+      builder: (context, settings, _) {
+        return Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              settings.locale.languageCode == 'ar' ? 'العربية' : 'English',
+              style: AppTypography.body.copyWith(
+                color: context.isDark
+                    ? Colors.white70
+                    : SellioColors.textSecondary,
+              ),
+            ),
+            HuxSwitch(
+              value: settings.locale.languageCode == 'ar',
+              onChanged: (_) => settings.toggleLocale(),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildThresholdSlider(BuildContext context, AppLocalizations l10n) {
     return Consumer<DashboardProvider>(
       builder: (context, provider, _) {
         return Column(
@@ -146,9 +181,11 @@ class SettingsPage extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  AppStrings.settingsThreshold,
+                  l10n.settingsThreshold,
                   style: AppTypography.body.copyWith(
-                    color: isDark ? Colors.white70 : const Color(0xFF374151),
+                    color: context.isDark
+                        ? Colors.white70
+                        : SellioColors.textSecondary,
                   ),
                 ),
                 Container(
@@ -157,7 +194,7 @@ class SettingsPage extends StatelessWidget {
                     vertical: AppSpacing.xs,
                   ),
                   decoration: BoxDecoration(
-                    color: SellioColors.primaryIndigo.withValues(alpha: 0.1),
+                    color: SellioColors.primaryIndigo.withAlpha(25),
                     borderRadius: AppRadius.smAll,
                   ),
                   child: Text(
@@ -183,7 +220,7 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoRow(String label, String value, bool isDark) {
+  Widget _buildInfoRow(BuildContext context, String label, String value) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
@@ -192,14 +229,16 @@ class SettingsPage extends StatelessWidget {
           Text(
             label,
             style: AppTypography.body.copyWith(
-              color: isDark ? Colors.white54 : const Color(0xFF6B7280),
+              color: context.isDark
+                  ? Colors.white54
+                  : SellioColors.textSecondary,
             ),
           ),
           Text(
             value,
             style: AppTypography.body.copyWith(
               fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white : const Color(0xFF1a1a2e),
+              color: context.isDark ? Colors.white : SellioColors.gray700,
             ),
           ),
         ],
