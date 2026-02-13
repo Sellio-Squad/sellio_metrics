@@ -1,17 +1,23 @@
-node_modules/
-.DS_Store
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
-dist/
+# Flutter / Dart
+.dart_tool/
+.packages
 build/
+.flutter-plugins
+.flutter-plugins-dependencies
+*.iml
 
-# GitHub API credentials
-src/config/github-config.js
+# IDE
+.idea/
+*.swp
+*.swo
+.vscode/
 
+# macOS
+.DS_Store
+
+# Node (legacy JS dashboard)
+node_modules/
+
+# Misc
+*.log
+.env
