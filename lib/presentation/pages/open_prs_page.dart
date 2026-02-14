@@ -1,6 +1,6 @@
 /// Sellio Metrics — Open PRs Page
 ///
-/// Lists open pull requests with search and status filtering.
+/// Lists open pull requests with search.
 /// Uses domain entities, localized strings, and theme extension.
 library;
 
@@ -30,57 +30,11 @@ class OpenPrsPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search bar
-              Row(
-                children: [
-                  Expanded(
-                    child: HuxInput(
-                      hint: l10n.searchPlaceholder,
-                      onChanged: (value) => provider.setSearchTerm(value),
-                      prefixIcon: const Icon(Icons.search),
-                    ),
-                  ),
-                  const SizedBox(width: AppSpacing.lg),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                    ),
-                    decoration: BoxDecoration(
-                      color: context.isDark
-                          ? SellioColors.darkSurface
-                          : SellioColors.lightBackground,
-                      borderRadius: AppRadius.mdAll,
-                    ),
-                    child: DropdownButton<String>(
-                      value: provider.statusFilter,
-                      items: [
-                        DropdownMenuItem(
-                          value: 'all',
-                          child: Text(l10n.filterAllTime),
-                        ),
-                        DropdownMenuItem(
-                          value: 'pending',
-                          child: Text(l10n.statusPending),
-                        ),
-                        DropdownMenuItem(
-                          value: 'approved',
-                          child: Text(l10n.statusApproved),
-                        ),
-                      ],
-                      onChanged: (v) =>
-                          provider.setStatusFilter(v ?? 'all'),
-                      underline: const SizedBox.shrink(),
-                      dropdownColor: context.isDark
-                          ? SellioColors.darkSurface
-                          : SellioColors.lightSurface,
-                      style: AppTypography.caption.copyWith(
-                        color: context.isDark
-                            ? Colors.white
-                            : SellioColors.gray700,
-                      ),
-                    ),
-                  ),
-                ],
+              // Search bar only — no status filter
+              HuxInput(
+                hint: l10n.searchPlaceholder,
+                onChanged: (value) => provider.setSearchTerm(value),
+                prefixIcon: const Icon(Icons.search),
               ),
               const SizedBox(height: AppSpacing.lg),
 

@@ -61,3 +61,13 @@ class PrStatus {
   static const String pending = 'pending';
   static const String approved = 'approved';
 }
+
+/// Scoring weights for the leaderboard algorithm.
+class LeaderboardWeights {
+  const LeaderboardWeights._();
+
+  static const int prsCreated = 3;
+  static const int prsMerged = 2;
+  static const int reviewsGiven = 2;
+  static const int commentsGiven = 1;
+}

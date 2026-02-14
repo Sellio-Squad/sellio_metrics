@@ -59,8 +59,10 @@ class CollaborationService {
 
     return scores.entries.map((e) {
       final a = e.value;
-      final total =
-          a.prsCreated * 3 + a.prsMerged * 2 + a.reviewsGiven * 2 + a.commentsGiven;
+      final total = a.prsCreated * LeaderboardWeights.prsCreated +
+          a.prsMerged * LeaderboardWeights.prsMerged +
+          a.reviewsGiven * LeaderboardWeights.reviewsGiven +
+          a.commentsGiven * LeaderboardWeights.commentsGiven;
       return LeaderboardEntry(
         developer: e.key,
         prsCreated: a.prsCreated,

@@ -1,10 +1,12 @@
 /// Sellio Metrics — About Sellio Page
 ///
-/// Business context page showing Sellio's mission, apps, and tech stack.
+/// Business context page showing Sellio's mission, apps, vision,
+/// how to join, and tech stack.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
@@ -26,17 +28,67 @@ class AboutPage extends StatelessWidget {
           _buildHero(context, l10n),
           const SizedBox(height: AppSpacing.xxl),
 
+          // Our Vision — expanded business description
+          _buildSection(
+            context,
+            title: l10n.aboutVision,
+            icon: Icons.visibility_outlined,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Sellio is a startup e-commerce platform that reimagines '
+                  'how people buy and sell online. We connect sellers and buyers '
+                  'in a seamless marketplace for both pre-owned and new goods, '
+                  'combining traditional e-commerce with modern thrifting culture.',
+                  style: AppTypography.body.copyWith(
+                    height: 1.8,
+                    color: context.isDark
+                        ? Colors.white70
+                        : SellioColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Text(
+                  'Our mission is to make online selling as easy as posting on '
+                  'social media while providing buyers with a curated, trustworthy '
+                  'shopping experience. We target the growing second-hand market '
+                  'in the MENA region, where sustainability meets affordability.',
+                  style: AppTypography.body.copyWith(
+                    height: 1.8,
+                    color: context.isDark
+                        ? Colors.white70
+                        : SellioColors.textSecondary,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                // Competitive advantages
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.md,
+                  children: [
+                    _advantageChip(context, '🎯', 'MENA-first approach'),
+                    _advantageChip(context, '♻️', 'Sustainability-driven'),
+                    _advantageChip(context, '🤖', 'AI-powered curation'),
+                    _advantageChip(context, '📱', 'Mobile-first design'),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+
           // Executive Summary
           _buildSection(
             context,
             title: l10n.aboutExecutiveSummary,
+            icon: Icons.summarize_outlined,
             child: Text(
-              'Sellio is a startup e-commerce platform. '
-              'It connects sellers and buyers in a seamless marketplace for '
-              'pre-owned and new goods, combining traditional e-commerce with '
-              'modern thrifting culture. Sellio aims to make online selling as '
-              'easy as social media posting while providing buyers with a '
-              'curated, trustworthy shopping experience.',
+              'Sellio differentiates itself through AI-powered product recommendations, '
+              'integrated design generation tools, and a streamlined seller onboarding '
+              'process that reduces listing time by 70%. Our scalable microservices '
+              'architecture supports rapid growth, and our cross-platform Flutter apps '
+              'ensure a consistent experience across iOS, Android, and Web.',
               style: AppTypography.body.copyWith(
                 height: 1.7,
                 color: context.isDark
@@ -47,11 +99,12 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xl),
 
-          // Apps
+          // Our Apps — with Try Live buttons
           _buildSection(
             context,
             title: l10n.aboutApps,
-            child: _buildAppsGrid(context),
+            icon: Icons.apps,
+            child: _buildAppsGrid(context, l10n),
           ),
           const SizedBox(height: AppSpacing.xl),
 
@@ -59,7 +112,17 @@ class AboutPage extends StatelessWidget {
           _buildSection(
             context,
             title: l10n.aboutTechStack,
+            icon: Icons.code,
             child: _buildTechStack(context),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+
+          // How to Join Us
+          _buildSection(
+            context,
+            title: l10n.aboutHowToJoin,
+            icon: Icons.group_add_outlined,
+            child: _buildHowToJoin(context),
           ),
           const SizedBox(height: AppSpacing.xl),
 
@@ -67,6 +130,7 @@ class AboutPage extends StatelessWidget {
           _buildSection(
             context,
             title: 'Key Features',
+            icon: Icons.star_outline,
             child: _buildFeatures(context),
           ),
         ],
@@ -109,7 +173,7 @@ class AboutPage extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'E-Commerce • Thrifting',
+            'E-Commerce • Thrifting • AI-Powered',
             style: AppTypography.body.copyWith(
               color: Colors.white70,
             ),
@@ -122,16 +186,27 @@ class AboutPage extends StatelessWidget {
   Widget _buildSection(
     BuildContext context, {
     required String title,
+    required IconData icon,
     required Widget child,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          title,
-          style: AppTypography.title.copyWith(
-            color: context.isDark ? Colors.white : SellioColors.gray700,
-          ),
+        Row(
+          children: [
+            Icon(
+              icon,
+              size: 20,
+              color: SellioColors.primaryIndigo,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              title,
+              style: AppTypography.title.copyWith(
+                color: context.isDark ? Colors.white : SellioColors.gray700,
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: AppSpacing.lg),
         child,
@@ -139,28 +214,64 @@ class AboutPage extends StatelessWidget {
     );
   }
 
-  Widget _buildAppsGrid(BuildContext context) {
+  Widget _advantageChip(BuildContext context, String emoji, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: SellioColors.primaryIndigo.withAlpha(15),
+        borderRadius: AppRadius.smAll,
+        border: Border.all(
+          color: SellioColors.primaryIndigo.withAlpha(40),
+        ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(emoji, style: const TextStyle(fontSize: 16)),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            text,
+            style: AppTypography.body.copyWith(
+              color: context.isDark ? Colors.white : SellioColors.gray700,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAppsGrid(BuildContext context, AppLocalizations l10n) {
     final apps = [
       _AppInfo(
         name: 'Customer App',
-        description: 'Browse, buy, and explore curated products.',
+        description: 'Browse, buy, and explore curated products. '
+            'Smart search, wishlists, and secure checkout.',
         icon: LucideIcons.shoppingBag,
         status: 'In Progress',
         statusColor: SellioColors.warning,
+        liveUrl: null,
       ),
       _AppInfo(
         name: 'Admin Panel',
-        description: 'Manage platform, users, and analytics.',
+        description: 'Manage platform, users, analytics, and orders. '
+            'Real-time monitoring dashboard.',
         icon: LucideIcons.shield,
         status: 'Planned',
         statusColor: SellioColors.info,
+        liveUrl: null,
       ),
       _AppInfo(
         name: 'Seller App',
-        description: 'List products, manage orders, and grow.',
+        description: 'List products with AI descriptions, manage orders, '
+            'track sales performance.',
         icon: LucideIcons.store,
         status: 'Planned',
         statusColor: SellioColors.info,
+        liveUrl: null,
       ),
     ];
 
@@ -173,16 +284,20 @@ class AboutPage extends StatelessWidget {
           mainAxisSpacing: AppSpacing.lg,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 1.5,
+          childAspectRatio: 1.3,
           children: apps
-              .map((app) => _buildAppCard(context, app))
+              .map((app) => _buildAppCard(context, app, l10n))
               .toList(),
         );
       },
     );
   }
 
-  Widget _buildAppCard(BuildContext context, _AppInfo app) {
+  Widget _buildAppCard(
+    BuildContext context,
+    _AppInfo app,
+    AppLocalizations l10n,
+  ) {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
       decoration: BoxDecoration(
@@ -224,6 +339,41 @@ class AboutPage extends StatelessWidget {
             ),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          // Try Live button
+          SizedBox(
+            width: double.infinity,
+            child: HuxButton(
+              variant: app.liveUrl != null
+                  ? HuxButtonVariant.primary
+                  : HuxButtonVariant.ghost,
+              size: HuxButtonSize.small,
+              onPressed: app.liveUrl != null
+                  ? () {
+                      final uri = Uri.tryParse(app.liveUrl!);
+                      if (uri != null) {
+                        launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    }
+                  : null,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    app.liveUrl != null ? Icons.play_arrow : Icons.schedule,
+                    size: 16,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    app.liveUrl != null
+                        ? l10n.aboutTryLive
+                        : 'Coming Soon',
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -291,6 +441,110 @@ class AboutPage extends StatelessWidget {
     );
   }
 
+  Widget _buildHowToJoin(BuildContext context) {
+    final steps = [
+      _JoinStep(
+        icon: Icons.mail_outlined,
+        title: 'Get in Touch',
+        description: 'Reach out to us via email or LinkedIn to express '
+            'your interest in joining the Sellio team.',
+      ),
+      _JoinStep(
+        icon: Icons.assignment_outlined,
+        title: 'Share Your Work',
+        description: 'Send us your portfolio, GitHub profile, or any '
+            'projects that showcase your skills.',
+      ),
+      _JoinStep(
+        icon: Icons.rocket_launch_outlined,
+        title: 'Start Contributing',
+        description: 'After a quick onboarding, dive straight into real '
+            'features with our agile squad.',
+      ),
+    ];
+
+    return Column(
+      children: steps.asMap().entries.map((entry) {
+        final index = entry.key;
+        final step = entry.value;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: context.isDark
+                  ? SellioColors.darkSurface
+                  : SellioColors.lightSurface,
+              borderRadius: AppRadius.mdAll,
+              border: Border.all(
+                color: context.isDark ? Colors.white10 : SellioColors.gray300,
+              ),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 36,
+                  height: 36,
+                  decoration: BoxDecoration(
+                    gradient: SellioColors.primaryGradient,
+                    borderRadius: AppRadius.smAll,
+                  ),
+                  child: Center(
+                    child: Text(
+                      '${index + 1}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.lg),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            step.icon,
+                            size: 18,
+                            color: SellioColors.primaryIndigo,
+                          ),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text(
+                            step.title,
+                            style: AppTypography.subtitle.copyWith(
+                              color: context.isDark
+                                  ? Colors.white
+                                  : SellioColors.gray700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        step.description,
+                        style: AppTypography.body.copyWith(
+                          color: context.isDark
+                              ? Colors.white54
+                              : SellioColors.textSecondary,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
   Widget _buildFeatures(BuildContext context) {
     final features = [
       'Multi-vendor e-commerce marketplace',
@@ -348,6 +602,7 @@ class _AppInfo {
   final IconData icon;
   final String status;
   final Color statusColor;
+  final String? liveUrl;
 
   const _AppInfo({
     required this.name,
@@ -355,6 +610,7 @@ class _AppInfo {
     required this.icon,
     required this.status,
     required this.statusColor,
+    this.liveUrl,
   });
 }
 
@@ -364,4 +620,16 @@ class _TechItem {
   final IconData icon;
 
   const _TechItem(this.name, this.role, this.icon);
+}
+
+class _JoinStep {
+  final IconData icon;
+  final String title;
+  final String description;
+
+  const _JoinStep({
+    required this.icon,
+    required this.title,
+    required this.description,
+  });
 }
