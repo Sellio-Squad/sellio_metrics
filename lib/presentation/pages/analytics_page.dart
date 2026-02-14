@@ -1,160 +1,123 @@
 /// Sellio Metrics — Analytics Page
 ///
-/// Displays spotlights at the top, slow PRs section.
-/// Uses domain entities, localized strings, and theme extension.
+/// Dashboard home: Spotlight → Slow PRs.
+/// Follows SRP — orchestrates sections, delegates to sub-widgets.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
+
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../providers/dashboard_provider.dart';
-import '../widgets/spotlight_card.dart';
 import '../widgets/bottleneck_item.dart';
 import '../widgets/filters/date_range_filter.dart';
+import '../widgets/spotlight_card.dart';
 
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     return Consumer<DashboardProvider>(
       builder: (context, provider, _) {
-        final l10n = AppLocalizations.of(context);
-        final spotlight = provider.spotlightMetrics;
-        final bottlenecks = provider.bottlenecks;
+        final scheme = context.colors;
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Spotlight Section — at the top
-              _buildSectionHeader(
-                context,
-                l10n.sectionSpotlight,
-                emoji: '✨',
+              // Date filter — no developer dropdown
+              const DateRangeFilter(),
+              const SizedBox(height: AppSpacing.xxl),
+
+              // Spotlight section
+              _SectionHeader(
+                emoji: '🌟',
+                title: l10n.sectionSpotlight,
               ),
               const SizedBox(height: AppSpacing.lg),
-              _buildSpotlightGrid(context, spotlight),
-
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final crossAxisCount =
+                  constraints.maxWidth > 800 ? 3 : 1;
+                  return GridView.count(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: AppSpacing.lg,
+                    mainAxisSpacing: AppSpacing.lg,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    childAspectRatio: 2.2,
+                    children: [
+                      SpotlightCard(
+                        emoji: '🔥',
+                        title: l10n.spotlightHotStreak,
+                        metric: provider.spotlightMetrics.hotStreak,
+                        accentColor: scheme.secondary,
+                      ),
+                      SpotlightCard(
+                        emoji: '⚡',
+                        title: l10n.spotlightFastestReviewer,
+                        metric: provider.spotlightMetrics.fastestReviewer,
+                        accentColor: scheme.green,
+                      ),
+                      SpotlightCard(
+                        emoji: '💬',
+                        title: l10n.spotlightTopCommenter,
+                        metric: provider.spotlightMetrics.topCommenter,
+                        accentColor: scheme.primary,
+                      ),
+                    ],
+                  );
+                },
+              ),
               const SizedBox(height: AppSpacing.xxl),
 
-              // Filter bar
-              const DateRangeFilter(),
-
-              const SizedBox(height: AppSpacing.xxl),
-
-              // Slow PRs Section (formerly Bottlenecks)
-              if (bottlenecks.isNotEmpty) ...[
-                _buildSlowPrsSection(context, bottlenecks, l10n),
-              ],
+              // Slow PRs section
+              _SectionHeader(
+                emoji: '🐢',
+                title: l10n.sectionBottlenecks,
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              if (provider.bottlenecks.isEmpty)
+                Text(
+                  l10n.emptyData,
+                  style: AppTypography.body.copyWith(color: scheme.hint),
+                )
+              else
+                ...provider.bottlenecks
+                    .map((b) => BottleneckItem(bottleneck: b)),
             ],
           ),
         );
       },
     );
   }
+}
 
-  Widget _buildSpotlightGrid(BuildContext context, spotlight) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final crossAxisCount = constraints.maxWidth > 800 ? 3 : 1;
-        return GridView.count(
-          crossAxisCount: crossAxisCount,
-          crossAxisSpacing: AppSpacing.lg,
-          mainAxisSpacing: AppSpacing.lg,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 2.2,
-          children: [
-            SpotlightCard(
-              title: 'Hot Streak',
-              emoji: '🔥',
-              metric: spotlight.hotStreak,
-              accentColor: SellioColors.danger,
-            ),
-            SpotlightCard(
-              title: 'Fastest Reviewer',
-              emoji: '⚡',
-              metric: spotlight.fastestReviewer,
-              accentColor: SellioColors.warning,
-            ),
-            SpotlightCard(
-              title: 'Top Commenter',
-              emoji: '💬',
-              metric: spotlight.topCommenter,
-              accentColor: SellioColors.info,
-            ),
-          ],
-        );
-      },
-    );
-  }
+/// Reusable section header with emoji + title.
+class _SectionHeader extends StatelessWidget {
+  final String emoji;
+  final String title;
 
-  Widget _buildSectionHeader(
-    BuildContext context,
-    String title, {
-    String? emoji,
-    int? count,
-  }) {
+  const _SectionHeader({required this.emoji, required this.title});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
     return Row(
       children: [
-        if (emoji != null) ...[
-          Text(emoji, style: const TextStyle(fontSize: 20)),
-          const SizedBox(width: AppSpacing.sm),
-        ],
+        Text(emoji, style: const TextStyle(fontSize: 20)),
+        const SizedBox(width: AppSpacing.sm),
         Text(
           title,
-          style: AppTypography.title.copyWith(
-            color: context.isDark ? Colors.white : SellioColors.gray700,
-          ),
+          style: AppTypography.title.copyWith(color: scheme.title),
         ),
-        if (count != null) ...[
-          const SizedBox(width: AppSpacing.sm),
-          Container(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppSpacing.sm,
-              vertical: 2,
-            ),
-            decoration: BoxDecoration(
-              color: SellioColors.danger.withAlpha(25),
-              borderRadius: AppRadius.smAll,
-            ),
-            child: Text(
-              '$count',
-              style: AppTypography.caption.copyWith(
-                color: SellioColors.danger,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildSlowPrsSection(
-    BuildContext context,
-    List bottlenecks,
-    AppLocalizations l10n,
-  ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        HuxTooltip(
-          message: l10n.tooltipBottleneck,
-          child: _buildSectionHeader(
-            context,
-            l10n.sectionBottlenecks,
-            emoji: '🐢',
-            count: bottlenecks.length,
-          ),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        ...bottlenecks.map((b) => BottleneckItem(bottleneck: b)),
       ],
     );
   }

@@ -1,9 +1,11 @@
+/// Sellio Metrics — Loading Screen Component
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
+
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../design_system/design_system.dart';
 import '../../../l10n/app_localizations.dart';
 
 class LoadingScreen extends StatefulWidget {
@@ -38,27 +40,22 @@ class _LoadingScreenState extends State<LoadingScreen>
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.colors;
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: context.isDark
-          ? SellioColors.darkBackground
-          : SellioColors.lightBackground,
+      backgroundColor: scheme.surface,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             const HuxLoading(size: HuxLoadingSize.extraLarge),
-            SizedBox(height: AppSpacing.xl),
+            const SizedBox(height: AppSpacing.xl),
             FadeTransition(
               opacity: _fadeAnimation,
               child: Text(
                 l10n.loadingData,
-                style: AppTypography.body.copyWith(
-                  color: context.isDark
-                      ? Colors.white54
-                      : SellioColors.textSecondary,
-                ),
+                style: AppTypography.body.copyWith(color: scheme.body),
               ),
             ),
           ],

@@ -28,35 +28,24 @@ class ChartsPage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // PR Type Distribution
-              _buildChartCard(
-                context,
+              _ChartCard(
                 title: l10n.sectionPrTypes,
-                child: _buildPrTypePieChart(context, provider),
+                child: _PrTypePieChart(provider: provider),
               ),
               const SizedBox(height: AppSpacing.xl),
-
-              // PR Activity Over Time
-              _buildChartCard(
-                context,
+              _ChartCard(
                 title: l10n.sectionPrActivity,
-                child: _buildPrActivityChart(context, provider),
+                child: _PrActivityChart(provider: provider),
               ),
               const SizedBox(height: AppSpacing.xl),
-
-              // Review Load Bar Chart
-              _buildChartCard(
-                context,
+              _ChartCard(
                 title: l10n.sectionReviewTime,
-                child: _buildReviewLoadChart(context, provider),
+                child: _ReviewLoadChart(provider: provider),
               ),
               const SizedBox(height: AppSpacing.xl),
-
-              // Code Volume
-              _buildChartCard(
-                context,
+              _ChartCard(
                 title: l10n.sectionCodeVolume,
-                child: _buildCodeVolumeChart(context, provider),
+                child: _CodeVolumeChart(provider: provider),
               ),
             ],
           ),
@@ -64,23 +53,27 @@ class ChartsPage extends StatelessWidget {
       },
     );
   }
+}
 
-  Widget _buildChartCard(
-    BuildContext context, {
-    required String title,
-    required Widget child,
-  }) {
+// ─── Chart Card Container ─────────────────────────────────
+
+class _ChartCard extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const _ChartCard({required this.title, required this.child});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: context.isDark
-            ? SellioColors.darkSurface
-            : SellioColors.lightSurface,
+        color: scheme.surfaceLow,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(
-          color: context.isDark ? Colors.white10 : SellioColors.gray300,
-        ),
+        border: Border.all(color: scheme.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -88,7 +81,7 @@ class ChartsPage extends StatelessWidget {
           Text(
             title,
             style: AppTypography.subtitle.copyWith(
-              color: context.isDark ? Colors.white : SellioColors.gray700,
+              color: scheme.title,
               fontWeight: FontWeight.w700,
             ),
           ),
@@ -98,15 +91,29 @@ class ChartsPage extends StatelessWidget {
       ),
     );
   }
+}
 
-  // ─── PR Type Pie Chart ───────────────────────────────────
-  Widget _buildPrTypePieChart(
-      BuildContext context, DashboardProvider provider) {
+// ─── PR Type Pie Chart ────────────────────────────────────
+
+class _PrTypePieChart extends StatelessWidget {
+  final DashboardProvider provider;
+
+  const _PrTypePieChart({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
     final types = provider.prTypeDistribution;
+
     if (types.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 200,
-        child: Center(child: Text('No data')),
+        child: Center(
+          child: Text(
+            AppLocalizations.of(context).emptyData,
+            style: AppTypography.body.copyWith(color: scheme.hint),
+          ),
+        ),
       );
     }
 
@@ -134,8 +141,8 @@ class ChartsPage extends StatelessWidget {
                     title: '${percentage.toStringAsFixed(0)}%',
                     color: color,
                     radius: 60,
-                    titleStyle: const TextStyle(
-                      color: Colors.white,
+                    titleStyle: TextStyle(
+                      color: scheme.onPrimary,
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
                     ),
@@ -170,11 +177,8 @@ class ChartsPage extends StatelessWidget {
                       const SizedBox(width: AppSpacing.sm),
                       Text(
                         '${entry.key} (${entry.value})',
-                        style: AppTypography.caption.copyWith(
-                          color: context.isDark
-                              ? Colors.white70
-                              : SellioColors.textSecondary,
-                        ),
+                        style: AppTypography.caption
+                            .copyWith(color: scheme.body),
                       ),
                     ],
                   ),
@@ -186,10 +190,18 @@ class ChartsPage extends StatelessWidget {
       ),
     );
   }
+}
 
-  // ─── PR Activity Line Chart ──────────────────────────────
-  Widget _buildPrActivityChart(
-      BuildContext context, DashboardProvider provider) {
+// ─── PR Activity Line Chart ───────────────────────────────
+
+class _PrActivityChart extends StatelessWidget {
+  final DashboardProvider provider;
+
+  const _PrActivityChart({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
     final weeklyData = <String, _WeeklyActivity>{};
 
     for (final pr in provider.weekFilteredPrs) {
@@ -200,9 +212,14 @@ class ChartsPage extends StatelessWidget {
     }
 
     if (weeklyData.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 200,
-        child: Center(child: Text('No data')),
+        child: Center(
+          child: Text(
+            AppLocalizations.of(context).emptyData,
+            style: AppTypography.body.copyWith(color: scheme.hint),
+          ),
+        ),
       );
     }
 
@@ -224,7 +241,7 @@ class ChartsPage extends StatelessWidget {
             show: true,
             drawVerticalLine: false,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: context.isDark ? Colors.white10 : SellioColors.gray300,
+              color: scheme.stroke,
               strokeWidth: 1,
             ),
           ),
@@ -242,18 +259,15 @@ class ChartsPage extends StatelessWidget {
                   if (idx < 0 || idx >= weeks.length) {
                     return const SizedBox.shrink();
                   }
-                  return Text(
-                    weeks[idx],
-                    style: AppTypography.overline,
-                  );
+                  return Text(weeks[idx], style: AppTypography.overline);
                 },
               ),
             ),
           ),
           borderData: FlBorderData(show: false),
           lineBarsData: [
-            _lineBarData(openedSpots, SellioColors.primaryIndigo),
-            _lineBarData(mergedSpots, SellioColors.success),
+            _lineBarData(openedSpots, scheme.primary),
+            _lineBarData(mergedSpots, scheme.green),
           ],
         ),
       ),
@@ -273,15 +287,29 @@ class ChartsPage extends StatelessWidget {
       ),
     );
   }
+}
 
-  // ─── Review Load Bar Chart ───────────────────────────────
-  Widget _buildReviewLoadChart(
-      BuildContext context, DashboardProvider provider) {
+// ─── Review Load Bar Chart ────────────────────────────────
+
+class _ReviewLoadChart extends StatelessWidget {
+  final DashboardProvider provider;
+
+  const _ReviewLoadChart({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
     final reviewLoad = provider.reviewLoad;
+
     if (reviewLoad.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 200,
-        child: Center(child: Text('No data')),
+        child: Center(
+          child: Text(
+            AppLocalizations.of(context).emptyData,
+            style: AppTypography.body.copyWith(color: scheme.hint),
+          ),
+        ),
       );
     }
 
@@ -299,7 +327,7 @@ class ChartsPage extends StatelessWidget {
             show: true,
             drawVerticalLine: false,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: context.isDark ? Colors.white10 : SellioColors.gray300,
+              color: scheme.stroke,
               strokeWidth: 1,
             ),
           ),
@@ -350,15 +378,29 @@ class ChartsPage extends StatelessWidget {
       ),
     );
   }
+}
 
-  // ─── Code Volume Chart ───────────────────────────────────
-  Widget _buildCodeVolumeChart(
-      BuildContext context, DashboardProvider provider) {
+// ─── Code Volume Chart ────────────────────────────────────
+
+class _CodeVolumeChart extends StatelessWidget {
+  final DashboardProvider provider;
+
+  const _CodeVolumeChart({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
     final prs = provider.weekFilteredPrs;
+
     if (prs.isEmpty) {
-      return const SizedBox(
+      return SizedBox(
         height: 200,
-        child: Center(child: Text('No data')),
+        child: Center(
+          child: Text(
+            AppLocalizations.of(context).emptyData,
+            style: AppTypography.body.copyWith(color: scheme.hint),
+          ),
+        ),
       );
     }
 
@@ -386,7 +428,7 @@ class ChartsPage extends StatelessWidget {
             show: true,
             drawVerticalLine: false,
             getDrawingHorizontalLine: (value) => FlLine(
-              color: context.isDark ? Colors.white10 : SellioColors.gray300,
+              color: scheme.stroke,
               strokeWidth: 1,
             ),
           ),
@@ -419,11 +461,11 @@ class ChartsPage extends StatelessWidget {
                   toY: (vol.additions + vol.deletions).toDouble(),
                   rodStackItems: [
                     BarChartRodStackItem(
-                        0, vol.additions.toDouble(), SellioColors.success),
+                        0, vol.additions.toDouble(), scheme.green),
                     BarChartRodStackItem(
                         vol.additions.toDouble(),
                         (vol.additions + vol.deletions).toDouble(),
-                        SellioColors.danger),
+                        scheme.red),
                   ],
                   width: 20,
                   color: Colors.transparent,

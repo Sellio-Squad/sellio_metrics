@@ -1,17 +1,20 @@
 /// Sellio Metrics — PR List Tile Widget
 ///
 /// Clickable, hoverable PR tile with type badge.
+/// Follows SRP — only responsible for rendering a single PR entry.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/constants/layout_constants.dart';
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_utils.dart';
+import '../../design_system/design_system.dart';
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/enums/pr_type.dart';
+import '../extensions/pr_type_presentation.dart';
 
 class PrListTile extends StatefulWidget {
   final PrEntity pr;
@@ -29,34 +32,33 @@ class _PrListTileState extends State<PrListTile> {
   Widget build(BuildContext context) {
     final pr = widget.pr;
     final prType = PrType.fromTitle(pr.title);
+    final scheme = context.colors;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: () => _openPrUrl(),
+        onTap: _openPrUrl,
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+          duration: AnimationConstants.hoverDuration,
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
           padding: const EdgeInsets.all(AppSpacing.lg),
           transform: _isHovered
-              ? (Matrix4.identity()..scale(1.005))
+              ? (Matrix4.identity()..scale(AnimationConstants.hoverScale))
               : Matrix4.identity(),
           decoration: BoxDecoration(
-            color: context.isDark
-                ? SellioColors.darkSurface
-                : SellioColors.lightSurface,
+            color: scheme.surfaceLow,
             borderRadius: AppRadius.mdAll,
             border: Border.all(
               color: _isHovered
-                  ? SellioColors.primaryIndigo.withValues(alpha: 0.4)
-                  : (context.isDark ? Colors.white10 : SellioColors.gray300),
+                  ? scheme.primary.withValues(alpha: 0.4)
+                  : scheme.stroke,
             ),
             boxShadow: _isHovered
                 ? [
                     BoxShadow(
-                      color: SellioColors.primaryIndigo.withValues(alpha: 0.08),
+                      color: scheme.primary.withValues(alpha: 0.08),
                       blurRadius: 12,
                       offset: const Offset(0, 4),
                     ),
@@ -66,10 +68,7 @@ class _PrListTileState extends State<PrListTile> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              HuxAvatar(
-                name: pr.creator.login,
-                size: HuxAvatarSize.small,
-              ),
+              HuxAvatar(name: pr.creator.login, size: HuxAvatarSize.small),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -79,9 +78,7 @@ class _PrListTileState extends State<PrListTile> {
                       pr.title,
                       style: AppTypography.body.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: context.isDark
-                            ? Colors.white
-                            : SellioColors.gray700,
+                        color: scheme.title,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
@@ -91,25 +88,16 @@ class _PrListTileState extends State<PrListTile> {
                       spacing: AppSpacing.md,
                       runSpacing: AppSpacing.xs,
                       children: [
-                        _infoChip(
-                          '#${pr.prNumber}',
-                          context.isDark,
-                        ),
-                        _infoChip(
-                          pr.creator.login,
-                          context.isDark,
-                          icon: Icons.person_outline,
-                        ),
-                        _infoChip(
-                          formatRelativeTime(pr.openedAt),
-                          context.isDark,
-                          icon: Icons.schedule,
-                        ),
-                        _infoChip(
-                          '+${pr.diffStats.additions} / -${pr.diffStats.deletions}',
-                          context.isDark,
-                          icon: Icons.code,
-                        ),
+                        _InfoChip(text: '#${pr.prNumber}'),
+                        _InfoChip(
+                            text: pr.creator.login, icon: Icons.person_outline),
+                        _InfoChip(
+                            text: formatRelativeTime(pr.openedAt),
+                            icon: Icons.schedule),
+                        _InfoChip(
+                            text:
+                                '+${pr.diffStats.additions} / -${pr.diffStats.deletions}',
+                            icon: Icons.code),
                       ],
                     ),
                   ],
@@ -119,27 +107,8 @@ class _PrListTileState extends State<PrListTile> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  // PR Type badge
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.sm,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: prType.color.withValues(alpha: 0.12),
-                      borderRadius: AppRadius.smAll,
-                    ),
-                    child: Text(
-                      prType.label,
-                      style: AppTypography.caption.copyWith(
-                        color: prType.color,
-                        fontWeight: FontWeight.w600,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
+                  _PrTypeBadge(prType: prType),
                   const SizedBox(height: AppSpacing.xs),
-                  // Status badge
                   HuxBadge(
                     label: pr.status.toUpperCase(),
                     variant: _getBadgeVariant(pr.status),
@@ -160,29 +129,6 @@ class _PrListTileState extends State<PrListTile> {
     }
   }
 
-  Widget _infoChip(String text, bool contextIsDark, {IconData? icon}) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        if (icon != null) ...[
-          Icon(
-            icon,
-            size: 12,
-            color: contextIsDark ? Colors.white38 : SellioColors.textTertiary,
-          ),
-          const SizedBox(width: 3),
-        ],
-        Text(
-          text,
-          style: AppTypography.caption.copyWith(
-            color: contextIsDark ? Colors.white54 : SellioColors.textSecondary,
-            fontSize: 11,
-          ),
-        ),
-      ],
-    );
-  }
-
   HuxBadgeVariant _getBadgeVariant(String status) {
     return switch (status) {
       'merged' => HuxBadgeVariant.primary,
@@ -190,5 +136,64 @@ class _PrListTileState extends State<PrListTile> {
       'approved' => HuxBadgeVariant.success,
       _ => HuxBadgeVariant.secondary,
     };
+  }
+}
+
+/// Small info chip for PR metadata (author, date, diff stats).
+class _InfoChip extends StatelessWidget {
+  final String text;
+  final IconData? icon;
+
+  const _InfoChip({required this.text, this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[
+          Icon(icon, size: 12, color: scheme.hint),
+          const SizedBox(width: 3),
+        ],
+        Text(
+          text,
+          style: AppTypography.caption.copyWith(
+            color: scheme.body,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// PR type badge (Feature, Fix, Refactor, etc.).
+class _PrTypeBadge extends StatelessWidget {
+  final PrType prType;
+
+  const _PrTypeBadge({required this.prType});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: 2,
+      ),
+      decoration: BoxDecoration(
+        color: prType.color.withValues(alpha: 0.12),
+        borderRadius: AppRadius.smAll,
+      ),
+      child: Text(
+        prType.label,
+        style: AppTypography.caption.copyWith(
+          color: prType.color,
+          fontWeight: FontWeight.w600,
+          fontSize: 10,
+        ),
+      ),
+    );
   }
 }

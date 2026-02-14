@@ -85,6 +85,18 @@ class AppLocalizations {
   String get settingsThreshold => _t('settingsThreshold');
   String get settingsAbout => _t('settingsAbout');
 
+  // Language
+  String get languageArabic => _t('languageArabic');
+  String get languageEnglish => _t('languageEnglish');
+
+  // Theme labels
+  String get themeDark => _t('themeDark');
+  String get themeLight => _t('themeLight');
+
+  // Date range
+  String get filterFrom => _t('filterFrom');
+  String get filterUntil => _t('filterUntil');
+
   // Search
   String get searchPlaceholder => _t('searchPlaceholder');
   String get searchNoResults => _t('searchNoResults');
@@ -162,9 +174,15 @@ class AppLocalizations {
     'sectionReviewTime': 'Avg. Review Time by Developer',
     'sectionCodeVolume': 'Code Volume',
     'sectionTeamStructure': 'Team Structure',
-    'spotlightHotStreak': '🔥 Hot Streak',
-    'spotlightFastestReviewer': '⚡ Fastest Reviewer',
-    'spotlightTopCommenter': '💬 Top Commenter',
+    'spotlightHotStreak': 'Hot Streak',
+    'spotlightFastestReviewer': 'Fastest Reviewer',
+    'spotlightTopCommenter': 'Top Commenter',
+    'languageArabic': 'العربية',
+    'languageEnglish': 'English',
+    'themeDark': 'Dark',
+    'themeLight': 'Light',
+    'filterFrom': 'From',
+    'filterUntil': 'Until',
     'bottleneckSeverityHigh': 'High',
     'bottleneckSeverityMedium': 'Medium',
     'bottleneckSeverityLow': 'Low',
@@ -233,9 +251,15 @@ class AppLocalizations {
     'sectionReviewTime': 'متوسط وقت المراجعة حسب المطور',
     'sectionCodeVolume': 'حجم الكود',
     'sectionTeamStructure': 'هيكل الفريق',
-    'spotlightHotStreak': '🔥 سلسلة نارية',
-    'spotlightFastestReviewer': '⚡ أسرع مراجع',
-    'spotlightTopCommenter': '💬 أكثر تعليقاً',
+    'spotlightHotStreak': 'سلسلة نارية',
+    'spotlightFastestReviewer': 'أسرع مراجع',
+    'spotlightTopCommenter': 'أكثر تعليقاً',
+    'languageArabic': 'العربية',
+    'languageEnglish': 'English',
+    'themeDark': 'داكن',
+    'themeLight': 'فاتح',
+    'filterFrom': 'من',
+    'filterUntil': 'حتى',
     'bottleneckSeverityHigh': 'عالي',
     'bottleneckSeverityMedium': 'متوسط',
     'bottleneckSeverityLow': 'منخفض',
