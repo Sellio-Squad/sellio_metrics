@@ -6,6 +6,7 @@ library;
 import '../../core/constants/app_constants.dart';
 import '../entities/pr_entity.dart';
 import '../entities/bottleneck_entity.dart';
+import '../enums/severity.dart';
 
 class BottleneckService {
   const BottleneckService();
@@ -24,14 +25,7 @@ class BottleneckService {
           final waitHours = waitMs / (3600 * 1000);
           final waitDays = waitHours / 24;
 
-          String severity = 'low';
-          if (waitHours >=
-              thresholdHours * BottleneckConfig.severityHighMultiplier) {
-            severity = 'high';
-          } else if (waitHours >=
-              thresholdHours * BottleneckConfig.severityMediumMultiplier) {
-            severity = 'medium';
-          }
+          final severity = _classifySeverity(waitHours, thresholdHours);
 
           return BottleneckEntity(
             prNumber: pr.prNumber,
@@ -48,5 +42,15 @@ class BottleneckService {
       ..sort((a, b) => b.waitTimeHours.compareTo(a.waitTimeHours));
 
     return bottlenecks.take(BottleneckConfig.maxDisplayCount).toList();
+  }
+
+  Severity _classifySeverity(double waitHours, double thresholdHours) {
+    if (waitHours >= thresholdHours * BottleneckConfig.severityHighMultiplier) {
+      return Severity.high;
+    } else if (waitHours >=
+        thresholdHours * BottleneckConfig.severityMediumMultiplier) {
+      return Severity.medium;
+    }
+    return Severity.low;
   }
 }

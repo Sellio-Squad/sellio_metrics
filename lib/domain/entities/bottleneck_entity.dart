@@ -1,5 +1,7 @@
 library;
 
+import '../../domain/enums/severity.dart';
+
 /// A PR that is stuck in review too long.
 class BottleneckEntity {
   final int prNumber;
@@ -8,7 +10,7 @@ class BottleneckEntity {
   final String author;
   final double waitTimeHours;
   final double waitTimeDays;
-  final String severity; // 'low', 'medium', 'high'
+  final Severity severity;
 
   const BottleneckEntity({
     required this.prNumber,

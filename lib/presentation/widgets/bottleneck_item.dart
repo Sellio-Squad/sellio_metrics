@@ -3,96 +3,132 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/formatters.dart';
 import '../../domain/entities/bottleneck_entity.dart';
+import '../../domain/enums/severity.dart';
 
-class BottleneckItem extends StatelessWidget {
+class BottleneckItem extends StatefulWidget {
   final BottleneckEntity bottleneck;
 
   const BottleneckItem({super.key, required this.bottleneck});
 
   @override
+  State<BottleneckItem> createState() => _BottleneckItemState();
+}
+
+class _BottleneckItemState extends State<BottleneckItem> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final severityColor = _getSeverityColor(widget.bottleneck.severity);
 
-    final severityColor = _getSeverityColor(bottleneck.severity);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.sm),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: context.isDark ? SellioColors.darkSurface : SellioColors.lightSurface,
-        borderRadius: AppRadius.mdAll,
-        border: Border(
-          left: BorderSide(color: severityColor, width: 3),
-        ),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  truncateText(bottleneck.title, 60),
-                  style: AppTypography.body.copyWith(
-                    fontWeight: FontWeight.w600,
-                    color: context.isDark ? Colors.white : SellioColors.gray700,
-                  ),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(
-                  '#${bottleneck.prNumber} by ${bottleneck.author}',
-                  style: AppTypography.caption.copyWith(
-                    color: context.isDark ? Colors.white54 : SellioColors.textTertiary,
-                  ),
-                ),
-              ],
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: () => _openPrUrl(),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          margin: const EdgeInsets.only(bottom: AppSpacing.sm),
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          transform: _isHovered
+              ? (Matrix4.identity()..scale(1.01))
+              : Matrix4.identity(),
+          decoration: BoxDecoration(
+            color: context.isDark
+                ? SellioColors.darkSurface
+                : SellioColors.lightSurface,
+            borderRadius: AppRadius.mdAll,
+            border: Border(
+              left: BorderSide(color: severityColor, width: 3),
             ),
+            boxShadow: _isHovered
+                ? [
+                    BoxShadow(
+                      color: severityColor.withValues(alpha: 0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
+                : [],
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
+          child: Row(
             children: [
-              HuxBadge(
-                label: bottleneck.severity.toUpperCase(),
-                variant: _getBadgeVariant(bottleneck.severity),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '${bottleneck.waitTimeDays.toStringAsFixed(1)}d waiting',
-                style: AppTypography.caption.copyWith(
-                  color: severityColor,
-                  fontWeight: FontWeight.w600,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      truncateText(widget.bottleneck.title, 60),
+                      style: AppTypography.body.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: context.isDark
+                            ? Colors.white
+                            : SellioColors.gray700,
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      '#${widget.bottleneck.prNumber} by ${widget.bottleneck.author}',
+                      style: AppTypography.caption.copyWith(
+                        color: context.isDark
+                            ? Colors.white54
+                            : SellioColors.textTertiary,
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  HuxBadge(
+                    label: widget.bottleneck.severity.label,
+                    variant: _getBadgeVariant(widget.bottleneck.severity),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    '${widget.bottleneck.waitTimeDays.toStringAsFixed(1)}d waiting',
+                    style: AppTypography.caption.copyWith(
+                      color: severityColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }
 
-  Color _getSeverityColor(String severity) {
-    switch (severity) {
-      case 'high':
-        return SellioColors.severityHigh;
-      case 'medium':
-        return SellioColors.severityMedium;
-      default:
-        return SellioColors.severityLow;
+  void _openPrUrl() {
+    final uri = Uri.tryParse(widget.bottleneck.url);
+    if (uri != null) {
+      launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
-  HuxBadgeVariant _getBadgeVariant(String severity) {
-    switch (severity) {
-      case 'high':
-        return HuxBadgeVariant.error;
-      case 'medium':
-        return HuxBadgeVariant.secondary;
-      default:
-        return HuxBadgeVariant.success;
-    }
+  Color _getSeverityColor(Severity severity) {
+    return switch (severity) {
+      Severity.high => SellioColors.severityHigh,
+      Severity.medium => SellioColors.severityMedium,
+      Severity.low => SellioColors.severityLow,
+    };
+  }
+
+  HuxBadgeVariant _getBadgeVariant(Severity severity) {
+    return switch (severity) {
+      Severity.high => HuxBadgeVariant.error,
+      Severity.medium => HuxBadgeVariant.secondary,
+      Severity.low => HuxBadgeVariant.success,
+    };
   }
 }

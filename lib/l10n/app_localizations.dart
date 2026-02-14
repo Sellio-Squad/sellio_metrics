@@ -114,6 +114,13 @@ class AppLocalizations {
   String get tooltipLeaderboard => _t('tooltipLeaderboard');
   String get tooltipChart => _t('tooltipChart');
 
+  // New strings
+  String get filterCurrentSprint => _t('filterCurrentSprint');
+  String get aboutHowToJoin => _t('aboutHowToJoin');
+  String get aboutTryLive => _t('aboutTryLive');
+  String get aboutVision => _t('aboutVision');
+  String get teamLeader => _t('teamLeader');
+
   String _t(String key) => _localizedValues[locale.languageCode]?[key] ?? key;
 
   static const Map<String, Map<String, String>> _localizedValues = {
@@ -144,7 +151,7 @@ class AppLocalizations {
     'filterStartDate': 'Start Date',
     'filterEndDate': 'End Date',
     'filterDeveloper': 'Developer',
-    'sectionBottlenecks': 'Bottleneck Analysis',
+    'sectionBottlenecks': 'Slow PRs',
     'sectionOpenPrs': 'Open Pull Requests',
     'sectionLeaderboard': 'Leaderboard',
     'sectionReviewLoad': 'Review Load',
@@ -185,6 +192,11 @@ class AppLocalizations {
     'tooltipBottleneck': 'PRs stuck in review longer than the threshold',
     'tooltipLeaderboard': 'Scored by: PRs created ×3, merged ×2, reviews ×2, comments ×1',
     'tooltipChart': 'Click on a segment for details',
+    'filterCurrentSprint': 'Current Sprint',
+    'aboutHowToJoin': 'How to Join Us',
+    'aboutTryLive': 'Try Live',
+    'aboutVision': 'Our Vision',
+    'teamLeader': 'Team Lead',
   };
 
   static const Map<String, String> _ar = {
@@ -210,7 +222,7 @@ class AppLocalizations {
     'filterStartDate': 'تاريخ البداية',
     'filterEndDate': 'تاريخ النهاية',
     'filterDeveloper': 'المطور',
-    'sectionBottlenecks': 'تحليل الاختناقات',
+    'sectionBottlenecks': 'طلبات بطيئة',
     'sectionOpenPrs': 'الطلبات المفتوحة',
     'sectionLeaderboard': 'لوحة المتصدرين',
     'sectionReviewLoad': 'حمل المراجعة',
@@ -251,6 +263,11 @@ class AppLocalizations {
     'tooltipBottleneck': 'الطلبات العالقة في المراجعة أطول من الحد',
     'tooltipLeaderboard': 'التقييم: طلبات ×3، دمج ×2، مراجعات ×2، تعليقات ×1',
     'tooltipChart': 'انقر على شريحة للتفاصيل',
+    'filterCurrentSprint': 'السبرنت الحالي',
+    'aboutHowToJoin': 'كيفية الانضمام إلينا',
+    'aboutTryLive': 'جرّب مباشرة',
+    'aboutVision': 'رؤيتنا',
+    'teamLeader': 'قائد الفريق',
   };
 }
 
