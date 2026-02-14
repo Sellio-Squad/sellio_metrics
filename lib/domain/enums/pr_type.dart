@@ -1,28 +1,25 @@
 /// Sellio Metrics — PR Type Enum
 ///
-/// Type-safe PR type classification derived from PR title patterns.
+/// Pure domain enum — no framework dependencies.
+/// UI concerns (colors, icons) live in presentation extensions.
 library;
 
-import 'package:flutter/material.dart';
-
 import '../../core/constants/app_constants.dart';
-import '../../core/theme/app_theme.dart';
 
 enum PrType {
-  feature('Feature', Colors.green),
-  fix('Fix', Colors.red),
-  refactor('Refactor', Colors.blue),
-  chore('Chore', Colors.grey),
-  docs('Docs', Colors.teal),
-  ci('CI', Colors.orange),
-  test('Test', Colors.purple),
-  style('Style', Colors.pink),
-  other('Other', Colors.blueGrey);
+  feature('Feature'),
+  fix('Fix'),
+  refactor('Refactor'),
+  chore('Chore'),
+  docs('Docs'),
+  ci('CI'),
+  test('Test'),
+  style('Style'),
+  other('Other');
 
   final String label;
-  final Color color;
 
-  const PrType(this.label, this.color);
+  const PrType(this.label);
 
   /// Classify a PR type from its title using pattern matching.
   static PrType fromTitle(String title) {

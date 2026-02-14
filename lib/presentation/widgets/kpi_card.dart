@@ -2,10 +2,10 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
+import '../../design_system/design_system.dart';
 
 class KpiCard extends StatelessWidget {
   final String label;
@@ -25,15 +25,13 @@ class KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardColor = context.isDark
-        ? SellioColors.darkSurface
-        : SellioColors.lightSurface;
+    final scheme = context.colors;
 
     return HuxCard(
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(
-          color: cardColor,
+          color: scheme.surfaceLow,
           borderRadius: AppRadius.lgAll,
           border: Border.all(
             color: accentColor.withValues(alpha: 0.2),
@@ -41,7 +39,8 @@ class KpiCard extends StatelessWidget {
           ),
           boxShadow: [
             BoxShadow(
-              color: accentColor.withValues(alpha: context.isDark ? 0.1 : 0.05),
+              color: accentColor.withValues(
+                  alpha: context.isDark ? 0.1 : 0.05),
               blurRadius: 20,
               offset: const Offset(0, 4),
             ),
@@ -62,18 +61,12 @@ class KpiCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.lg),
             Text(
               value,
-              style: AppTypography.kpiValue.copyWith(
-                color: context.isDark ? Colors.white : SellioColors.gray700,
-              ),
+              style: AppTypography.kpiValue.copyWith(color: scheme.title),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               label,
-              style: AppTypography.caption.copyWith(
-                color: context.isDark
-                    ? Colors.white70
-                    : SellioColors.textSecondary,
-              ),
+              style: AppTypography.caption.copyWith(color: scheme.body),
             ),
             if (subtitle != null) ...[
               const SizedBox(height: AppSpacing.xs),

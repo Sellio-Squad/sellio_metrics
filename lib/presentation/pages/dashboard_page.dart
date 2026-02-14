@@ -41,9 +41,7 @@ class _DashboardPageState extends State<DashboardPage> {
     final isDesktop = MediaQuery.of(context).size.width >= 800;
 
     return Scaffold(
-      backgroundColor: context.isDark
-          ? SellioColors.darkBackground
-          : SellioColors.lightBackground,
+      backgroundColor: context.colors.surface,
       body: isDesktop ? _buildDesktopLayout() : _buildMobileLayout(),
       bottomNavigationBar: isDesktop
           ? null

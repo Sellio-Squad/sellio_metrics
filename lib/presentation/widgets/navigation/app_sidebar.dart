@@ -1,14 +1,15 @@
 /// Sellio Metrics — App Sidebar Navigation
 ///
-/// Desktop sidebar using HuxSidebar with Sellio branding.
+/// Desktop sidebar using design system components with Sellio branding.
+/// Follows SRP — header and footer are separate sub-widgets.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../design_system/design_system.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../providers/app_settings_provider.dart';
 
@@ -68,12 +69,20 @@ class AppSidebar extends StatelessWidget {
         final index = ids.indexOf(id);
         if (index >= 0) onItemSelected(index);
       },
-      header: _buildHeader(context),
-      footer: _buildFooter(context),
+      header: const _SidebarHeader(),
+      footer: const _SidebarFooter(),
     );
   }
+}
 
-  Widget _buildHeader(BuildContext context) {
+class _SidebarHeader extends StatelessWidget {
+  const _SidebarHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
+
     return Row(
       children: [
         Container(
@@ -83,33 +92,29 @@ class AppSidebar extends StatelessWidget {
             gradient: SellioColors.primaryGradient,
             borderRadius: BorderRadius.circular(AppRadius.sm),
           ),
-          child: const Center(
+          child: Center(
             child: Text(
               'S',
               style: TextStyle(
-                color: Colors.white,
+                color: scheme.onPrimary,
                 fontSize: 18,
                 fontWeight: FontWeight.w800,
               ),
             ),
           ),
         ),
-        SizedBox(width: AppSpacing.md),
+        const SizedBox(width: AppSpacing.md),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Sellio',
-                style: AppTypography.subtitle.copyWith(
-                  color: context.isDark ? Colors.white : SellioColors.gray700,
-                ),
+                l10n.appTitle,
+                style: AppTypography.subtitle.copyWith(color: scheme.title),
               ),
               Text(
-                'Squad Dashboard',
-                style: AppTypography.caption.copyWith(
-                  color: SellioColors.textSecondary,
-                ),
+                l10n.appSubtitle,
+                style: AppTypography.caption.copyWith(color: scheme.hint),
               ),
             ],
           ),
@@ -117,32 +122,33 @@ class AppSidebar extends StatelessWidget {
       ],
     );
   }
+}
 
-  Widget _buildFooter(BuildContext context) {
+class _SidebarFooter extends StatelessWidget {
+  const _SidebarFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
     final settings = context.watch<AppSettingsProvider>();
+    final l10n = AppLocalizations.of(context);
 
     return Column(
       children: [
-        Divider(
-          color: context.isDark
-              ? Colors.white10
-              : SellioColors.gray300,
-        ),
-        SizedBox(height: AppSpacing.sm),
+        Divider(color: scheme.stroke),
+        const SizedBox(height: AppSpacing.sm),
         Row(
           children: [
             Icon(
               settings.isDarkMode ? LucideIcons.moon : LucideIcons.sun,
               size: 18,
-              color: SellioColors.textSecondary,
+              color: scheme.hint,
             ),
-            SizedBox(width: AppSpacing.sm),
+            const SizedBox(width: AppSpacing.sm),
             Expanded(
               child: Text(
-                settings.isDarkMode ? 'Dark' : 'Light',
-                style: AppTypography.caption.copyWith(
-                  color: SellioColors.textSecondary,
-                ),
+                settings.isDarkMode ? l10n.themeDark : l10n.themeLight,
+                style: AppTypography.caption.copyWith(color: scheme.hint),
               ),
             ),
             HuxSwitch(

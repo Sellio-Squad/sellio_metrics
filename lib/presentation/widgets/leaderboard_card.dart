@@ -1,12 +1,17 @@
 /// Sellio Metrics — Leaderboard Card Widget
+///
+/// Displays ranked developer leaderboard.
+/// Follows SRP — only responsible for rendering the leaderboard table.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 
+import '../../core/constants/layout_constants.dart';
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
+import '../../design_system/design_system.dart';
 import '../../domain/entities/collaboration_entity.dart';
+import '../../l10n/app_localizations.dart';
 
 class LeaderboardCard extends StatelessWidget {
   final List<LeaderboardEntry> entries;
@@ -15,16 +20,15 @@ class LeaderboardCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
+    final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: context.isDark ? SellioColors.darkSurface : SellioColors.lightSurface,
+        color: scheme.surfaceLow,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(
-          color: context.isDark ? Colors.white10 : SellioColors.gray300,
-        ),
+        border: Border.all(color: scheme.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -34,31 +38,32 @@ class LeaderboardCard extends StatelessWidget {
               const Text('🏆', style: TextStyle(fontSize: 20)),
               const SizedBox(width: AppSpacing.sm),
               Text(
-                'Leaderboard',
-                style: AppTypography.title.copyWith(
-                  color: context.isDark ? Colors.white : SellioColors.gray700,
-                ),
+                l10n.sectionLeaderboard,
+                style: AppTypography.title.copyWith(color: scheme.title),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          ...entries.asMap().entries.map((entry) {
-            final index = entry.key;
-            final item = entry.value;
-            return _buildRow(context, index, item);
-          }),
+          ...entries.asMap().entries.map((entry) =>
+              _LeaderboardRow(index: entry.key, entry: entry.value)),
         ],
       ),
     );
   }
+}
 
-  Widget _buildRow(
-    BuildContext context,
-    int index,
-    LeaderboardEntry entry,
-  ) {
-    final medals = ['🥇', '🥈', '🥉'];
-    final medal = index < 3 ? medals[index] : '${index + 1}';
+class _LeaderboardRow extends StatelessWidget {
+  final int index;
+  final LeaderboardEntry entry;
+
+  const _LeaderboardRow({required this.index, required this.entry});
+
+  static const _medals = ['🥇', '🥈', '🥉'];
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final medal = index < 3 ? _medals[index] : '${index + 1}';
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -70,7 +75,7 @@ class LeaderboardCard extends StatelessWidget {
               medal,
               style: TextStyle(
                 fontSize: index < 3 ? 18 : 14,
-                color: context.isDark ? Colors.white54 : SellioColors.textSecondary,
+                color: scheme.hint,
               ),
               textAlign: TextAlign.center,
             ),
@@ -86,13 +91,13 @@ class LeaderboardCard extends StatelessWidget {
                   entry.developer,
                   style: AppTypography.body.copyWith(
                     fontWeight: FontWeight.w600,
-                    color: context.isDark ? Colors.white : SellioColors.gray700,
+                    color: scheme.title,
                   ),
                 ),
                 Text(
                   '${entry.prsCreated} PRs · ${entry.reviewsGiven} reviews · ${entry.commentsGiven} comments',
                   style: AppTypography.caption.copyWith(
-                    color: context.isDark ? Colors.white38 : SellioColors.textTertiary,
+                    color: scheme.hint,
                     fontSize: 11,
                   ),
                 ),
@@ -105,13 +110,13 @@ class LeaderboardCard extends StatelessWidget {
               vertical: AppSpacing.xs,
             ),
             decoration: BoxDecoration(
-              color: SellioColors.primaryIndigo.withValues(alpha: 0.1),
+              color: scheme.primaryVariant,
               borderRadius: AppRadius.smAll,
             ),
             child: Text(
               '${entry.totalScore}',
               style: AppTypography.caption.copyWith(
-                color: SellioColors.primaryIndigo,
+                color: scheme.primary,
                 fontWeight: FontWeight.w700,
               ),
             ),

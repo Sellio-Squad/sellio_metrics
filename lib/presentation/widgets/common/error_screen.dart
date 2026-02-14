@@ -2,10 +2,10 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../design_system/design_system.dart';
 import '../../../l10n/app_localizations.dart';
 
 class ErrorScreen extends StatelessWidget {
@@ -15,31 +15,22 @@ class ErrorScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final scheme = context.colors;
     final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      backgroundColor: context.isDark
-          ? SellioColors.darkBackground
-          : SellioColors.lightBackground,
+      backgroundColor: scheme.surface,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              Icons.error_outline,
-              size: 48,
-              color: context.isDark ? Colors.white24 : SellioColors.gray300,
-            ),
-            SizedBox(height: AppSpacing.lg),
+            Icon(Icons.error_outline, size: 48, color: scheme.disabled),
+            const SizedBox(height: AppSpacing.lg),
             Text(
               l10n.errorLoadingData,
-              style: AppTypography.body.copyWith(
-                color: context.isDark
-                    ? Colors.white54
-                    : SellioColors.textSecondary,
-              ),
+              style: AppTypography.body.copyWith(color: scheme.body),
             ),
-            SizedBox(height: AppSpacing.lg),
+            const SizedBox(height: AppSpacing.lg),
             HuxButton(
               onPressed: onRetry,
               child: Text(l10n.retry),

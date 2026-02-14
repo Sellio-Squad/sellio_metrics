@@ -1,77 +1,179 @@
 /// Sellio Metrics — Color Tokens
+///
+/// Uses the official Sellio brand palette.
+/// Provides light/dark scheme instances via SellioColorScheme.
 library;
 
 import 'package:flutter/material.dart';
 
+/// Semantic color scheme for the Sellio brand.
+class SellioColorScheme {
+  final Color authBackground;
+  final Color primary;
+  final Color primaryVariant;
+  final Color secondary;
+  final Color secondaryVariant;
+  final Color surfaceLow;
+  final Color surface;
+  final Color surfaceHigh;
+  final Color title;
+  final Color body;
+  final Color hint;
+  final Color stroke;
+  final Color onPrimary;
+  final Color disabled;
+  final Color red;
+  final Color errorVariant;
+  final Color green;
+  final Color greenVariant;
+  final Color redVariant;
+  final Color purpleVariant;
+  final Color semanticError;
+  final Color neutralsHint;
+  final List<Color> loadingDarkColors;
+  final List<Color> loadingLightColors;
+  final Color uploadImageTint;
+  final Color shadowColor;
+
+  const SellioColorScheme({
+    this.authBackground = const Color(0xFF2C0113),
+    required this.primary,
+    required this.primaryVariant,
+    required this.secondary,
+    required this.secondaryVariant,
+    required this.surfaceLow,
+    required this.surface,
+    required this.surfaceHigh,
+    required this.title,
+    required this.body,
+    required this.hint,
+    required this.stroke,
+    required this.onPrimary,
+    required this.disabled,
+    required this.red,
+    required this.errorVariant,
+    required this.green,
+    required this.greenVariant,
+    required this.redVariant,
+    required this.purpleVariant,
+    required this.semanticError,
+    required this.neutralsHint,
+    required this.loadingDarkColors,
+    required this.loadingLightColors,
+    required this.uploadImageTint,
+    required this.shadowColor,
+  });
+}
+
+/// Central color definitions for the Sellio brand.
+///
+/// Access via [SellioColors.light] or [SellioColors.dark].
 class SellioColors {
-  const SellioColors._();
+  SellioColors._();
 
-  // Primary gradient
-  static const Color primaryIndigo = Color(0xFF4F46E5);
-  static const Color primaryPurple = Color(0xFF7C3AED);
-  static const Color primaryViolet = Color(0xFF8B5CF6);
+  // ─── Brand schemes ────────────────────────────────────────
 
-  // Backgrounds
-  static const Color darkBackground = Color(0xFF12121A);
-  static const Color lightBackground = Color(0xFFF5F5F7);
-  static const Color darkSurface = Color(0xFF1A1A2E);
-  static const Color lightSurface = Color(0xFFFFFFFF);
+  static const light = SellioColorScheme(
+    primary: Color(0xFF520826),
+    primaryVariant: Color(0xFFFEF5F9),
+    secondary: Color(0xFFF5A623),
+    secondaryVariant: Color(0xFFFEF3E1),
+    surfaceLow: Color(0xFFFFFFFF),
+    surface: Color(0xFFF8F8F8),
+    surfaceHigh: Color(0xFFE6E6E6),
+    title: Color(0xDE1F1F1F),
+    body: Color(0xA81F1F1F),
+    hint: Color(0x611F1F1F),
+    stroke: Color(0x1F1F1F1F),
+    onPrimary: Color(0xDEFFFFFF),
+    disabled: Color(0xFFE8EBED),
+    red: Color(0xFFE54F40),
+    errorVariant: Color(0xFFFEEDEC),
+    green: Color(0xFF0D6620),
+    greenVariant: Color(0xFFE0F5E5),
+    redVariant: Color(0xFFFEEDEC),
+    purpleVariant: Color(0xFFFEF5F9),
+    semanticError: Color(0xFFCF3E30),
+    neutralsHint: Color(0xFFBBBBBB),
+    loadingDarkColors: [
+      Color(0x1F520826),
+      Color(0x80520826),
+      Color(0xFF520826),
+    ],
+    loadingLightColors: [
+      Color(0x1FFFFFFF),
+      Color(0x80FFFFFF),
+      Color(0xDEFFFFFF),
+    ],
+    uploadImageTint: Color(0x70000000),
+    shadowColor: Color(0x1F520826),
+  );
 
-  // Text
-  static const Color textSecondary = Color(0xFF6B7280);
-  static const Color textTertiary = Color(0xFF9CA3AF);
+  static const dark = SellioColorScheme(
+    primary: Color(0xFF520826),
+    primaryVariant: Color(0xFFFEF5F9),
+    secondary: Color(0xFFF5A623),
+    secondaryVariant: Color(0xFFFEF3E1),
+    surfaceLow: Color(0xFF1A1A2E),
+    surface: Color(0xFF12121A),
+    surfaceHigh: Color(0xFF2A2A3A),
+    title: Color(0xDEFFFFFF),
+    body: Color(0xA8FFFFFF),
+    hint: Color(0x61FFFFFF),
+    stroke: Color(0x1FFFFFFF),
+    onPrimary: Color(0xDEFFFFFF),
+    disabled: Color(0xFF3A3A4A),
+    red: Color(0xFFE54F40),
+    errorVariant: Color(0xFF3B1A18),
+    green: Color(0xFF0D6620),
+    greenVariant: Color(0xFF1A3A1F),
+    redVariant: Color(0xFF3B1A18),
+    purpleVariant: Color(0xFF2A1A2E),
+    semanticError: Color(0xFFCF3E30),
+    neutralsHint: Color(0xFF666666),
+    loadingDarkColors: [
+      Color(0x1F520826),
+      Color(0x80520826),
+      Color(0xFF520826),
+    ],
+    loadingLightColors: [
+      Color(0x1FFFFFFF),
+      Color(0x80FFFFFF),
+      Color(0xDEFFFFFF),
+    ],
+    uploadImageTint: Color(0x70000000),
+    shadowColor: Color(0x1F520826),
+  );
 
-  // Grays
-  static const Color gray300 = Color(0xFFD1D5DB);
-  static const Color gray500 = Color(0xFF6B7280);
-  static const Color gray700 = Color(0xFF374151);
+  // ─── Product colors ───────────────────────────────────────
 
-  // Semantic colors
-  static const Color success = Color(0xFF10B981);
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color danger = Color(0xFFEF4444);
-  static const Color info = Color(0xFF3B82F6);
+  static const Color productBlack = Colors.black;
+  static const Color productWhite = Colors.white;
 
-  // Severity colors
-  static const Color severityHigh = Color(0xFFEF4444);
-  static const Color severityMedium = Color(0xFFF59E0B);
-  static const Color severityLow = Color(0xFF10B981);
+  // ─── Gradients ────────────────────────────────────────────
 
-  // Status colors
-  static const Color merged = Color(0xFF8B5CF6);
-  static const Color pending = Color(0xFFF59E0B);
-  static const Color closed = Color(0xFFEF4444);
-  static const Color approved = Color(0xFF10B981);
-
-  // KPI accent colors
-  static const Color kpiFuchsia = Color(0xFFD946EF);
-  static const Color kpiPurple = Color(0xFFA855F7);
-  static const Color kpiBlue = Color(0xFF3B82F6);
-  static const Color kpiCyan = Color(0xFF06B6D4);
-  static const Color kpiPink = Color(0xFFEC4899);
-
-  // Chart palette
-  static const List<Color> chartPalette = [
-    primaryIndigo,
-    primaryPurple,
-    success,
-    warning,
-    info,
-    kpiFuchsia,
-    kpiCyan,
-    kpiPink,
-  ];
-
-  // Gradient
   static const LinearGradient primaryGradient = LinearGradient(
-    colors: [primaryIndigo, primaryPurple],
+    colors: [Color(0xFF520826), Color(0xFF7A1040)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
 
   static const LinearGradient cardGradient = LinearGradient(
-    colors: [Color(0xFF312E81), Color(0xFF4C1D95)],
+    colors: [Color(0xFF3B0619), Color(0xFF520826)],
     begin: Alignment.topLeft,
     end: Alignment.bottomRight,
   );
+
+  // ─── Chart palette ────────────────────────────────────────
+
+  static const List<Color> chartPalette = [
+    Color(0xFF520826),
+    Color(0xFFF5A623),
+    Color(0xFF0D6620),
+    Color(0xFFE54F40),
+    Color(0xFF3B82F6),
+    Color(0xFF8B5CF6),
+    Color(0xFF14B8A6),
+    Color(0xFFEC4899),
+  ];
 }

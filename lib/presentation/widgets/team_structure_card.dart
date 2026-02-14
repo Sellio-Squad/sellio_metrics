@@ -1,29 +1,26 @@
 /// Sellio Metrics — Team Structure Card Widget
 ///
 /// Displays team cards with team name, leader, and description.
+/// Follows SRP — only responsible for rendering team structure.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 
+import '../../core/constants/layout_constants.dart';
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../l10n/app_localizations.dart';
 
-/// Team data model for display.
+/// Pure data class for team display — no framework types.
 class TeamInfo {
   final String name;
   final String leader;
   final String description;
-  final IconData icon;
-  final Color color;
 
   const TeamInfo({
     required this.name,
     required this.leader,
     required this.description,
-    required this.icon,
-    required this.color,
   });
 }
 
@@ -36,139 +33,141 @@ class TeamStructureCard extends StatelessWidget {
       name: 'Platform Team',
       leader: 'Team Lead 1',
       description: 'Core infrastructure, CI/CD, developer tools',
-      icon: Icons.build_circle_outlined,
-      color: SellioColors.primaryIndigo,
     ),
     TeamInfo(
       name: 'Product Team',
       leader: 'Team Lead 2',
       description: 'Customer-facing features, UI/UX, mobile apps',
-      icon: Icons.phone_android_outlined,
-      color: SellioColors.success,
     ),
     TeamInfo(
       name: 'Backend Team',
       leader: 'Team Lead 3',
       description: 'APIs, microservices, data pipelines',
-      icon: Icons.dns_outlined,
-      color: SellioColors.warning,
     ),
+  ];
+
+  static const _teamIcons = [
+    Icons.build_circle_outlined,
+    Icons.phone_android_outlined,
+    Icons.dns_outlined,
   ];
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final scheme = context.colors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            const Text('🏗️', style: TextStyle(fontSize: 20)),
+            Icon(Icons.groups_outlined,
+                size: LayoutConstants.iconSizeMd, color: scheme.primary),
             const SizedBox(width: AppSpacing.sm),
             Text(
               l10n.sectionTeamStructure,
-              style: AppTypography.title.copyWith(
-                color: context.isDark ? Colors.white : SellioColors.gray700,
-              ),
+              style: AppTypography.title.copyWith(color: scheme.title),
             ),
           ],
         ),
         const SizedBox(height: AppSpacing.lg),
         LayoutBuilder(
           builder: (context, constraints) {
-            final crossAxisCount = constraints.maxWidth > 700 ? 3 : 1;
-            return GridView.count(
-              crossAxisCount: crossAxisCount,
-              crossAxisSpacing: AppSpacing.lg,
-              mainAxisSpacing: AppSpacing.lg,
+            final crossAxisCount =
+                constraints.maxWidth > LayoutConstants.gridBreakpoint ? 3 : 1;
+            return GridView.builder(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              childAspectRatio: 1.6,
-              children: _teams
-                  .map((team) => _buildTeamCard(context, team, l10n))
-                  .toList(),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: crossAxisCount,
+                crossAxisSpacing: AppSpacing.lg,
+                mainAxisSpacing: AppSpacing.lg,
+                mainAxisExtent: 160,
+              ),
+              itemCount: _teams.length,
+              itemBuilder: (context, index) =>
+                  _TeamCard(team: _teams[index], icon: _teamIcons[index]),
             );
           },
         ),
       ],
     );
   }
+}
 
-  Widget _buildTeamCard(
-    BuildContext context,
-    TeamInfo team,
-    AppLocalizations l10n,
-  ) {
-    return HuxCard(
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        decoration: BoxDecoration(
-          color: context.isDark
-              ? SellioColors.darkSurface
-              : SellioColors.lightSurface,
-          borderRadius: AppRadius.lgAll,
-          border: Border(
-            top: BorderSide(color: team.color, width: 3),
+class _TeamCard extends StatelessWidget {
+  final TeamInfo team;
+  final IconData icon;
+
+  const _TeamCard({required this.team, required this.icon});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.xl),
+      decoration: BoxDecoration(
+        color: scheme.surfaceLow,
+        borderRadius: AppRadius.lgAll,
+        border: Border(
+          top: BorderSide(color: scheme.primary, width: 3),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: scheme.shadowColor,
+            blurRadius: 8,
+            offset: const Offset(0, 2),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  decoration: BoxDecoration(
-                    color: team.color.withValues(alpha: 0.1),
-                    borderRadius: AppRadius.mdAll,
-                  ),
-                  child: Icon(team.icon, color: team.color, size: 22),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                decoration: BoxDecoration(
+                  color: scheme.primaryVariant,
+                  borderRadius: AppRadius.mdAll,
                 ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: Text(
-                    team.name,
-                    style: AppTypography.subtitle.copyWith(
-                      color: context.isDark
-                          ? Colors.white
-                          : SellioColors.gray700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Icon(
-                  Icons.person,
-                  size: 14,
-                  color: team.color,
-                ),
-                const SizedBox(width: AppSpacing.xs),
-                Text(
-                  '${l10n.teamLeader}: ${team.leader}',
-                  style: AppTypography.caption.copyWith(
-                    color: team.color,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              team.description,
-              style: AppTypography.caption.copyWith(
-                color: context.isDark
-                    ? Colors.white54
-                    : SellioColors.textSecondary,
+                child: Icon(icon, color: scheme.primary, size: 22),
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Text(
+                  team.name,
+                  style: AppTypography.subtitle.copyWith(color: scheme.title),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Icon(Icons.person, size: LayoutConstants.iconSizeSm,
+                  color: scheme.primary),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                '${l10n.teamLeader}: ${team.leader}',
+                style: AppTypography.caption.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            team.description,
+            style: AppTypography.caption.copyWith(color: scheme.hint),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ],
       ),
     );
   }

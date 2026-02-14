@@ -1,4 +1,7 @@
 /// Sellio Metrics — Spotlight Card Widget
+///
+/// Displays a spotlight metric (e.g. Hot Streak, Fastest Reviewer).
+/// Follows SRP — only responsible for a single spotlight entry.
 library;
 
 import 'package:flutter/material.dart';
@@ -6,6 +9,7 @@ import 'package:flutter/material.dart';
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../domain/entities/kpi_entity.dart';
+import '../../l10n/app_localizations.dart';
 
 class SpotlightCard extends StatelessWidget {
   final String title;
@@ -23,7 +27,8 @@ class SpotlightCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
+    final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.lg),
@@ -62,23 +67,17 @@ class SpotlightCard extends StatelessWidget {
           if (metric != null) ...[
             Text(
               metric!.user,
-              style: AppTypography.subtitle.copyWith(
-                color: context.isDark ? Colors.white : SellioColors.gray700,
-              ),
+              style: AppTypography.subtitle.copyWith(color: scheme.title),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
               metric!.label,
-              style: AppTypography.caption.copyWith(
-                color: context.isDark ? Colors.white54 : SellioColors.textSecondary,
-              ),
+              style: AppTypography.caption.copyWith(color: scheme.body),
             ),
           ] else
             Text(
-              'No data',
-              style: AppTypography.caption.copyWith(
-                color: context.isDark ? Colors.white38 : SellioColors.textTertiary,
-              ),
+              l10n.emptyData,
+              style: AppTypography.caption.copyWith(color: scheme.hint),
             ),
         ],
       ),

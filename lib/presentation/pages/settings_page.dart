@@ -1,14 +1,15 @@
 /// Sellio Metrics — Settings Page
 ///
-/// Configuration panel for theme and locale only.
+/// Configuration panel for theme and locale.
+/// Follows SRP — each setting section is a separate sub-widget.
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
+import '../../design_system/design_system.dart';
 import '../../l10n/app_localizations.dart';
 import '../providers/app_settings_provider.dart';
 
@@ -18,6 +19,7 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final scheme = context.colors;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppSpacing.xl),
@@ -26,66 +28,67 @@ class SettingsPage extends StatelessWidget {
         children: [
           Text(
             l10n.navSettings,
-            style: AppTypography.headline.copyWith(
-              color: context.isDark ? Colors.white : SellioColors.gray700,
-            ),
+            style: AppTypography.headline.copyWith(color: scheme.title),
           ),
           const SizedBox(height: AppSpacing.xxl),
 
           // Appearance
-          _buildSection(
-            context,
+          _SettingsSection(
             title: l10n.settingsTheme,
             icon: Icons.palette_outlined,
             children: [
-              _buildThemeToggle(context, l10n),
+              const _ThemeToggle(),
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
 
           // Language
-          _buildSection(
-            context,
+          _SettingsSection(
             title: l10n.settingsLanguage,
             icon: Icons.translate,
             children: [
-              _buildLanguageToggle(context, l10n),
+              const _LanguageToggle(),
             ],
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildSection(
-    BuildContext context, {
-    required String title,
-    required IconData icon,
-    required List<Widget> children,
-  }) {
+/// Reusable settings section container.
+class _SettingsSection extends StatelessWidget {
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+
+  const _SettingsSection({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: context.isDark
-            ? SellioColors.darkSurface
-            : SellioColors.lightSurface,
+        color: scheme.surfaceLow,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(
-          color: context.isDark ? Colors.white10 : SellioColors.gray300,
-        ),
+        border: Border.all(color: scheme.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, size: 20, color: SellioColors.primaryIndigo),
+              Icon(icon, size: 20, color: scheme.primary),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 title,
-                style: AppTypography.subtitle.copyWith(
-                  color: context.isDark ? Colors.white : SellioColors.gray700,
-                ),
+                style: AppTypography.subtitle.copyWith(color: scheme.title),
               ),
             ],
           ),
@@ -95,8 +98,17 @@ class SettingsPage extends StatelessWidget {
       ),
     );
   }
+}
 
-  Widget _buildThemeToggle(BuildContext context, AppLocalizations l10n) {
+/// Theme toggle row.
+class _ThemeToggle extends StatelessWidget {
+  const _ThemeToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
+
     return Consumer<AppSettingsProvider>(
       builder: (context, settings, _) {
         return Row(
@@ -104,11 +116,7 @@ class SettingsPage extends StatelessWidget {
           children: [
             Text(
               l10n.settingsTheme,
-              style: AppTypography.body.copyWith(
-                color: context.isDark
-                    ? Colors.white70
-                    : SellioColors.textSecondary,
-              ),
+              style: AppTypography.body.copyWith(color: scheme.body),
             ),
             HuxSwitch(
               value: settings.isDarkMode,
@@ -119,23 +127,29 @@ class SettingsPage extends StatelessWidget {
       },
     );
   }
+}
 
-  Widget _buildLanguageToggle(BuildContext context, AppLocalizations l10n) {
+/// Language toggle row.
+class _LanguageToggle extends StatelessWidget {
+  const _LanguageToggle();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
+
     return Consumer<AppSettingsProvider>(
       builder: (context, settings, _) {
+        final isArabic = settings.locale.languageCode == 'ar';
         return Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Text(
-              settings.locale.languageCode == 'ar' ? 'العربية' : 'English',
-              style: AppTypography.body.copyWith(
-                color: context.isDark
-                    ? Colors.white70
-                    : SellioColors.textSecondary,
-              ),
+              isArabic ? l10n.languageArabic : l10n.languageEnglish,
+              style: AppTypography.body.copyWith(color: scheme.body),
             ),
             HuxSwitch(
-              value: settings.locale.languageCode == 'ar',
+              value: isArabic,
               onChanged: (_) => settings.toggleLocale(),
             ),
           ],

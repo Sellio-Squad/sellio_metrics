@@ -2,10 +2,9 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
-import '../../../core/theme/app_theme.dart';
+import '../../../design_system/design_system.dart';
 import '../../../l10n/app_localizations.dart';
 
 class AppBottomNav extends StatelessWidget {
@@ -21,14 +20,13 @@ class AppBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
+    final scheme = context.colors;
 
     return NavigationBar(
       selectedIndex: currentIndex,
       onDestinationSelected: onTap,
-      backgroundColor: context.isDark
-          ? SellioColors.darkSurface
-          : SellioColors.lightSurface,
-      indicatorColor: SellioColors.primaryIndigo.withAlpha(30),
+      backgroundColor: scheme.surfaceLow,
+      indicatorColor: scheme.primaryVariant,
       destinations: [
         NavigationDestination(
           icon: const Icon(LucideIcons.barChart3),

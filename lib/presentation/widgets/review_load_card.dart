@@ -2,10 +2,11 @@
 library;
 
 import 'package:flutter/material.dart';
-import 'package:hux/hux.dart';
 
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
+import '../../design_system/design_system.dart';
+import '../../l10n/app_localizations.dart';
 import '../../domain/entities/collaboration_entity.dart';
 
 class ReviewLoadCard extends StatelessWidget {
@@ -15,16 +16,15 @@ class ReviewLoadCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
+    final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
 
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xl),
       decoration: BoxDecoration(
-        color: context.isDark ? SellioColors.darkSurface : SellioColors.lightSurface,
+        color: scheme.surfaceLow,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(
-          color: context.isDark ? Colors.white10 : SellioColors.gray300,
-        ),
+        border: Border.all(color: scheme.stroke),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -34,24 +34,35 @@ class ReviewLoadCard extends StatelessWidget {
               const Text('⚖️', style: TextStyle(fontSize: 20)),
               const SizedBox(width: AppSpacing.sm),
               Text(
-                'Review Load',
-                style: AppTypography.title.copyWith(
-                  color: context.isDark ? Colors.white : SellioColors.gray700,
-                ),
+                l10n.sectionReviewLoad,
+                style: AppTypography.title.copyWith(color: scheme.title),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          ...entries.take(8).map((entry) => _buildRow(context, entry)),
+          ...entries.take(8).map((entry) => _ReviewRow(
+                entry: entry,
+                maxReviews: _maxReviews,
+              )),
         ],
       ),
     );
   }
 
-  Widget _buildRow(BuildContext context, ReviewLoadEntry entry) {
-    final maxReviews = entries.isNotEmpty
-        ? entries.map((e) => e.reviewsGiven).reduce((a, b) => a > b ? a : b)
-        : 1;
+  int get _maxReviews => entries.isNotEmpty
+      ? entries.map((e) => e.reviewsGiven).reduce((a, b) => a > b ? a : b)
+      : 1;
+}
+
+class _ReviewRow extends StatelessWidget {
+  final ReviewLoadEntry entry;
+  final int maxReviews;
+
+  const _ReviewRow({required this.entry, required this.maxReviews});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
     final progress = maxReviews > 0 ? entry.reviewsGiven / maxReviews : 0.0;
 
     return Padding(
@@ -71,13 +82,13 @@ class ReviewLoadCard extends StatelessWidget {
                       entry.developer,
                       style: AppTypography.caption.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: context.isDark ? Colors.white : SellioColors.gray700,
+                        color: scheme.title,
                       ),
                     ),
                     Text(
                       '${entry.reviewsGiven} reviews',
                       style: AppTypography.caption.copyWith(
-                        color: context.isDark ? Colors.white54 : SellioColors.textSecondary,
+                        color: scheme.hint,
                         fontSize: 11,
                       ),
                     ),
