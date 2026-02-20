@@ -67,7 +67,7 @@ class _PrListTileState extends State<PrListTile> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              HuxAvatar(name: pr.creator.login, size: HuxAvatarSize.small),
+              SAvatar(name: pr.creator.login, size: SAvatarSize.small),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
@@ -108,7 +108,7 @@ class _PrListTileState extends State<PrListTile> {
                 children: [
                   _PrTypeBadge(prType: prType),
                   const SizedBox(height: AppSpacing.xs),
-                  HuxBadge(
+                  SBadge(
                     label: pr.status.toUpperCase(),
                     variant: _getBadgeVariant(pr.status),
                   ),
@@ -128,12 +128,12 @@ class _PrListTileState extends State<PrListTile> {
     }
   }
 
-  HuxBadgeVariant _getBadgeVariant(String status) {
+  SBadgeVariant _getBadgeVariant(String status) {
     return switch (status) {
-      'merged' => HuxBadgeVariant.primary,
-      'closed' => HuxBadgeVariant.error,
-      'approved' => HuxBadgeVariant.success,
-      _ => HuxBadgeVariant.secondary,
+      'merged' => SBadgeVariant.primary,
+      'closed' => SBadgeVariant.error,
+      'approved' => SBadgeVariant.success,
+      _ => SBadgeVariant.secondary,
     };
   }
 }

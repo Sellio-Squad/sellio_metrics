@@ -27,25 +27,6 @@ class TeamInfo {
 class TeamStructureCard extends StatelessWidget {
   const TeamStructureCard({super.key});
 
-  // Placeholder data — update with actual team info
-  static const _teams = [
-    TeamInfo(
-      name: 'Platform Team',
-      leader: 'Team Lead 1',
-      description: 'Core infrastructure, CI/CD, developer tools',
-    ),
-    TeamInfo(
-      name: 'Product Team',
-      leader: 'Team Lead 2',
-      description: 'Customer-facing features, UI/UX, mobile apps',
-    ),
-    TeamInfo(
-      name: 'Backend Team',
-      leader: 'Team Lead 3',
-      description: 'APIs, microservices, data pipelines',
-    ),
-  ];
-
   static const _teamIcons = [
     Icons.build_circle_outlined,
     Icons.phone_android_outlined,
@@ -56,6 +37,25 @@ class TeamStructureCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
+
+    // Teams are localized
+    final teams = [
+      TeamInfo(
+        name: l10n.teamPlatformName,
+        leader: l10n.teamPlatformLeader,
+        description: l10n.teamPlatformDesc,
+      ),
+      TeamInfo(
+        name: l10n.teamProductName,
+        leader: l10n.teamProductLeader,
+        description: l10n.teamProductDesc,
+      ),
+      TeamInfo(
+        name: l10n.teamBackendName,
+        leader: l10n.teamBackendLeader,
+        description: l10n.teamBackendDesc,
+      ),
+    ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -85,9 +85,9 @@ class TeamStructureCard extends StatelessWidget {
                 mainAxisSpacing: AppSpacing.lg,
                 mainAxisExtent: 160,
               ),
-              itemCount: _teams.length,
+              itemCount: teams.length,
               itemBuilder: (context, index) =>
-                  _TeamCard(team: _teams[index], icon: _teamIcons[index]),
+                  _TeamCard(team: teams[index], icon: _teamIcons[index]),
             );
           },
         ),

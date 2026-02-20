@@ -62,13 +62,14 @@ class _ReviewRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
     final progress = maxReviews > 0 ? entry.reviewsGiven / maxReviews : 0.0;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Row(
         children: [
-          HuxAvatar(name: entry.developer, size: HuxAvatarSize.small),
+          SAvatar(name: entry.developer, size: SAvatarSize.small),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -85,7 +86,7 @@ class _ReviewRow extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      '${entry.reviewsGiven} reviews',
+                      '${entry.reviewsGiven} ${l10n.unitReviews}',
                       style: AppTypography.caption.copyWith(
                         color: scheme.hint,
                         fontSize: 11,
@@ -94,9 +95,9 @@ class _ReviewRow extends StatelessWidget {
                   ],
                 ),
                 const SizedBox(height: AppSpacing.xs),
-                HuxProgress(
+                SProgress(
                   value: progress,
-                  size: HuxProgressSize.medium,
+                  size: SProgressSize.medium,
                 ),
               ],
             ),

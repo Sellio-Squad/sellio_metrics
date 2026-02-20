@@ -2,7 +2,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:hux/hux.dart';
+import 'package:hux/hux.dart' show HuxTheme;
 import 'package:provider/provider.dart';
 import 'core/constants/app_constants.dart';
 import 'di/service_locator.dart';

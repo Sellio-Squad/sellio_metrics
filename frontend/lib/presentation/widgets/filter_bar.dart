@@ -2,12 +2,12 @@
 library;
 
 import 'package:flutter/material.dart';
-
 import 'package:provider/provider.dart';
 
+import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_utils.dart';
-import '../../l10n/app_strings.dart';
+import '../../l10n/app_localizations.dart';
 import '../providers/dashboard_provider.dart';
 
 class FilterBar extends StatelessWidget {
@@ -15,20 +15,17 @@ class FilterBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
 
     return Consumer<DashboardProvider>(
       builder: (context, provider, _) {
         return Container(
           padding: const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+            color: scheme.surfaceLow,
             borderRadius: AppRadius.lgAll,
-            border: Border.all(
-              color: isDark
-                  ? const Color(0xFF2E2E3E)
-                  : const Color(0xFFE5E7EB),
-            ),
+            border: Border.all(color: scheme.stroke),
           ),
           child: Wrap(
             spacing: AppSpacing.lg,
@@ -38,17 +35,18 @@ class FilterBar extends StatelessWidget {
               // Week filter
               _buildDropdown(
                 context: context,
-                label: AppStrings.filterByWeek,
+                scheme: scheme,
+                label: l10n.filterAllTime,
                 value: provider.weekFilter,
                 items: [
-                  const DropdownMenuItem(
+                  DropdownMenuItem(
                     value: 'all',
-                    child: Text(AppStrings.filterAllTime),
+                    child: Text(l10n.filterAllTime),
                   ),
                   ...provider.availableWeeks.asMap().entries.map((entry) {
                     final weekStart = DateTime.parse(entry.value);
                     final label = entry.key == 0
-                        ? AppStrings.filterCurrentWeek
+                        ? l10n.filterCurrentSprint
                         : formatWeekHeader(weekStart);
                     return DropdownMenuItem(
                       value: entry.value,
@@ -57,25 +55,24 @@ class FilterBar extends StatelessWidget {
                   }),
                 ],
                 onChanged: (v) => provider.setWeekFilter(v ?? 'all'),
-                isDark: isDark,
               ),
 
               // Developer filter
               _buildDropdown(
                 context: context,
-                label: AppStrings.filterViewAs,
+                scheme: scheme,
+                label: l10n.filterDeveloper,
                 value: provider.developerFilter,
                 items: [
-                  const DropdownMenuItem(
+                  DropdownMenuItem(
                     value: 'all',
-                    child: Text(AppStrings.filterAllTeam),
+                    child: Text(l10n.filterAllTeam),
                   ),
                   ...provider.availableDevelopers.map((dev) {
                     return DropdownMenuItem(value: dev, child: Text(dev));
                   }),
                 ],
                 onChanged: (v) => provider.setDeveloperFilter(v ?? 'all'),
-                isDark: isDark,
               ),
             ],
           ),
@@ -86,11 +83,11 @@ class FilterBar extends StatelessWidget {
 
   Widget _buildDropdown({
     required BuildContext context,
+    required SellioColorScheme scheme,
     required String label,
     required String value,
     required List<DropdownMenuItem<String>> items,
     required ValueChanged<String?> onChanged,
-    required bool isDark,
   }) {
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -99,14 +96,14 @@ class FilterBar extends StatelessWidget {
           label,
           style: AppTypography.caption.copyWith(
             fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white70 : const Color(0xFF374151),
+            color: scheme.body,
           ),
         ),
         const SizedBox(width: AppSpacing.sm),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
           decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF2A2A3E) : const Color(0xFFF3F4F6),
+            color: scheme.surface,
             borderRadius: AppRadius.mdAll,
           ),
           child: DropdownButton<String>(
@@ -114,11 +111,8 @@ class FilterBar extends StatelessWidget {
             items: items,
             onChanged: onChanged,
             underline: const SizedBox.shrink(),
-            dropdownColor:
-                isDark ? const Color(0xFF2A2A3E) : Colors.white,
-            style: AppTypography.caption.copyWith(
-              color: isDark ? Colors.white : const Color(0xFF1a1a2e),
-            ),
+            dropdownColor: scheme.surfaceLow,
+            style: AppTypography.caption.copyWith(color: scheme.title),
             isDense: true,
           ),
         ),

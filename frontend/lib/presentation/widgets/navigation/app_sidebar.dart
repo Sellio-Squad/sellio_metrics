@@ -27,32 +27,32 @@ class AppSidebar extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     final items = [
-      HuxSidebarItemData(
+      SSidebarItemData(
         id: 'analytics',
         icon: LucideIcons.barChart3,
         label: l10n.navAnalytics,
       ),
-      HuxSidebarItemData(
+      SSidebarItemData(
         id: 'open_prs',
         icon: LucideIcons.gitPullRequest,
         label: l10n.navOpenPrs,
       ),
-      HuxSidebarItemData(
+      SSidebarItemData(
         id: 'team',
         icon: LucideIcons.users,
         label: l10n.navTeam,
       ),
-      HuxSidebarItemData(
+      SSidebarItemData(
         id: 'charts',
         icon: LucideIcons.pieChart,
         label: l10n.navCharts,
       ),
-      HuxSidebarItemData(
+      SSidebarItemData(
         id: 'about',
         icon: LucideIcons.info,
         label: l10n.navAbout,
       ),
-      HuxSidebarItemData(
+      SSidebarItemData(
         id: 'settings',
         icon: LucideIcons.settings,
         label: l10n.navSettings,
@@ -61,7 +61,7 @@ class AppSidebar extends StatelessWidget {
 
     final ids = items.map((i) => i.id).toList();
 
-    return HuxSidebar(
+    return SSidebar(
       items: items,
       selectedItemId: ids[selectedIndex],
       onItemSelected: (id) {
@@ -150,7 +150,7 @@ class _SidebarFooter extends StatelessWidget {
                 style: AppTypography.caption.copyWith(color: scheme.hint),
               ),
             ),
-            HuxSwitch(
+            SSwitch(
               value: settings.isDarkMode,
               onChanged: (_) => settings.toggleTheme(),
             ),

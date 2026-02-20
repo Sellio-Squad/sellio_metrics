@@ -18,21 +18,18 @@ class AboutHowToJoinSection extends StatelessWidget {
     final steps = [
       _JoinStep(
         icon: Icons.mail_outlined,
-        title: 'Get in Touch',
-        description: 'Reach out to us via email or LinkedIn to express '
-            'your interest in joining the Sellio team.',
+        title: l10n.joinStep1Title,
+        description: l10n.joinStep1Desc,
       ),
       _JoinStep(
         icon: Icons.assignment_outlined,
-        title: 'Share Your Work',
-        description: 'Send us your portfolio, GitHub profile, or any '
-            'projects that showcase your skills.',
+        title: l10n.joinStep2Title,
+        description: l10n.joinStep2Desc,
       ),
       _JoinStep(
         icon: Icons.rocket_launch_outlined,
-        title: 'Start Contributing',
-        description: 'After a quick onboarding, dive straight into real '
-            'features with our agile squad.',
+        title: l10n.joinStep3Title,
+        description: l10n.joinStep3Desc,
       ),
     ];
 
