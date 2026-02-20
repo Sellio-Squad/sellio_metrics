@@ -1,11 +1,6 @@
-/// Sellio Metrics — Severity Presentation Extension
-///
-/// Maps domain Severity values to UI colors and icons.
-/// Keeps framework concerns out of the domain layer.
 library;
 
 import 'package:flutter/material.dart';
-
 import '../../core/theme/sellio_colors.dart';
 import '../../domain/enums/severity.dart';
 
