@@ -1,11 +1,6 @@
-/// Sellio Metrics — PrType Presentation Extension
-///
-/// Maps domain PrType values to UI colors.
-/// Keeps framework concerns out of the domain layer.
 library;
 
 import 'package:flutter/material.dart';
-
 import '../../core/theme/sellio_colors.dart';
 import '../../domain/enums/pr_type.dart';
 
