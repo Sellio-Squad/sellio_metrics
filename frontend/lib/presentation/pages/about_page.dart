@@ -1,11 +1,6 @@
-/// Sellio Metrics — About Sellio Page
-///
-/// Orchestrator page — delegates each section to a focused sub-widget.
-/// Follows SRP: this file only handles layout and section ordering.
 library;
 
 import 'package:flutter/material.dart';
-
 import '../../design_system/design_system.dart';
 import 'about/about_apps_section.dart';
 import 'about/about_features_section.dart';
