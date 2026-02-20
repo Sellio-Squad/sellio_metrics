@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
+import '../../../l10n/app_localizations.dart';
 import 'about_section_header.dart';
 
 class AboutFeaturesSection extends StatelessWidget {
@@ -12,20 +13,22 @@ class AboutFeaturesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+
     final features = [
-      'Multi-vendor e-commerce marketplace',
-      'Thrifting & pre-owned goods',
-      'AI-powered design generation',
-      'Real-time analytics dashboard',
-      'Scalable microservices backend',
-      'Cross-platform Flutter apps',
+      l10n.featureMarketplace,
+      l10n.featureThrifting,
+      l10n.featureAiDesign,
+      l10n.featureAnalytics,
+      l10n.featureMicroservices,
+      l10n.featureCrossplatform,
     ];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const AboutSectionHeader(
-          title: 'Key Features',
+        AboutSectionHeader(
+          title: l10n.aboutKeyFeatures,
           icon: Icons.star_outline,
         ),
         const SizedBox(height: AppSpacing.lg),

@@ -61,6 +61,7 @@ class _LeaderboardRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
+    final l10n = AppLocalizations.of(context);
     final medal = index < 3 ? _medals[index] : '${index + 1}';
 
     return Padding(
@@ -79,7 +80,7 @@ class _LeaderboardRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: AppSpacing.md),
-          HuxAvatar(name: entry.developer, size: HuxAvatarSize.small),
+          SAvatar(name: entry.developer, size: SAvatarSize.small),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -93,7 +94,9 @@ class _LeaderboardRow extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${entry.prsCreated} PRs · ${entry.reviewsGiven} reviews · ${entry.commentsGiven} comments',
+                  '${entry.prsCreated} ${l10n.unitPrs} · '
+                  '${entry.reviewsGiven} ${l10n.unitReviews} · '
+                  '${entry.commentsGiven} ${l10n.unitComments}',
                   style: AppTypography.caption.copyWith(
                     color: scheme.hint,
                     fontSize: 11,

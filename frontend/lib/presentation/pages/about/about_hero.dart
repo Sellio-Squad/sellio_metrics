@@ -49,7 +49,7 @@ class AboutHero extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'E-Commerce • Thrifting • AI-Powered',
+            l10n.aboutTagline,
             style: AppTypography.body.copyWith(
               color: scheme.onPrimary.withValues(alpha: 0.7),
             ),

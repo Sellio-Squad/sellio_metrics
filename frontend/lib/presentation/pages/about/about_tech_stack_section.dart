@@ -16,10 +16,10 @@ class AboutTechStackSection extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     final techItems = [
-      _TechItem('Flutter', 'Mobile & Web', LucideIcons.smartphone),
-      _TechItem('Kotlin', 'Backend API', LucideIcons.server),
-      _TechItem('GitHub Actions', 'CI/CD Pipeline', LucideIcons.gitBranch),
-      _TechItem('Firebase', 'Auth & Database', LucideIcons.database),
+      _TechItem(l10n.techFlutter, l10n.techFlutterRole, LucideIcons.smartphone),
+      _TechItem(l10n.techKotlin, l10n.techKotlinRole, LucideIcons.server),
+      _TechItem(l10n.techGithubActions, l10n.techGithubActionsRole, LucideIcons.gitBranch),
+      _TechItem(l10n.techFirebase, l10n.techFirebaseRole, LucideIcons.database),
     ];
 
     return Column(

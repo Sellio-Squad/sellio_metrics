@@ -31,7 +31,7 @@ class OpenPrsPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Search bar only — no status filter
-              HuxInput(
+              SInput(
                 hint: l10n.searchPlaceholder,
                 onChanged: (value) => provider.setSearchTerm(value),
                 prefixIcon: const Icon(Icons.search),
@@ -46,9 +46,9 @@ class OpenPrsPage extends StatelessWidget {
                     style: AppTypography.title.copyWith(color: scheme.title),
                   ),
                   const SizedBox(width: AppSpacing.sm),
-                  HuxBadge(
+                  SBadge(
                     label: '${prs.length}',
-                    variant: HuxBadgeVariant.primary,
+                    variant: SBadgeVariant.primary,
                   ),
                 ],
               ),

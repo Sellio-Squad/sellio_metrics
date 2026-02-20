@@ -48,7 +48,7 @@ class _LoadingScreenState extends State<LoadingScreen>
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const HuxLoading(size: HuxLoadingSize.extraLarge),
+            SLoading(size: SLoadingSize.extraLarge),
             const SizedBox(height: AppSpacing.xl),
             FadeTransition(
               opacity: _fadeAnimation,

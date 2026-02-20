@@ -42,7 +42,7 @@ class DateRangeFilter extends StatelessWidget {
           // Start date
           SizedBox(
             width: 180,
-            child: HuxDatePicker(
+            child: SDatePicker(
               placeholder: l10n.filterStartDate,
               initialDate: provider.startDate,
               firstDate: firstDate,
@@ -56,7 +56,7 @@ class DateRangeFilter extends StatelessWidget {
           // End date — firstDate constrained to startDate
           SizedBox(
             width: 180,
-            child: HuxDatePicker(
+            child: SDatePicker(
               placeholder: l10n.filterEndDate,
               initialDate: provider.endDate,
               firstDate: provider.startDate ?? firstDate,
@@ -75,9 +75,9 @@ class DateRangeFilter extends StatelessWidget {
             ),
 
           // Current Sprint shortcut
-          HuxButton(
-            variant: HuxButtonVariant.ghost,
-            size: HuxButtonSize.small,
+          SButton(
+            variant: SButtonVariant.ghost,
+            size: SButtonSize.small,
             onPressed: () {
               final sprintEnd = now;
               final sprintStart = now.subtract(
@@ -97,9 +97,9 @@ class DateRangeFilter extends StatelessWidget {
 
           // Clear filters
           if (provider.startDate != null || provider.endDate != null)
-            HuxButton(
-              variant: HuxButtonVariant.ghost,
-              size: HuxButtonSize.small,
+            SButton(
+              variant: SButtonVariant.ghost,
+              size: SButtonSize.small,
               onPressed: () => provider.setDateRange(null, null),
               child: Row(
                 mainAxisSize: MainAxisSize.min,

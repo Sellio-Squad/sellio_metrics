@@ -18,27 +18,24 @@ class AboutAppsSection extends StatelessWidget {
 
     final apps = [
       _AppInfo(
-        name: 'Customer App',
-        description: 'Browse, buy, and explore curated products. '
-            'Smart search, wishlists, and secure checkout.',
+        name: l10n.aboutAppCustomerName,
+        description: l10n.aboutAppCustomerDesc,
         icon: LucideIcons.shoppingBag,
-        status: 'In Progress',
+        status: l10n.aboutStatusInProgress,
         liveUrl: null,
       ),
       _AppInfo(
-        name: 'Admin Panel',
-        description: 'Manage platform, users, analytics, and orders. '
-            'Real-time monitoring dashboard.',
+        name: l10n.aboutAppAdminName,
+        description: l10n.aboutAppAdminDesc,
         icon: LucideIcons.shield,
-        status: 'Planned',
+        status: l10n.aboutStatusPlanned,
         liveUrl: null,
       ),
       _AppInfo(
-        name: 'Seller App',
-        description: 'List products with AI descriptions, manage orders, '
-            'track sales performance.',
+        name: l10n.aboutAppSellerName,
+        description: l10n.aboutAppSellerDesc,
         icon: LucideIcons.store,
-        status: 'Planned',
+        status: l10n.aboutStatusPlanned,
         liveUrl: null,
       ),
     ];
@@ -92,9 +89,9 @@ class _AppCard extends StatelessWidget {
             children: [
               Icon(app.icon, color: scheme.primary, size: 24),
               const Spacer(),
-              HuxBadge(
+              SBadge(
                 label: app.status,
-                variant: HuxBadgeVariant.secondary,
+                variant: SBadgeVariant.secondary,
               ),
             ],
           ),
@@ -116,11 +113,11 @@ class _AppCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           SizedBox(
             width: double.infinity,
-            child: HuxButton(
+            child: SButton(
               variant: app.liveUrl != null
-                  ? HuxButtonVariant.primary
-                  : HuxButtonVariant.ghost,
-              size: HuxButtonSize.small,
+                  ? SButtonVariant.primary
+                  : SButtonVariant.ghost,
+              size: SButtonSize.small,
               onPressed: app.liveUrl != null
                   ? () {
                       final uri = Uri.tryParse(app.liveUrl!);
@@ -139,7 +136,7 @@ class _AppCard extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Text(
-                    app.liveUrl != null ? l10n.aboutTryLive : 'Coming Soon',
+                    app.liveUrl != null ? l10n.aboutTryLive : l10n.aboutComingSoon,
                   ),
                 ],
               ),

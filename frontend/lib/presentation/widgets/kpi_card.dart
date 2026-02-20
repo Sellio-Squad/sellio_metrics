@@ -26,7 +26,7 @@ class KpiCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = context.colors;
 
-    return HuxCard(
+    return SCard(
       child: Container(
         padding: const EdgeInsets.all(AppSpacing.xl),
         decoration: BoxDecoration(

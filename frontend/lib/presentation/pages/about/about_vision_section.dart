@@ -25,10 +25,7 @@ class AboutVisionSection extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'Sellio is a startup e-commerce platform that reimagines '
-          'how people buy and sell online. We connect sellers and buyers '
-          'in a seamless marketplace for both pre-owned and new goods, '
-          'combining traditional e-commerce with modern thrifting culture.',
+          l10n.aboutVisionP1,
           style: AppTypography.body.copyWith(
             height: 1.8,
             color: scheme.body,
@@ -36,10 +33,7 @@ class AboutVisionSection extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Our mission is to make online selling as easy as posting on '
-          'social media while providing buyers with a curated, trustworthy '
-          'shopping experience. We target the growing second-hand market '
-          'in the MENA region, where sustainability meets affordability.',
+          l10n.aboutVisionP2,
           style: AppTypography.body.copyWith(
             height: 1.8,
             color: scheme.body,
@@ -50,10 +44,10 @@ class AboutVisionSection extends StatelessWidget {
           spacing: AppSpacing.md,
           runSpacing: AppSpacing.md,
           children: [
-            _AdvantageChip(emoji: '🎯', text: 'MENA-first approach'),
-            _AdvantageChip(emoji: '♻️', text: 'Sustainability-driven'),
-            _AdvantageChip(emoji: '🤖', text: 'AI-powered curation'),
-            _AdvantageChip(emoji: '📱', text: 'Mobile-first design'),
+            _AdvantageChip(emoji: '🎯', text: l10n.aboutVisionChipMena),
+            _AdvantageChip(emoji: '♻️', text: l10n.aboutVisionChipSustainability),
+            _AdvantageChip(emoji: '🤖', text: l10n.aboutVisionChipAi),
+            _AdvantageChip(emoji: '📱', text: l10n.aboutVisionChipMobile),
           ],
         ),
         const SizedBox(height: AppSpacing.xl),
@@ -65,11 +59,7 @@ class AboutVisionSection extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'Sellio differentiates itself through AI-powered product recommendations, '
-          'integrated design generation tools, and a streamlined seller onboarding '
-          'process that reduces listing time by 70%. Our scalable microservices '
-          'architecture supports rapid growth, and our cross-platform Flutter apps '
-          'ensure a consistent experience across iOS, Android, and Web.',
+          l10n.aboutSummaryBody,
           style: AppTypography.body.copyWith(
             height: 1.7,
             color: scheme.body,

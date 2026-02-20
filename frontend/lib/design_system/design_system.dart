@@ -10,5 +10,17 @@ export '../core/theme/app_spacing.dart';
 export '../core/theme/app_radius.dart';
 export '../core/theme/app_typography.dart';
 
-// ─── Hux component re-exports ───────────────────────────────
-export 'package:hux/hux.dart' hide DateFormat;
+// ─── S* wrapper components ──────────────────────────────────
+export 'components/s_avatar.dart';
+export 'components/s_badge.dart';
+export 'components/s_button.dart';
+export 'components/s_card.dart';
+export 'components/s_date_picker.dart';
+export 'components/s_input.dart';
+export 'components/s_loading.dart';
+export 'components/s_progress.dart';
+export 'components/s_sidebar.dart';
+export 'components/s_switch.dart';
+
+// ─── Icons (re-exported for convenience) ─────────────────────
+export 'package:hux/hux.dart' show LucideIcons;
