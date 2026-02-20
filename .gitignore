@@ -1,24 +1,31 @@
-# Flutter / Dart
+# ─── Flutter / Dart ─────────────────────────────────────────
 .dart_tool/
 .packages
-build/
 .flutter-plugins
 .flutter-plugins-dependencies
 *.iml
 
-# IDE
-.idea/
-*.swp
-*.swo
-.vscode/
+# ─── Flutter build output ────────────────────────────────────
+frontend/build/
+build/
 
-# macOS
-.DS_Store
-
-# Node (legacy JS dashboard)
+# ─── Node.js / Backend ──────────────────────────────────────
+backend/node_modules/
+backend/dist/
 node_modules/
 
-# Misc
-*.log
+# ─── IDE ─────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# ─── Environment ─────────────────────────────────────────────
 .env
-/pubspec.lock
+backend/.env
+
+# ─── OS ──────────────────────────────────────────────────────
+.DS_Store
+
+# ─── Misc ────────────────────────────────────────────────────
+*.log
