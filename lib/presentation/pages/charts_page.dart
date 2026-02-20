@@ -7,7 +7,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
-
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/theme/app_theme.dart';
 import '../../core/utils/date_utils.dart';
