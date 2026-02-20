@@ -1,8 +1,3 @@
-/// Sellio Metrics — Charts Page
-///
-/// Dedicated analytics visualization page with PR activity,
-/// type distribution, review time, and code volume charts.
-/// Delegates each chart to its own widget file.
 library;
 
 import 'package:flutter/material.dart';
