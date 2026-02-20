@@ -1,11 +1,6 @@
-/// Sellio Metrics — Dashboard Page (App Shell)
-///
-/// Minimal compositor: sidebar (desktop) / bottom nav (mobile) + page content.
-/// Navigation logic only — no business logic here.
 library;
 
 import 'package:flutter/material.dart';
-
 import '../../core/extensions/theme_extensions.dart';
 import '../widgets/navigation/app_sidebar.dart';
 import '../widgets/navigation/app_bottom_nav.dart';
