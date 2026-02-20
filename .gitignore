@@ -20,9 +20,14 @@ node_modules/
 *.swp
 *.swo
 
-# ─── Environment ─────────────────────────────────────────────
+# ─── Environment & Secrets ──────────────────────────────────
 .env
 backend/.env
+
+# Private keys — NEVER commit these
+*.pem
+backend/private-key.pem
+private-key.pem
 
 # ─── OS ──────────────────────────────────────────────────────
 .DS_Store
