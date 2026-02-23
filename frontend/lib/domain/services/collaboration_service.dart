@@ -58,8 +58,3 @@ class _LeaderboardAccumulator {
   int reviewsGiven = 0;
   int commentsGiven = 0;
 }
-
-class _ReviewLoadAccumulator {
-  int reviewsGiven = 0;
-  int prsCreated = 0;
-}
