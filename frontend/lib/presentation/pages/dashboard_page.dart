@@ -4,11 +4,11 @@ import 'package:flutter/material.dart';
 import '../../core/extensions/theme_extensions.dart';
 import '../widgets/navigation/app_sidebar.dart';
 import '../widgets/navigation/app_bottom_nav.dart';
-import 'analytics_page.dart';
+import 'analytics/analytics_page.dart';
 import 'open_prs_page.dart';
 import 'team_page.dart';
 import 'charts_page.dart';
-import 'about_page.dart';
+import 'about/about_page.dart';
 import 'settings_page.dart';
 
 class DashboardPage extends StatefulWidget {

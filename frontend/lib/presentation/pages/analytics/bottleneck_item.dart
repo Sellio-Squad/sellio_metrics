@@ -1,18 +1,13 @@
-/// Sellio Metrics — Bottleneck Item Widget
-///
-/// Clickable, hoverable PR card for the "Slow PRs" section.
-/// Follows SRP — only responsible for rendering a single bottleneck entry.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-
-import '../../core/constants/layout_constants.dart';
-import '../../core/extensions/theme_extensions.dart';
-import '../../core/theme/app_theme.dart';
-import '../../domain/entities/bottleneck_entity.dart';
-import '../../l10n/app_localizations.dart';
-import '../extensions/severity_presentation.dart';
+import '../../../core/constants/layout_constants.dart';
+import '../../../core/extensions/theme_extensions.dart';
+import '../../../core/theme/app_theme.dart';
+import '../../../domain/entities/bottleneck_entity.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../extensions/severity_presentation.dart';
 
 class BottleneckItem extends StatefulWidget {
   final BottleneckEntity bottleneck;

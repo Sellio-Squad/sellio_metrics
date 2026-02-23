@@ -2,13 +2,13 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/extensions/theme_extensions.dart';
-import '../../design_system/design_system.dart';
-import '../../l10n/app_localizations.dart';
-import '../providers/dashboard_provider.dart';
-import '../widgets/bottleneck_item.dart';
-import '../widgets/filters/date_range_filter.dart';
-import '../widgets/spotlight_card.dart';
+import '../../../core/extensions/theme_extensions.dart';
+import '../../../design_system/design_system.dart';
+import '../../../l10n/app_localizations.dart';
+import '../../providers/dashboard_provider.dart';
+import 'bottleneck_item.dart';
+import 'spotlight_card.dart';
+import 'filters/date_range_filter.dart';
 
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
