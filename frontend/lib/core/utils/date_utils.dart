@@ -1,9 +1,6 @@
-/// Sellio Metrics Dashboard — Date Utilities
-///
-/// Pure functions for date manipulation, week calculation, and formatting.
 library;
 
-import 'package:intl/intl.dart';
+import '../constants/app_constants.dart';
 
 /// Returns the Monday (start) of the ISO week containing [date].
 DateTime getWeekStartDate(DateTime date) {
@@ -14,13 +11,13 @@ DateTime getWeekStartDate(DateTime date) {
 /// Formats a week start date as "Mon DD – Mon DD" range.
 String formatWeekHeader(DateTime weekStart) {
   final weekEnd = weekStart.add(const Duration(days: 6));
-  final startFmt = DateFormat('MMM d').format(weekStart);
-  final endFmt = DateFormat('MMM d').format(weekEnd);
+  final startFmt = DateFormats.short.format(weekStart);
+  final endFmt = DateFormats.short.format(weekEnd);
   return '$startFmt – $endFmt';
 }
 
 /// Format a [DateTime] as ISO date string (YYYY-MM-DD).
-String toIsoDate(DateTime date) => DateFormat('yyyy-MM-dd').format(date);
+String toIsoDate(DateTime date) => DateFormats.iso.format(date);
 
 /// Returns the ISO week key (e.g., "2026-W04") for a given date.
 String getIsoWeekKey(DateTime date) {
@@ -46,7 +43,7 @@ String formatRelativeTime(DateTime date) {
 }
 
 /// Formats [DateTime] as "MMM DD, YYYY" (e.g., "Jan 20, 2026").
-String formatFullDate(DateTime date) => DateFormat('MMM d, yyyy').format(date);
+String formatFullDate(DateTime date) => DateFormats.full.format(date);
 
 /// Formats [DateTime] as "MMM DD" (e.g., "Jan 20").
-String formatShortDate(DateTime date) => DateFormat('MMM d').format(date);
+String formatShortDate(DateTime date) => DateFormats.short.format(date);

@@ -1,6 +1,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 class ApiConfig {
   const ApiConfig._();
@@ -89,4 +90,12 @@ class LeaderboardWeights {
   static const int prsMerged = 2;
   static const int reviewsGiven = 2;
   static const int commentsGiven = 1;
+}
+
+class DateFormats {
+  const DateFormats._();
+
+  static final full = DateFormat('MMM d, yyyy');
+  static final short = DateFormat('MMM d');
+  static final iso = DateFormat('yyyy-MM-dd');
 }

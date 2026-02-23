@@ -2,6 +2,7 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:sellio_metrics/core/constants/layout_constants.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../l10n/app_localizations.dart';
@@ -9,7 +10,7 @@ import '../../providers/dashboard_provider.dart';
 import 'section_header.dart';
 import 'bottleneck_item.dart';
 import 'spotlight_card.dart';
-import 'filters/date_range_filter.dart';
+import 'date_filter/date_range_filter.dart';
 
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
@@ -40,14 +41,14 @@ class AnalyticsPage extends StatelessWidget {
 
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final crossAxisCount = constraints.maxWidth > 800 ? 3 : 1;
+                    final crossAxisCount = constraints.maxWidth > LayoutConstants.mobileBreakpoint ? 3 : 1;
                     return GridView.count(
                       crossAxisCount: crossAxisCount,
                       crossAxisSpacing: AppSpacing.lg,
                       mainAxisSpacing: AppSpacing.lg,
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      childAspectRatio: 2.2,
+                      childAspectRatio: 2,
                       children: [
                         SpotlightCard(
                           icon: LucideIcons.flame,
