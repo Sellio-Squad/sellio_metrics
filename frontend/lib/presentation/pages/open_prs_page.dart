@@ -1,12 +1,7 @@
-/// Sellio Metrics — Open PRs Page
-///
-/// Lists open pull requests with search.
-/// Follows SRP — orchestrates layout, delegates to PrListTile.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../core/extensions/theme_extensions.dart';
 import '../../design_system/design_system.dart';
 import '../../l10n/app_localizations.dart';

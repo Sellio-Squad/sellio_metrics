@@ -21,72 +21,75 @@ class AnalyticsPage extends StatelessWidget {
       builder: (context, provider, _) {
         final scheme = context.colors;
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Date filter — no developer dropdown
-              const DateRangeFilter(),
-              const SizedBox(height: AppSpacing.xxl),
+        return Align(
+          alignment: Alignment.topCenter,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Date filter — no developer dropdown
+                const DateRangeFilter(),
+                const SizedBox(height: AppSpacing.xxl),
 
-              // Spotlight section
-              _SectionHeader(
-                emoji: '🌟',
-                title: l10n.sectionSpotlight,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final crossAxisCount =
-                  constraints.maxWidth > 800 ? 3 : 1;
-                  return GridView.count(
-                    crossAxisCount: crossAxisCount,
-                    crossAxisSpacing: AppSpacing.lg,
-                    mainAxisSpacing: AppSpacing.lg,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 2.2,
-                    children: [
-                      SpotlightCard(
-                        emoji: '🔥',
-                        title: l10n.spotlightHotStreak,
-                        metric: provider.spotlightMetrics.hotStreak,
-                        accentColor: scheme.secondary,
-                      ),
-                      SpotlightCard(
-                        emoji: '⚡',
-                        title: l10n.spotlightFastestReviewer,
-                        metric: provider.spotlightMetrics.fastestReviewer,
-                        accentColor: scheme.green,
-                      ),
-                      SpotlightCard(
-                        emoji: '💬',
-                        title: l10n.spotlightTopCommenter,
-                        metric: provider.spotlightMetrics.topCommenter,
-                        accentColor: scheme.primary,
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: AppSpacing.xxl),
+                // Spotlight section
+                _SectionHeader(
+                  emoji: '🌟',
+                  title: l10n.sectionSpotlight,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final crossAxisCount =
+                    constraints.maxWidth > 800 ? 3 : 1;
+                    return GridView.count(
+                      crossAxisCount: crossAxisCount,
+                      crossAxisSpacing: AppSpacing.lg,
+                      mainAxisSpacing: AppSpacing.lg,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      childAspectRatio: 2.2,
+                      children: [
+                        SpotlightCard(
+                          emoji: '🔥',
+                          title: l10n.spotlightHotStreak,
+                          metric: provider.spotlightMetrics.hotStreak,
+                          accentColor: scheme.secondary,
+                        ),
+                        SpotlightCard(
+                          emoji: '⚡',
+                          title: l10n.spotlightFastestReviewer,
+                          metric: provider.spotlightMetrics.fastestReviewer,
+                          accentColor: scheme.green,
+                        ),
+                        SpotlightCard(
+                          emoji: '💬',
+                          title: l10n.spotlightTopCommenter,
+                          metric: provider.spotlightMetrics.topCommenter,
+                          accentColor: scheme.primary,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.xxl),
 
-              // Slow PRs section
-              _SectionHeader(
-                emoji: '🐢',
-                title: l10n.sectionBottlenecks,
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              if (provider.bottlenecks.isEmpty)
-                Text(
-                  l10n.emptyData,
-                  style: AppTypography.body.copyWith(color: scheme.hint),
-                )
-              else
-                ...provider.bottlenecks
-                    .map((b) => BottleneckItem(bottleneck: b)),
-            ],
+                // Slow PRs section
+                _SectionHeader(
+                  emoji: '🐢',
+                  title: l10n.sectionBottlenecks,
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                if (provider.bottlenecks.isEmpty)
+                  Text(
+                    l10n.emptyData,
+                    style: AppTypography.body.copyWith(color: scheme.hint),
+                  )
+                else
+                  ...provider.bottlenecks
+                      .map((b) => BottleneckItem(bottleneck: b)),
+              ],
+            ),
           ),
         );
       },
