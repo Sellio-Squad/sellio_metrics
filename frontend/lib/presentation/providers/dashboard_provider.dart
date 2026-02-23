@@ -1,17 +1,11 @@
-/// Sellio Metrics — Dashboard Provider
-///
-/// Main state management for the dashboard.
-/// Receives dependencies via constructor injection from DI.
-/// Only imports from domain layer — never from data.
 library;
 
 import 'package:flutter/foundation.dart';
-
 import '../../core/constants/app_constants.dart';
+import '../../domain/entities/leaderboard_entry.dart';
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/entities/kpi_entity.dart';
 import '../../domain/entities/bottleneck_entity.dart';
-import '../../domain/entities/collaboration_entity.dart';
 import '../../domain/repositories/metrics_repository.dart';
 import '../../domain/services/kpi_service.dart';
 import '../../domain/services/bottleneck_service.dart';
@@ -33,11 +27,11 @@ class DashboardProvider extends ChangeNotifier {
     required BottleneckService bottleneckService,
     required CollaborationService collaborationService,
     required FilterService filterService,
-  })  : _repository = repository,
-        _kpiService = kpiService,
-        _bottleneckService = bottleneckService,
-        _collaborationService = collaborationService,
-        _filterService = filterService;
+  }) : _repository = repository,
+       _kpiService = kpiService,
+       _bottleneckService = bottleneckService,
+       _collaborationService = collaborationService,
+       _filterService = filterService;
 
   // ─── State ───────────────────────────────────────────────
   DashboardStatus _status = DashboardStatus.loading;
@@ -57,16 +51,27 @@ class DashboardProvider extends ChangeNotifier {
 
   // ─── Getters ─────────────────────────────────────────────
   DashboardStatus get status => _status;
+
   List<PrEntity> get allPrs => _allPrs;
+
   String get weekFilter => _weekFilter;
+
   String get developerFilter => _developerFilter;
+
   String get searchTerm => _searchTerm;
+
   String get statusFilter => _statusFilter;
+
   int get currentPageIndex => _currentPageIndex;
+
   double get bottleneckThreshold => _bottleneckThreshold;
+
   DateTime? get startDate => _startDate;
+
   DateTime? get endDate => _endDate;
+
   String get currentOwner => _currentOwner;
+
   String get currentRepo => _currentRepo;
 
   /// PRs filtered by date range and week.
@@ -77,26 +82,24 @@ class DashboardProvider extends ChangeNotifier {
 
   /// PRs filtered by week + search + status (for PR lists).
   List<PrEntity> get filteredPrs => _filterService.filterPrs(
-        weekFilteredPrs,
-        searchTerm: _searchTerm,
-        statusFilter: _statusFilter,
-      );
+    weekFilteredPrs,
+    searchTerm: _searchTerm,
+    statusFilter: _statusFilter,
+  );
 
   /// Open PRs only.
-  List<PrEntity> get openPrs =>
-      filteredPrs.where((pr) => pr.isOpen).toList();
+  List<PrEntity> get openPrs => filteredPrs.where((pr) => pr.isOpen).toList();
 
   // ─── Computed Analytics ──────────────────────────────────
   KpiEntity get kpis => _kpiService.calculateKpis(
-        weekFilteredPrs,
-        developerFilter: _developerFilter,
-      );
+    weekFilteredPrs,
+    developerFilter: _developerFilter,
+  );
 
-  SpotlightEntity get spotlightMetrics =>
-      _kpiService.calculateSpotlightMetrics(
-        weekFilteredPrs,
-        developerFilter: _developerFilter,
-      );
+  SpotlightEntity get spotlightMetrics => _kpiService.calculateSpotlightMetrics(
+    weekFilteredPrs,
+    developerFilter: _developerFilter,
+  );
 
   List<BottleneckEntity> get bottlenecks =>
       _bottleneckService.identifyBottlenecks(
@@ -104,34 +107,21 @@ class DashboardProvider extends ChangeNotifier {
         thresholdHours: _bottleneckThreshold,
       );
 
-  List<CollaborationPair> get collaborationPairs =>
-      _collaborationService.calculateCollaborationPairs(weekFilteredPrs);
-
   List<LeaderboardEntry> get leaderboard =>
       _collaborationService.calculateLeaderboard(weekFilteredPrs);
 
-  List<ReviewLoadEntry> get reviewLoad =>
-      _collaborationService.calculateReviewLoad(weekFilteredPrs);
-
-  Map<String, int> get prTypeDistribution =>
-      _filterService.analyzePrTypes(weekFilteredPrs);
-
-  List<String> get availableWeeks =>
-      _filterService.getUniqueWeeks(_allPrs);
-
-  List<String> get availableDevelopers =>
-      _filterService.getUniqueDevelopers(_allPrs);
 
   // ─── Actions ─────────────────────────────────────────────
 
   /// Load PR data for the given [owner]/[repo].
   Future<void> loadData({String owner = '', String repo = ''}) async {
-    // Use provided or fall back to current
     final o = owner.isNotEmpty ? owner : _currentOwner;
     final r = repo.isNotEmpty ? repo : _currentRepo;
 
     if (o.isEmpty || r.isEmpty) {
-      debugPrint('[DashboardProvider] No owner/repo set. Waiting for selection.');
+      debugPrint(
+        '[DashboardProvider] No owner/repo set. Waiting for selection.',
+      );
       return;
     }
 
@@ -166,35 +156,12 @@ class DashboardProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setWeekFilter(String week) {
-    _weekFilter = week;
-    notifyListeners();
-  }
-
-  void setDeveloperFilter(String developer) {
-    _developerFilter = developer;
-    notifyListeners();
-  }
 
   void setSearchTerm(String term) {
     _searchTerm = term;
     notifyListeners();
   }
 
-  void setStatusFilter(String status) {
-    _statusFilter = status;
-    notifyListeners();
-  }
-
-  void setPageIndex(int index) {
-    _currentPageIndex = index;
-    notifyListeners();
-  }
-
-  void setBottleneckThreshold(double hours) {
-    _bottleneckThreshold = hours;
-    notifyListeners();
-  }
 
   void setDateRange(DateTime? start, DateTime? end) {
     _startDate = start;

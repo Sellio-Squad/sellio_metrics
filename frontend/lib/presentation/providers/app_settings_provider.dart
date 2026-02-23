@@ -12,12 +12,10 @@ class AppSettingsProvider extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.dark;
   Locale _locale = const Locale('en');
 
-  /// Currently selected repository (owner/repo format, e.g. "Sellio-Squad/sellio_mobile").
   String _selectedRepoFullName = '';
   String _selectedRepoName = '';
   String _selectedOwner = '';
 
-  /// Available repositories from the GitHub org.
   List<RepoInfo> _availableRepos = [];
   bool _isLoadingRepos = false;
 
