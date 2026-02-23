@@ -79,6 +79,7 @@ class AnalyticsPage extends StatelessWidget {
                   icon: LucideIcons.alertTriangle,
                   title: l10n.sectionBottlenecks,
                 ),
+
                 const SizedBox(height: AppSpacing.lg),
                 if (provider.bottlenecks.isEmpty)
                   Text(

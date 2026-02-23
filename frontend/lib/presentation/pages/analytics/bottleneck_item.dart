@@ -39,7 +39,12 @@ class _BottleneckItemState extends State<BottleneckItem> {
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
           padding: const EdgeInsets.all(AppSpacing.lg),
           transform: _isHovered
-              ? (Matrix4.identity()..scaleByDouble(AnimationConstants.hoverScale, AnimationConstants.hoverScale, 1.0, 1.0))
+              ? (Matrix4.identity()..scaleByDouble(
+                  AnimationConstants.hoverScale,
+                  AnimationConstants.hoverScale,
+                  1.0,
+                  1.0,
+                ))
               : Matrix4.identity(),
           decoration: BoxDecoration(
             color: scheme.surfaceLow,
@@ -98,9 +103,7 @@ class _BottleneckItemState extends State<BottleneckItem> {
                     const SizedBox(height: 2),
                     Text(
                       '${b.author} · ${b.waitTimeDays.toStringAsFixed(1)} ${l10n.bottleneckWaiting}',
-                      style: AppTypography.caption.copyWith(
-                        color: scheme.body,
-                      ),
+                      style: AppTypography.caption.copyWith(color: scheme.body),
                     ),
                   ],
                 ),
