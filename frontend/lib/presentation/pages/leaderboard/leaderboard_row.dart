@@ -3,7 +3,7 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../design_system/components/s_avatar.dart';
 import '../../../domain/entities/leaderboard_entry.dart';
-import '../../../l10n/app_localizations.dart';
+import '../../../core/l10n/app_localizations.dart';
 
 class LeaderboardRow extends StatelessWidget {
   final int index;

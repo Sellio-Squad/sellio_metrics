@@ -6,11 +6,11 @@ import '../../core/extensions/theme_extensions.dart';
 import '../widgets/navigation/app_sidebar.dart';
 import '../widgets/navigation/app_bottom_nav.dart';
 import 'analytics/analytics_page.dart';
-import 'open_prs_page.dart';
+import 'prs/open_prs_page.dart';
 import 'leaderboard/leaderboard_page.dart';
-import 'charts_page.dart';
+import 'chart/charts_page.dart';
 import 'about/about_page.dart';
-import 'settings_page.dart';
+import 'setting/settings_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});

@@ -5,7 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../l10n/app_localizations.dart';
+import '../../../core/l10n/app_localizations.dart';
 import 'about_section_header.dart';
 
 class AboutAppsSection extends StatelessWidget {

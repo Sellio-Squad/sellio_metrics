@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:sellio_metrics/core/constants/layout_constants.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../l10n/app_localizations.dart';
+import '../../../core/l10n/app_localizations.dart';
 import '../../providers/dashboard_provider.dart';
 import 'section_header.dart';
 import 'bottleneck_item.dart';

@@ -6,7 +6,7 @@ import '../../../core/constants/layout_constants.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/entities/bottleneck_entity.dart';
-import '../../../l10n/app_localizations.dart';
+import '../../../core/l10n/app_localizations.dart';
 import '../../extensions/severity_presentation.dart';
 
 class BottleneckItem extends StatefulWidget {

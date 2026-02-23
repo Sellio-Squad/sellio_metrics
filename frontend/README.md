@@ -161,7 +161,7 @@ flutter pub get
 flutter gen-l10n
 ```
 
-> This generates `lib/l10n/app_localizations.dart` from the `.arb` files.  
+> This generates `lib/core/l10n/app_localizations.dart` from the `.arb` files.  
 > Must be run after any change to `app_en.arb`.
 
 ### Step 4 — Configure Backend URL

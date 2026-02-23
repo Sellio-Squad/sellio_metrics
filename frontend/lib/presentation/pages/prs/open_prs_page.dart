@@ -2,11 +2,11 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../core/extensions/theme_extensions.dart';
-import '../../design_system/design_system.dart';
-import '../../l10n/app_localizations.dart';
-import '../providers/dashboard_provider.dart';
-import '../widgets/pr_list_tile.dart';
+import '../../../core/extensions/theme_extensions.dart';
+import '../../../design_system/design_system.dart';
+import '../../../core/l10n/app_localizations.dart';
+import '../../providers/dashboard_provider.dart';
+import '../../widgets/pr_list_tile.dart';
 
 class OpenPrsPage extends StatelessWidget {
   const OpenPrsPage({super.key});

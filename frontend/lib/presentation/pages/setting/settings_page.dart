@@ -6,13 +6,13 @@ library;
 
 import 'package:flutter/material.dart';
 
-import '../../core/extensions/theme_extensions.dart';
-import '../../design_system/design_system.dart';
-import '../../l10n/app_localizations.dart';
-import '../widgets/settings/settings_section.dart';
-import '../widgets/settings/repository_selector.dart';
-import '../widgets/settings/theme_toggle.dart';
-import '../widgets/settings/language_toggle.dart';
+import '../../../core/extensions/theme_extensions.dart';
+import '../../../design_system/design_system.dart';
+import '../../../core/l10n/app_localizations.dart';
+import '../../widgets/settings/settings_section.dart';
+import '../../widgets/settings/repository_selector.dart';
+import '../../widgets/settings/theme_toggle.dart';
+import '../../widgets/settings/language_toggle.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
