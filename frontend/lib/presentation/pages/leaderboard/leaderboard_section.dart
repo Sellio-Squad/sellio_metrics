@@ -1,20 +1,15 @@
-/// Sellio Metrics — Leaderboard Card Widget
-///
-/// Displays ranked developer leaderboard.
-/// Follows SRP — only responsible for rendering the leaderboard table.
 library;
 
 import 'package:flutter/material.dart';
+import '../../../core/extensions/theme_extensions.dart';
+import '../../../design_system/design_system.dart';
+import '../../../domain/entities/collaboration_entity.dart';
+import '../../../l10n/app_localizations.dart';
 
-import '../../core/extensions/theme_extensions.dart';
-import '../../design_system/design_system.dart';
-import '../../domain/entities/collaboration_entity.dart';
-import '../../l10n/app_localizations.dart';
-
-class LeaderboardCard extends StatelessWidget {
+class LeaderboardSection extends StatelessWidget {
   final List<LeaderboardEntry> entries;
 
-  const LeaderboardCard({super.key, required this.entries});
+  const LeaderboardSection({super.key, required this.entries});
 
   @override
   Widget build(BuildContext context) {

@@ -32,7 +32,7 @@ class AppLocalizations {
   // Navigation
   String get navAnalytics => _t('navAnalytics');
   String get navOpenPrs => _t('navOpenPrs');
-  String get navTeam => _t('navTeam');
+  String get navLeaderboard => _t('navLeaderboard');
   String get navCharts => _t('navCharts');
   String get navAbout => _t('navAbout');
   String get navSettings => _t('navSettings');
@@ -234,7 +234,7 @@ class AppLocalizations {
     'appSubtitle': 'Team Metrics & Analytics',
     'navAnalytics': 'Analytics',
     'navOpenPrs': 'Open PRs',
-    'navTeam': 'Team',
+    'navLeaderboard': 'Leaderboard',
     'navCharts': 'Charts',
     'navAbout': 'About',
     'navSettings': 'Settings',
@@ -425,7 +425,7 @@ class AppLocalizations {
     'appSubtitle': 'مقاييس الفريق والتحليلات',
     'navAnalytics': 'التحليلات',
     'navOpenPrs': 'الطلبات المفتوحة',
-    'navTeam': 'الفريق',
+    'navLeaderboard': 'المتصدرين',
     'navCharts': 'الرسوم',
     'navAbout': 'حول',
     'navSettings': 'الإعدادات',

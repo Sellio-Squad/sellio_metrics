@@ -38,7 +38,7 @@ class AppBottomNav extends StatelessWidget {
         ),
         NavigationDestination(
           icon: const Icon(LucideIcons.users),
-          label: l10n.navTeam,
+          label: l10n.navLeaderboard,
         ),
         NavigationDestination(
           icon: const Icon(LucideIcons.pieChart),

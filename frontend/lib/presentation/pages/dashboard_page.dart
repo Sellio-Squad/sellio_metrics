@@ -1,12 +1,13 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:sellio_metrics/core/constants/layout_constants.dart';
 import '../../core/extensions/theme_extensions.dart';
 import '../widgets/navigation/app_sidebar.dart';
 import '../widgets/navigation/app_bottom_nav.dart';
 import 'analytics/analytics_page.dart';
 import 'open_prs_page.dart';
-import 'team_page.dart';
+import 'leaderboard/leaderboard_page.dart';
 import 'charts_page.dart';
 import 'about/about_page.dart';
 import 'settings_page.dart';
@@ -24,7 +25,7 @@ class _DashboardPageState extends State<DashboardPage> {
   static const _pages = <Widget>[
     AnalyticsPage(),
     OpenPrsPage(),
-    TeamPage(),
+    LeaderboardPage(),
     ChartsPage(),
     AboutPage(),
     SettingsPage(),
@@ -32,7 +33,7 @@ class _DashboardPageState extends State<DashboardPage> {
 
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= 800;
+    final isDesktop = MediaQuery.of(context).size.width >= LayoutConstants.mobileBreakpoint;
 
     return Scaffold(
       backgroundColor: context.colors.surface,

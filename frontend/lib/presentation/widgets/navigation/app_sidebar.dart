@@ -38,9 +38,9 @@ class AppSidebar extends StatelessWidget {
         label: l10n.navOpenPrs,
       ),
       SSidebarItemData(
-        id: 'team',
+        id: 'leaderboard',
         icon: LucideIcons.users,
-        label: l10n.navTeam,
+        label: l10n.navLeaderboard,
       ),
       SSidebarItemData(
         id: 'charts',
