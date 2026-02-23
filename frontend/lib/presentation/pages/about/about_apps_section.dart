@@ -1,4 +1,3 @@
-/// Sellio Metrics — About Apps Section
 library;
 
 import 'package:flutter/material.dart';

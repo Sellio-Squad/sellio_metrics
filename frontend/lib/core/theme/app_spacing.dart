@@ -1,4 +1,3 @@
-/// Sellio Metrics — Spacing Tokens
 library;
 
 class AppSpacing {

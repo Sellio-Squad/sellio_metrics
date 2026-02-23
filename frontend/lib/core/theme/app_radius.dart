@@ -1,4 +1,3 @@
-/// Sellio Metrics — Border Radius Tokens
 library;
 
 import 'package:flutter/material.dart';

@@ -1,8 +1,6 @@
-/// Sellio Metrics — Theme & BuildContext Extensions
 library;
 
 import 'package:flutter/material.dart';
-
 import '../theme/sellio_colors.dart';
 
 extension ThemeX on BuildContext {
@@ -14,7 +12,7 @@ extension ThemeX on BuildContext {
 
   ColorScheme get colorScheme => Theme.of(this).colorScheme;
 
-  /// Returns the active Sellio color scheme based on current brightness.
+
   SellioColorScheme get colors =>
       isDark ? SellioColors.dark : SellioColors.light;
 }

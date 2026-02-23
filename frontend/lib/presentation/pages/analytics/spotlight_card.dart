@@ -8,14 +8,14 @@ import '../../../l10n/app_localizations.dart';
 
 class SpotlightCard extends StatelessWidget {
   final String title;
-  final String emoji;
+  final IconData icon;
   final SpotlightMetric? metric;
   final Color accentColor;
 
   const SpotlightCard({
     super.key,
     required this.title,
-    required this.emoji,
+    required this.icon,
     this.metric,
     required this.accentColor,
   });
@@ -37,9 +37,7 @@ class SpotlightCard extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: AppRadius.lgAll,
-        border: Border.all(
-          color: accentColor.withValues(alpha: 0.2),
-        ),
+        border: Border.all(color: accentColor.withValues(alpha: 0.2)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -47,7 +45,7 @@ class SpotlightCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              Text(emoji, style: const TextStyle(fontSize: 20)),
+              Icon(icon),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 title,

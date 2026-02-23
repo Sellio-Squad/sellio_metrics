@@ -6,6 +6,7 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../providers/dashboard_provider.dart';
+import 'section_header.dart';
 import 'bottleneck_item.dart';
 import 'spotlight_card.dart';
 import 'filters/date_range_filter.dart';
@@ -28,20 +29,18 @@ class AnalyticsPage extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Date filter — no developer dropdown
                 const DateRangeFilter(),
                 const SizedBox(height: AppSpacing.xxl),
 
-                // Spotlight section
-                _SectionHeader(
-                  emoji: '🌟',
+                SectionHeader(
+                  icon: LucideIcons.star,
                   title: l10n.sectionSpotlight,
                 ),
                 const SizedBox(height: AppSpacing.lg),
+
                 LayoutBuilder(
                   builder: (context, constraints) {
-                    final crossAxisCount =
-                    constraints.maxWidth > 800 ? 3 : 1;
+                    final crossAxisCount = constraints.maxWidth > 800 ? 3 : 1;
                     return GridView.count(
                       crossAxisCount: crossAxisCount,
                       crossAxisSpacing: AppSpacing.lg,
@@ -51,19 +50,19 @@ class AnalyticsPage extends StatelessWidget {
                       childAspectRatio: 2.2,
                       children: [
                         SpotlightCard(
-                          emoji: '🔥',
+                          icon: LucideIcons.flame,
                           title: l10n.spotlightHotStreak,
                           metric: provider.spotlightMetrics.hotStreak,
                           accentColor: scheme.secondary,
                         ),
                         SpotlightCard(
-                          emoji: '⚡',
+                          icon: LucideIcons.zap,
                           title: l10n.spotlightFastestReviewer,
                           metric: provider.spotlightMetrics.fastestReviewer,
                           accentColor: scheme.green,
                         ),
                         SpotlightCard(
-                          emoji: '💬',
+                          icon: LucideIcons.messageCircle,
                           title: l10n.spotlightTopCommenter,
                           metric: provider.spotlightMetrics.topCommenter,
                           accentColor: scheme.primary,
@@ -75,8 +74,8 @@ class AnalyticsPage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xxl),
 
                 // Slow PRs section
-                _SectionHeader(
-                  emoji: '🐢',
+                SectionHeader(
+                  icon: LucideIcons.alertTriangle,
                   title: l10n.sectionBottlenecks,
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -86,37 +85,14 @@ class AnalyticsPage extends StatelessWidget {
                     style: AppTypography.body.copyWith(color: scheme.hint),
                   )
                 else
-                  ...provider.bottlenecks
-                      .map((b) => BottleneckItem(bottleneck: b)),
+                  ...provider.bottlenecks.map(
+                    (b) => BottleneckItem(bottleneck: b),
+                  ),
               ],
             ),
           ),
         );
       },
-    );
-  }
-}
-
-/// Reusable section header with emoji + title.
-class _SectionHeader extends StatelessWidget {
-  final String emoji;
-  final String title;
-
-  const _SectionHeader({required this.emoji, required this.title});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = context.colors;
-
-    return Row(
-      children: [
-        Text(emoji, style: const TextStyle(fontSize: 20)),
-        const SizedBox(width: AppSpacing.sm),
-        Text(
-          title,
-          style: AppTypography.title.copyWith(color: scheme.title),
-        ),
-      ],
     );
   }
 }

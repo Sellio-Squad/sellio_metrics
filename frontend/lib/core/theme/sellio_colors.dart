@@ -1,12 +1,7 @@
-/// Sellio Metrics — Color Tokens
-///
-/// Uses the official Sellio brand palette.
-/// Provides light/dark scheme instances via SellioColorScheme.
 library;
 
 import 'package:flutter/material.dart';
 
-/// Semantic color scheme for the Sellio brand.
 class SellioColorScheme {
   final Color authBackground;
   final Color primary;
@@ -65,13 +60,8 @@ class SellioColorScheme {
   });
 }
 
-/// Central color definitions for the Sellio brand.
-///
-/// Access via [SellioColors.light] or [SellioColors.dark].
 class SellioColors {
   SellioColors._();
-
-  // ─── Brand schemes ────────────────────────────────────────
 
   static const light = SellioColorScheme(
     primary: Color(0xFF520826),
@@ -145,12 +135,10 @@ class SellioColors {
     shadowColor: Color(0x1F520826),
   );
 
-  // ─── Product colors ───────────────────────────────────────
 
   static const Color productBlack = Colors.black;
   static const Color productWhite = Colors.white;
 
-  // ─── Gradients ────────────────────────────────────────────
 
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF520826), Color(0xFF7A1040)],
@@ -164,7 +152,6 @@ class SellioColors {
     end: Alignment.bottomRight,
   );
 
-  // ─── Chart palette ────────────────────────────────────────
 
   static const List<Color> chartPalette = [
     Color(0xFF520826),

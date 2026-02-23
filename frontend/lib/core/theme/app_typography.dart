@@ -1,4 +1,3 @@
-/// Sellio Metrics — Typography Tokens
 library;
 
 import 'package:flutter/material.dart';
