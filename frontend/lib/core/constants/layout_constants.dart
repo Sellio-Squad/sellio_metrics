@@ -1,6 +1,3 @@
-/// Sellio Metrics — Layout & Animation Constants
-///
-/// Extracted magic numbers used across presentation widgets.
 library;
 
 class LayoutConstants {

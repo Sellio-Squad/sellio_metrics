@@ -13,7 +13,7 @@ class AppStrings {
   // Navigation
   static const String navAnalytics = 'Analytics';
   static const String navOpenPrs = 'Open PRs';
-  static const String navTeam = 'Team';
+  static const String navLeaderboard = 'Leaderboard';
   static const String navSettings = 'Settings';
 
   // KPI Labels

@@ -1,20 +1,15 @@
-/// Sellio Metrics — Service Locator (DI Container)
-///
-/// Simple dependency injection container.
-/// Registers all repositories, services, and providers so that
-/// presentation never imports from data layer directly.
 library;
 
-import '../core/constants/app_constants.dart';
-import '../data/datasources/local_data_source.dart';
-import '../data/repositories/metrics_repository_impl.dart';
-import '../domain/repositories/metrics_repository.dart';
-import '../domain/services/kpi_service.dart';
-import '../domain/services/bottleneck_service.dart';
-import '../domain/services/collaboration_service.dart';
-import '../domain/services/filter_service.dart';
-import '../presentation/providers/dashboard_provider.dart';
-import '../presentation/providers/app_settings_provider.dart';
+import '../../core/constants/app_constants.dart';
+import '../../data/datasources/local_data_source.dart';
+import '../../data/repositories/metrics_repository_impl.dart';
+import '../../domain/repositories/metrics_repository.dart';
+import '../../domain/services/kpi_service.dart';
+import '../../domain/services/bottleneck_service.dart';
+import '../../domain/services/collaboration_service.dart';
+import '../../domain/services/filter_service.dart';
+import '../../presentation/providers/dashboard_provider.dart';
+import '../../presentation/providers/app_settings_provider.dart';
 
 /// Global service locator instance.
 final sl = ServiceLocator();

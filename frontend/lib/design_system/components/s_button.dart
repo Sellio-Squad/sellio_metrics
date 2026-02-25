@@ -7,7 +7,7 @@ library;
 import 'package:hux/hux.dart';
 
 /// Button variant mirroring HuxButtonVariant.
-enum SButtonVariant { primary, ghost }
+enum SButtonVariant { primary, ghost, outline }
 
 /// Button size mirroring HuxButtonSize.
 enum SButtonSize { small, medium, large }
@@ -15,6 +15,7 @@ enum SButtonSize { small, medium, large }
 HuxButtonVariant _toHuxVariant(SButtonVariant v) => switch (v) {
       SButtonVariant.primary => HuxButtonVariant.primary,
       SButtonVariant.ghost => HuxButtonVariant.ghost,
+      SButtonVariant.outline => HuxButtonVariant.outline,
     };
 
 HuxButtonSize _toHuxSize(SButtonSize s) => switch (s) {

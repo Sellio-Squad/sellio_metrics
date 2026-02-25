@@ -32,7 +32,7 @@ class AppLocalizations {
   // Navigation
   String get navAnalytics => _t('navAnalytics');
   String get navOpenPrs => _t('navOpenPrs');
-  String get navTeam => _t('navTeam');
+  String get navLeaderboard => _t('navLeaderboard');
   String get navCharts => _t('navCharts');
   String get navAbout => _t('navAbout');
   String get navSettings => _t('navSettings');
@@ -199,6 +199,24 @@ class AppLocalizations {
   String get teamBackendLeader => _t('teamBackendLeader');
   String get teamBackendDesc => _t('teamBackendDesc');
 
+  // ─── Meetings ─────────────────────────────────────────────
+  String get aboutMeetings => _t('aboutMeetings');
+  String get meetingDownloadIcs => _t('meetingDownloadIcs');
+  String get meetingWeekly => _t('meetingWeekly');
+  String get meetingBiweekly => _t('meetingBiweekly');
+  String get meetingDailyStandup => _t('meetingDailyStandup');
+  String get meetingDailyStandupDesc => _t('meetingDailyStandupDesc');
+  String get meetingSprintPlanning => _t('meetingSprintPlanning');
+  String get meetingSprintPlanningDesc => _t('meetingSprintPlanningDesc');
+  String get meetingRetrospective => _t('meetingRetrospective');
+  String get meetingRetrospectiveDesc => _t('meetingRetrospectiveDesc');
+  String get meetingCodeReview => _t('meetingCodeReview');
+  String get meetingCodeReviewDesc => _t('meetingCodeReviewDesc');
+  String get duration15Min => _t('duration15Min');
+  String get duration45Min => _t('duration45Min');
+  String get duration1Hour => _t('duration1Hour');
+  String get locationGoogleMeet => _t('locationGoogleMeet');
+
   // ─── Leaderboard / Review units ──────────────────────────
   String get unitReviews => _t('unitReviews');
   String get unitPrs => _t('unitPrs');
@@ -216,7 +234,7 @@ class AppLocalizations {
     'appSubtitle': 'Team Metrics & Analytics',
     'navAnalytics': 'Analytics',
     'navOpenPrs': 'Open PRs',
-    'navTeam': 'Team',
+    'navLeaderboard': 'Leaderboard',
     'navCharts': 'Charts',
     'navAbout': 'About',
     'navSettings': 'Settings',
@@ -382,6 +400,24 @@ class AppLocalizations {
     'unitReviews': 'reviews',
     'unitPrs': 'PRs',
     'unitComments': 'comments',
+
+    // Meetings
+    'aboutMeetings': 'Meeting Schedule',
+    'meetingDownloadIcs': 'Add to Calendar',
+    'meetingWeekly': 'Weekly',
+    'meetingBiweekly': 'Biweekly',
+    'meetingDailyStandup': 'Daily Standup',
+    'meetingDailyStandupDesc': 'Quick sync on blockers and progress.',
+    'meetingSprintPlanning': 'Sprint Planning',
+    'meetingSprintPlanningDesc': 'Plan out the tasks and goals for the next sprint.',
+    'meetingRetrospective': 'Sprint Retrospective',
+    'meetingRetrospectiveDesc': 'Review what went well and what we can improve.',
+    'meetingCodeReview': 'Code Review Session',
+    'meetingCodeReviewDesc': 'Pair programming and deep-dive code reviews.',
+    'duration15Min': '15 min',
+    'duration45Min': '45 min',
+    'duration1Hour': '1 hour',
+    'locationGoogleMeet': 'Google Meet',
   };
 
   static const Map<String, String> _ar = {
@@ -389,7 +425,7 @@ class AppLocalizations {
     'appSubtitle': 'مقاييس الفريق والتحليلات',
     'navAnalytics': 'التحليلات',
     'navOpenPrs': 'الطلبات المفتوحة',
-    'navTeam': 'الفريق',
+    'navLeaderboard': 'المتصدرين',
     'navCharts': 'الرسوم',
     'navAbout': 'حول',
     'navSettings': 'الإعدادات',
@@ -555,6 +591,24 @@ class AppLocalizations {
     'unitReviews': 'مراجعات',
     'unitPrs': 'طلبات',
     'unitComments': 'تعليقات',
+
+    // Meetings
+    'aboutMeetings': 'جدول الاجتماعات',
+    'meetingDownloadIcs': 'أضف للتقويم',
+    'meetingWeekly': 'أسبوعياً',
+    'meetingBiweekly': 'كل أسبوعين',
+    'meetingDailyStandup': 'الاجتماع اليومي',
+    'meetingDailyStandupDesc': 'مزامنة سريعة للعوائق والتقدم.',
+    'meetingSprintPlanning': 'تخطيط السبرنت',
+    'meetingSprintPlanningDesc': 'تخطيط المهام والأهداف للسبرنت القادم.',
+    'meetingRetrospective': 'مراجعة السبرنت',
+    'meetingRetrospectiveDesc': 'مراجعة ما سار بشكل جيد وما يمكننا تحسينه.',
+    'meetingCodeReview': 'جلسة مراجعة الكود',
+    'meetingCodeReviewDesc': 'برمجة ثنائية ومراجعات عميقة للكود.',
+    'duration15Min': '15 دقيقة',
+    'duration45Min': '45 دقيقة',
+    'duration1Hour': 'ساعة واحدة',
+    'locationGoogleMeet': 'جوجل ميت',
   };
 }
 

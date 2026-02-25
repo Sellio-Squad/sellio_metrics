@@ -1,13 +1,14 @@
 library;
 
 import 'package:flutter/material.dart';
-import '../../design_system/design_system.dart';
-import 'about/about_apps_section.dart';
-import 'about/about_features_section.dart';
-import 'about/about_hero.dart';
-import 'about/about_how_to_join_section.dart';
-import 'about/about_tech_stack_section.dart';
-import 'about/about_vision_section.dart';
+import '../../../design_system/design_system.dart';
+import 'about_apps_section.dart';
+import 'about_features_section.dart';
+import 'about_hero.dart';
+import 'about_how_to_join_section.dart';
+import 'about_meetings_section.dart';
+import 'about_tech_stack_section.dart';
+import 'about_vision_section.dart';
 
 class AboutPage extends StatelessWidget {
   const AboutPage({super.key});
@@ -28,6 +29,8 @@ class AboutPage extends StatelessWidget {
           const AboutTechStackSection(),
           const SizedBox(height: AppSpacing.xl),
           const AboutHowToJoinSection(),
+          const SizedBox(height: AppSpacing.xl),
+          const AboutMeetingsSection(),
           const SizedBox(height: AppSpacing.xl),
           const AboutFeaturesSection(),
         ],

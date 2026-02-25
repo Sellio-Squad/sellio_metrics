@@ -1,6 +1,7 @@
 library;
 
 import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
 
 class ApiConfig {
   const ApiConfig._();
@@ -28,16 +29,6 @@ class BottleneckConfig {
   static const double severityMediumMultiplier = 1.5;
 }
 
-class AnalyticsConfig {
-  const AnalyticsConfig._();
-
-  static const int requiredApprovals = 2;
-  static const int topCollaboratorsCount = 5;
-  static const int topDiscussedPrsCount = 5;
-  static const double mergeTimeFastThreshold = 60; // minutes
-  static const double mergeTimeSlowThreshold = 1440; // minutes (24h)
-}
-
 class PrTypePatterns {
   const PrTypePatterns._();
 
@@ -61,17 +52,6 @@ class StorageKeys {
   static const String filters = 'sellio_filters';
 }
 
-class AppTabs {
-  const AppTabs._();
-
-  static const String analytics = 'analytics';
-  static const String openPrs = 'open_prs';
-  static const String team = 'team';
-  static const String settings = 'settings';
-
-  static const List<String> all = [analytics, openPrs, team, settings];
-}
-
 class PrStatus {
   const PrStatus._();
 
@@ -89,4 +69,12 @@ class LeaderboardWeights {
   static const int prsMerged = 2;
   static const int reviewsGiven = 2;
   static const int commentsGiven = 1;
+}
+
+class DateFormats {
+  const DateFormats._();
+
+  static final full = DateFormat('MMM d, yyyy');
+  static final short = DateFormat('MMM d');
+  static final iso = DateFormat('yyyy-MM-dd');
 }

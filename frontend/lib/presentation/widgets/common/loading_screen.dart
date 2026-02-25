@@ -1,11 +1,10 @@
-/// Sellio Metrics — Loading Screen Component
+
 library;
 
 import 'package:flutter/material.dart';
-
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../l10n/app_localizations.dart';
+import '../../../core/l10n/app_localizations.dart';
 
 class LoadingScreen extends StatefulWidget {
   const LoadingScreen({super.key});

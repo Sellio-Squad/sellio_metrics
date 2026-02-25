@@ -7,13 +7,13 @@ library;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/constants/layout_constants.dart';
-import '../../core/extensions/theme_extensions.dart';
-import '../../core/utils/date_utils.dart';
-import '../../design_system/design_system.dart';
-import '../../domain/entities/pr_entity.dart';
-import '../../domain/enums/pr_type.dart';
-import '../extensions/pr_type_presentation.dart';
+import '../../../core/constants/layout_constants.dart';
+import '../../../core/extensions/theme_extensions.dart';
+import '../../../core/utils/date_utils.dart';
+import '../../../design_system/design_system.dart';
+import '../../../domain/entities/pr_entity.dart';
+import '../../../domain/enums/pr_type.dart';
+import '../../extensions/pr_type_presentation.dart';
 
 class PrListTile extends StatefulWidget {
   final PrEntity pr;

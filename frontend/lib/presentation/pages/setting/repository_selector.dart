@@ -6,7 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../l10n/app_localizations.dart';
+import '../../../core/l10n/app_localizations.dart';
 import '../../providers/app_settings_provider.dart';
 import '../../providers/dashboard_provider.dart';
 

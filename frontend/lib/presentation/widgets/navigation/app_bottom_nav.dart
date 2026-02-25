@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../l10n/app_localizations.dart';
+import '../../../core/l10n/app_localizations.dart';
 
 class AppBottomNav extends StatelessWidget {
   final int currentIndex;
@@ -38,7 +38,7 @@ class AppBottomNav extends StatelessWidget {
         ),
         NavigationDestination(
           icon: const Icon(LucideIcons.users),
-          label: l10n.navTeam,
+          label: l10n.navLeaderboard,
         ),
         NavigationDestination(
           icon: const Icon(LucideIcons.pieChart),

@@ -9,7 +9,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../l10n/app_localizations.dart';
+import '../../../core/l10n/app_localizations.dart';
 import '../../providers/app_settings_provider.dart';
 
 class AppSidebar extends StatelessWidget {
@@ -38,9 +38,9 @@ class AppSidebar extends StatelessWidget {
         label: l10n.navOpenPrs,
       ),
       SSidebarItemData(
-        id: 'team',
+        id: 'leaderboard',
         icon: LucideIcons.users,
-        label: l10n.navTeam,
+        label: l10n.navLeaderboard,
       ),
       SSidebarItemData(
         id: 'charts',
