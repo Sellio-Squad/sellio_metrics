@@ -7,6 +7,8 @@ import '../../../design_system/design_system.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../widgets/pr_list_tile.dart';
+import '../widgets/section_header.dart';
+import 'bottleneck_item.dart';
 
 class OpenPrsPage extends StatelessWidget {
   const OpenPrsPage({super.key});
@@ -33,31 +35,61 @@ class OpenPrsPage extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
 
-              // Count badge
-              Row(
-                children: [
-                  Text(
-                    l10n.sectionOpenPrs,
-                    style: AppTypography.title.copyWith(color: scheme.title),
-                  ),
-                  const SizedBox(width: AppSpacing.sm),
-                  SBadge(
-                    label: '${prs.length}',
-                    variant: SBadgeVariant.primary,
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.lg),
-
-              // PR List
               Expanded(
-                child: prs.isEmpty
-                    ? _EmptyState(scheme: scheme, l10n: l10n)
-                    : ListView.builder(
-                        itemCount: prs.length,
-                        itemBuilder: (context, index) =>
-                            PrListTile(pr: prs[index]),
+                child: CustomScrollView(
+                  slivers: [
+                    SliverToBoxAdapter(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Slow PRs section
+                          SectionHeader(
+                            icon: LucideIcons.alertTriangle,
+                            title: l10n.sectionBottlenecks,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          if (provider.bottlenecks.isEmpty)
+                            Text(
+                              l10n.emptyData,
+                              style: AppTypography.body.copyWith(color: scheme.hint),
+                            )
+                          else
+                            ...provider.bottlenecks.map(
+                              (b) => BottleneckItem(bottleneck: b),
+                            ),
+                          const SizedBox(height: AppSpacing.xxl),
+
+                          // Count badge
+                          Row(
+                            children: [
+                              Text(
+                                l10n.sectionOpenPrs,
+                                style: AppTypography.title.copyWith(color: scheme.title),
+                              ),
+                              const SizedBox(width: AppSpacing.sm),
+                              SBadge(
+                                label: '${prs.length}',
+                                variant: SBadgeVariant.primary,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                        ],
                       ),
+                    ),
+                    prs.isEmpty
+                        ? SliverFillRemaining(
+                            hasScrollBody: false,
+                            child: _EmptyState(scheme: scheme, l10n: l10n),
+                          )
+                        : SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (context, index) => PrListTile(pr: prs[index]),
+                              childCount: prs.length,
+                            ),
+                          ),
+                  ],
+                ),
               ),
             ],
           ),
