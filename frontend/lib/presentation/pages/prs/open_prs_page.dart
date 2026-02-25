@@ -6,8 +6,8 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../providers/dashboard_provider.dart';
-import '../../widgets/pr_list_tile.dart';
-import '../widgets/section_header.dart';
+import 'pr_list_tile.dart';
+import '../../widgets/section_header.dart';
 import 'bottleneck_item.dart';
 
 class OpenPrsPage extends StatelessWidget {

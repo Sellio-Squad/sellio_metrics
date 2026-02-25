@@ -7,7 +7,7 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../providers/dashboard_provider.dart';
-import '../widgets/section_header.dart';
+import '../../widgets/section_header.dart';
 import 'spotlight_card.dart';
 import 'leaderboard_section.dart';
 

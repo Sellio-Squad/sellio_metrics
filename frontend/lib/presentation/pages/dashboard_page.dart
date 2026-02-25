@@ -23,10 +23,10 @@ class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
 
   static const _pages = <Widget>[
-    AnalyticsPage(),
-    OpenPrsPage(),
     LeaderboardPage(),
-    ChartsPage(),
+    OpenPrsPage(),
+    //AnalyticsPage(),
+    //ChartsPage(),
     AboutPage(),
     SettingsPage(),
   ];
