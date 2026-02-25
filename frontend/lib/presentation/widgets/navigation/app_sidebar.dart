@@ -1,15 +1,11 @@
-/// Sellio Metrics — App Sidebar Navigation
-///
-/// Desktop sidebar using design system components with Sellio branding.
-/// Follows SRP — header and footer are separate sub-widgets.
 library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../core/l10n/app_localizations.dart';
+import '../../../core/navigation/app_navigation.dart';
 import '../../providers/app_settings_provider.dart';
 
 class AppSidebar extends StatelessWidget {
@@ -26,44 +22,20 @@ class AppSidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    final items = [
-      SSidebarItemData(
-        id: 'analytics',
-        icon: LucideIcons.barChart3,
-        label: l10n.navAnalytics,
-      ),
-      SSidebarItemData(
-        id: 'open_prs',
-        icon: LucideIcons.gitPullRequest,
-        label: l10n.navOpenPrs,
-      ),
-      SSidebarItemData(
-        id: 'leaderboard',
-        icon: LucideIcons.users,
-        label: l10n.navLeaderboard,
-      ),
-      SSidebarItemData(
-        id: 'charts',
-        icon: LucideIcons.pieChart,
-        label: l10n.navCharts,
-      ),
-      SSidebarItemData(
-        id: 'about',
-        icon: LucideIcons.info,
-        label: l10n.navAbout,
-      ),
-      SSidebarItemData(
-        id: 'settings',
-        icon: LucideIcons.settings,
-        label: l10n.navSettings,
-      ),
-    ];
+    final items = AppNavigation.routes.map((route) {
+      return SSidebarItemData(
+        id: route.id,
+        icon: route.icon,
+        label: route.labelBuilder(l10n),
+      );
+    }).toList();
 
     final ids = items.map((i) => i.id).toList();
+    final safeIndex = selectedIndex < ids.length ? selectedIndex : 0;
 
     return SSidebar(
       items: items,
-      selectedItemId: ids[selectedIndex],
+      selectedItemId: ids[safeIndex],
       onItemSelected: (id) {
         final index = ids.indexOf(id);
         if (index >= 0) onItemSelected(index);

@@ -3,14 +3,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:sellio_metrics/core/constants/layout_constants.dart';
 import '../../core/extensions/theme_extensions.dart';
+import '../../core/navigation/app_navigation.dart';
 import '../widgets/navigation/app_sidebar.dart';
 import '../widgets/navigation/app_bottom_nav.dart';
-import 'analytics/analytics_page.dart';
-import 'prs/open_prs_page.dart';
-import 'leaderboard/leaderboard_page.dart';
-import 'chart/charts_page.dart';
-import 'about/about_page.dart';
-import 'setting/settings_page.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -22,18 +17,14 @@ class DashboardPage extends StatefulWidget {
 class _DashboardPageState extends State<DashboardPage> {
   int _selectedIndex = 0;
 
-  static const _pages = <Widget>[
-    LeaderboardPage(),
-    OpenPrsPage(),
-    //AnalyticsPage(),
-    //ChartsPage(),
-    AboutPage(),
-    SettingsPage(),
-  ];
-
   @override
   Widget build(BuildContext context) {
-    final isDesktop = MediaQuery.of(context).size.width >= LayoutConstants.mobileBreakpoint;
+    final isDesktop =
+        MediaQuery.of(context).size.width >= LayoutConstants.mobileBreakpoint;
+
+    if (_selectedIndex >= AppNavigation.routes.length) {
+      _selectedIndex = 0;
+    }
 
     return Scaffold(
       backgroundColor: context.colors.surface,
@@ -57,7 +48,7 @@ class _DashboardPageState extends State<DashboardPage> {
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: _pages[_selectedIndex],
+            child: AppNavigation.routes[_selectedIndex].page,
           ),
         ),
       ],
@@ -67,7 +58,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildMobileLayout() {
     return AnimatedSwitcher(
       duration: const Duration(milliseconds: 200),
-      child: _pages[_selectedIndex],
+      child: AppNavigation.routes[_selectedIndex].page,
     );
   }
 }
