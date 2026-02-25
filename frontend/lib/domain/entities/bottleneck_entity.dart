@@ -2,7 +2,6 @@ library;
 
 import '../../domain/enums/severity.dart';
 
-/// A PR that is stuck in review too long.
 class BottleneckEntity {
   final int prNumber;
   final String title;
