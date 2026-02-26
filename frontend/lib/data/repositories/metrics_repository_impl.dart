@@ -66,6 +66,10 @@ class MetricsRepositoryImpl implements MetricsRepository {
           'avatar_url': c.author.avatarUrl,
         }
       }).toList(),
+      'diff_stats': {
+        'additions': pr.diffStats.additions,
+        'deletions': pr.diffStats.deletions,
+      },
     }).toList();
 
     final result = await _dataSource.calculateLeaderboard(prData);
@@ -77,7 +81,9 @@ class MetricsRepositoryImpl implements MetricsRepository {
       prsMerged: json['prsMerged'] as int? ?? 0,
       reviewsGiven: json['reviewsGiven'] as int? ?? 0,
       commentsGiven: json['commentsGiven'] as int? ?? 0,
-      totalScore: json['totalScore'] as int? ?? 0,
+       additions: json['additions'] as int? ?? 0,
+      deletions: json['deletions'] as int? ?? 0,
+      totalScore: (json['totalScore'] as num?)?.toDouble() ?? 0.0,
     )).toList();
   }
 

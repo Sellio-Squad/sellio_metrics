@@ -54,8 +54,8 @@ class LeaderboardRow extends StatelessWidget {
                 ),
                 Text(
                   '${entry.prsCreated} ${l10n.unitPrs} · '
-                  '${entry.reviewsGiven} ${l10n.unitReviews} · '
-                  '${entry.commentsGiven} ${l10n.unitComments}',
+                  '${entry.commentsGiven} ${l10n.unitComments} · '
+                  '+${entry.additions} / -${entry.deletions} loc',
                   style: AppTypography.caption.copyWith(
                     color: scheme.hint,
                     fontSize: 11,
@@ -74,7 +74,7 @@ class LeaderboardRow extends StatelessWidget {
               borderRadius: AppRadius.smAll,
             ),
             child: Text(
-              '${entry.totalScore}',
+              entry.totalScore.toStringAsFixed(2),
               style: AppTypography.caption.copyWith(
                 color: scheme.primary,
                 fontWeight: FontWeight.w700,

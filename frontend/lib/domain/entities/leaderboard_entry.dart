@@ -7,7 +7,9 @@ class LeaderboardEntry {
   final int prsMerged;
   final int reviewsGiven;
   final int commentsGiven;
-  final int totalScore;
+  final int additions;
+  final int deletions;
+  final double totalScore;
 
   const LeaderboardEntry({
     required this.developer,
@@ -16,6 +18,8 @@ class LeaderboardEntry {
     required this.prsMerged,
     required this.reviewsGiven,
     required this.commentsGiven,
+    required this.additions,
+    required this.deletions,
     required this.totalScore,
   });
 }
