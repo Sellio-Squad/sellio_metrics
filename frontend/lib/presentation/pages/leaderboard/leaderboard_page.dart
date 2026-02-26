@@ -10,9 +10,26 @@ import '../../providers/dashboard_provider.dart';
 import '../../widgets/section_header.dart';
 import 'spotlight_card.dart';
 import 'leaderboard_section.dart';
+import '../../providers/app_settings_provider.dart';
 
-class LeaderboardPage extends StatelessWidget {
+class LeaderboardPage extends StatefulWidget {
   const LeaderboardPage({super.key});
+
+  @override
+  State<LeaderboardPage> createState() => _LeaderboardPageState();
+}
+
+class _LeaderboardPageState extends State<LeaderboardPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final settings = context.read<AppSettingsProvider>();
+      final dashboard = context.read<DashboardProvider>();
+      dashboard.ensureDataLoaded(settings.selectedRepos);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

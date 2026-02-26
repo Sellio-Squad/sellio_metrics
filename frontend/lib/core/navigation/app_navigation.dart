@@ -3,8 +3,6 @@ import '../../design_system/design_system.dart';
 import '../l10n/app_localizations.dart';
 import '../../presentation/pages/leaderboard/leaderboard_page.dart';
 import '../../presentation/pages/prs/open_prs_page.dart';
-import '../../presentation/pages/analytics/analytics_page.dart';
-import '../../presentation/pages/chart/charts_page.dart';
 import '../../presentation/pages/about/about_page.dart';
 import '../../presentation/pages/setting/settings_page.dart';
 

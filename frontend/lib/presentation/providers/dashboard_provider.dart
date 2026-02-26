@@ -45,9 +45,8 @@ class DashboardProvider extends ChangeNotifier {
   DateTime? _startDate;
   DateTime? _endDate;
 
-  /// Current repo being displayed.
-  String _currentOwner = '';
-  String _currentRepo = '';
+  /// Current repos being displayed.
+  List<RepoInfo> _currentRepos = [];
 
   // ─── Getters ─────────────────────────────────────────────
   DashboardStatus get status => _status;
@@ -70,9 +69,7 @@ class DashboardProvider extends ChangeNotifier {
 
   DateTime? get endDate => _endDate;
 
-  String get currentOwner => _currentOwner;
-
-  String get currentRepo => _currentRepo;
+  List<RepoInfo> get currentRepos => _currentRepos;
 
   /// PRs filtered by date range and week.
   List<PrEntity> get weekFilteredPrs {
@@ -113,25 +110,42 @@ class DashboardProvider extends ChangeNotifier {
 
   // ─── Actions ─────────────────────────────────────────────
 
-  /// Load PR data for the given [owner]/[repo].
-  Future<void> loadData({String owner = '', String repo = ''}) async {
-    final o = owner.isNotEmpty ? owner : _currentOwner;
-    final r = repo.isNotEmpty ? repo : _currentRepo;
+  /// Ensure data is loaded only if the repos have changed.
+  Future<void> ensureDataLoaded(List<RepoInfo> repos) async {
+    if (repos.isEmpty) return;
+    
+    // Check if the exact same repositories are already loaded
+    if (_currentRepos.length == repos.length &&
+        _currentRepos.every((r1) => repos.any((r2) => r1.fullName == r2.fullName))) {
+      return; // Already loaded
+    }
+    
+    await loadData(repos: repos);
+  }
 
-    if (o.isEmpty || r.isEmpty) {
-      debugPrint(
-        '[DashboardProvider] No owner/repo set. Waiting for selection.',
-      );
+  /// Load PR data for the given [repos].
+  Future<void> loadData({List<RepoInfo>? repos}) async {
+    final rs = repos ?? _currentRepos;
+
+    if (rs.isEmpty) {
+      debugPrint('[DashboardProvider] No repos set. Waiting for selection.');
       return;
     }
 
-    _currentOwner = o;
-    _currentRepo = r;
+    _currentRepos = List.from(rs);
     _status = DashboardStatus.loading;
     notifyListeners();
 
     try {
-      _allPrs = await _repository.getPullRequests(o, r);
+      final List<PrEntity> aggregatedPrs = [];
+      for (final repo in rs) {
+        final parts = repo.fullName.split('/');
+        final owner = parts.isNotEmpty ? parts.first : '';
+        final repoName = repo.name;
+        final prs = await _repository.getPullRequests(owner, repoName);
+        aggregatedPrs.addAll(prs);
+      }
+      _allPrs = aggregatedPrs;
       _status = DashboardStatus.loaded;
     } catch (e) {
       _status = DashboardStatus.error;
@@ -141,13 +155,21 @@ class DashboardProvider extends ChangeNotifier {
   }
 
   Future<void> refresh() async {
-    if (_currentOwner.isEmpty || _currentRepo.isEmpty) return;
+    if (_currentRepos.isEmpty) return;
 
     _status = DashboardStatus.loading;
     notifyListeners();
 
     try {
-      _allPrs = await _repository.refresh(_currentOwner, _currentRepo);
+      final List<PrEntity> aggregatedPrs = [];
+      for (final repo in _currentRepos) {
+        final parts = repo.fullName.split('/');
+        final owner = parts.isNotEmpty ? parts.first : '';
+        final repoName = repo.name;
+        final prs = await _repository.refresh(owner, repoName);
+        aggregatedPrs.addAll(prs);
+      }
+      _allPrs = aggregatedPrs;
       _status = DashboardStatus.loaded;
     } catch (e) {
       _status = DashboardStatus.error;

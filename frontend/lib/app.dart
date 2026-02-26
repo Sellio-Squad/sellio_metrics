@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:hux/hux.dart' show HuxTheme;
 import 'package:provider/provider.dart';
-import 'core/constants/app_constants.dart';
 import 'core/l10n/app_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'presentation/providers/dashboard_provider.dart';
@@ -77,15 +76,8 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
     // Load available repos first, then load data for the selected repo
     await settings.loadRepositories();
 
-    // Load dashboard data for the selected (or default) repo
-    final owner = settings.selectedOwner.isNotEmpty
-        ? settings.selectedOwner
-        : ApiConfig.defaultOrg;
-    final repo = settings.selectedRepoName.isNotEmpty
-        ? settings.selectedRepoName
-        : ApiConfig.defaultRepo;
-
-    dashboard.loadData(owner: owner, repo: repo);
+    // Load dashboard data for the selected (or default) repos
+    dashboard.loadData(repos: settings.selectedRepos);
   }
 
   @override
