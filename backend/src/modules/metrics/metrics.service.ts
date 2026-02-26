@@ -106,10 +106,6 @@ export class MetricsService {
         return results;
     }
 
-    /**
-     * Enriches a single PR: fetches reviews, issue comments,
-     * and review comments in parallel, then delegates to the mapper.
-     */
     private async enrichSinglePr(
         owner: string,
         repo: string,
@@ -117,7 +113,10 @@ export class MetricsService {
     ): Promise<PrMetric> {
         const prNumber = pr.number;
 
-        const [reviews, issueComments, reviewComments] = await Promise.all([
+        const [fullPrResponse, reviews, issueComments, reviewComments] = await Promise.all([
+            this.githubClient.rest.pulls.get({
+                owner, repo, pull_number: prNumber
+            }).catch(() => ({ data: pr })),
             this.githubClient
                 .paginate(this.githubClient.rest.pulls.listReviews, {
                     owner, repo, pull_number: prNumber, per_page: 100,
@@ -135,9 +134,11 @@ export class MetricsService {
                 .catch(() => []),
         ]);
 
+        const fullPr = fullPrResponse.data;
+
         // Delegate all transformation to the mapper
         return mapToPrMetric({
-            pr,
+            pr: fullPr,
             reviews: reviews as any,
             issueComments: issueComments as any,
             reviewComments: reviewComments as any,
