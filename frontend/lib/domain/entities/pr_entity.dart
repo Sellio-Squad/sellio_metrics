@@ -130,4 +130,20 @@ class PrEntity {
   bool get isOpen => mergedAt == null && closedAt == null;
 
   bool get isMerged => status == 'merged';
+
+  /// Extracts the 'owner/repo' name from the PR URL.
+  String get repoName {
+    try {
+      final uri = Uri.parse(url);
+      final parts = uri.pathSegments;
+      if (uri.host == 'api.github.com' && parts.length >= 4 && parts[0] == 'repos') {
+        return '${parts[1]}/${parts[2]}';
+      } else if (uri.host == 'github.com' && parts.length >= 2) {
+        return '${parts[0]}/${parts[1]}';
+      }
+      return '';
+    } catch (e) {
+      return '';
+    }
+  }
 }

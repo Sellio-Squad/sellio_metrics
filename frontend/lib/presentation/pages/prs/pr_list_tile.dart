@@ -93,6 +93,9 @@ class _PrListTileState extends State<PrListTile> {
                       runSpacing: AppSpacing.xs,
                       children: [
                         _InfoChip(text: '#${pr.prNumber}'),
+                        if (pr.repoName.isNotEmpty)
+                          _InfoChip(
+                              text: pr.repoName, icon: Icons.source_outlined),
                         _InfoChip(
                             text: pr.creator.login, icon: Icons.person_outline),
                         _InfoChip(
