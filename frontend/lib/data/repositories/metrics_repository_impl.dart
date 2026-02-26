@@ -8,6 +8,7 @@ import '../datasources/local_data_source.dart';
 import '../mappers/pr_mappers.dart';
 
 import '../../domain/entities/pr_entity.dart';
+import '../../domain/entities/leaderboard_entry.dart';
 import '../../domain/repositories/metrics_repository.dart';
 
 class MetricsRepositoryImpl implements MetricsRepository {
@@ -43,6 +44,41 @@ class MetricsRepositoryImpl implements MetricsRepository {
               description: r.description,
             ))
         .toList();
+  }
+
+  @override
+  Future<List<LeaderboardEntry>> calculateLeaderboard(List<PrEntity> prs) async {
+    final prData = prs.map((pr) => {
+      'status': pr.status,
+      'creator': {
+        'login': pr.creator.login,
+        'avatar_url': pr.creator.avatarUrl,
+      },
+      'approvals': pr.approvals.map((a) => {
+        'reviewer': {
+          'login': a.reviewer.login,
+          'avatar_url': a.reviewer.avatarUrl,
+        }
+      }).toList(),
+      'comments': pr.comments.map((c) => {
+        'author': {
+          'login': c.author.login,
+          'avatar_url': c.author.avatarUrl,
+        }
+      }).toList(),
+    }).toList();
+
+    final result = await _dataSource.calculateLeaderboard(prData);
+    
+    return result.map((json) => LeaderboardEntry(
+      developer: json['developer'] as String? ?? 'Unknown',
+      avatarUrl: json['avatarUrl'] as String?,
+      prsCreated: json['prsCreated'] as int? ?? 0,
+      prsMerged: json['prsMerged'] as int? ?? 0,
+      reviewsGiven: json['reviewsGiven'] as int? ?? 0,
+      commentsGiven: json['commentsGiven'] as int? ?? 0,
+      totalScore: json['totalScore'] as int? ?? 0,
+    )).toList();
   }
 
   Future<List<PrEntity>> _fetchAndMap(String owner, String repo) async {

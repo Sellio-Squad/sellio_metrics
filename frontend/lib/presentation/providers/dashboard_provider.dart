@@ -9,7 +9,6 @@ import '../../domain/entities/bottleneck_entity.dart';
 import '../../domain/repositories/metrics_repository.dart';
 import '../../domain/services/kpi_service.dart';
 import '../../domain/services/bottleneck_service.dart';
-import '../../domain/services/collaboration_service.dart';
 import '../../domain/services/filter_service.dart';
 
 enum DashboardStatus { loading, loaded, error }
@@ -18,35 +17,34 @@ class DashboardProvider extends ChangeNotifier {
   final MetricsRepository _repository;
   final KpiService _kpiService;
   final BottleneckService _bottleneckService;
-  final CollaborationService _collaborationService;
   final FilterService _filterService;
 
   DashboardProvider({
     required MetricsRepository repository,
     required KpiService kpiService,
     required BottleneckService bottleneckService,
-    required CollaborationService collaborationService,
     required FilterService filterService,
   }) : _repository = repository,
        _kpiService = kpiService,
        _bottleneckService = bottleneckService,
-       _collaborationService = collaborationService,
        _filterService = filterService;
 
   // ─── State ───────────────────────────────────────────────
   DashboardStatus _status = DashboardStatus.loading;
   List<PrEntity> _allPrs = [];
-  String _weekFilter = FilterOptions.all;
-  String _developerFilter = FilterOptions.all;
+  final String _weekFilter = FilterOptions.all;
+  final String _developerFilter = FilterOptions.all;
   String _searchTerm = '';
-  String _statusFilter = FilterOptions.all;
-  int _currentPageIndex = 0;
-  double _bottleneckThreshold = BottleneckConfig.defaultThresholdHours;
+  final String _statusFilter = FilterOptions.all;
+  final int _currentPageIndex = 0;
+  final double _bottleneckThreshold = BottleneckConfig.defaultThresholdHours;
   DateTime? _startDate;
   DateTime? _endDate;
 
   /// Current repos being displayed.
   List<RepoInfo> _currentRepos = [];
+
+  List<LeaderboardEntry> _leaderboard = [];
 
   // ─── Getters ─────────────────────────────────────────────
   DashboardStatus get status => _status;
@@ -104,11 +102,19 @@ class DashboardProvider extends ChangeNotifier {
         thresholdHours: _bottleneckThreshold,
       );
 
-  List<LeaderboardEntry> get leaderboard =>
-      _collaborationService.calculateLeaderboard(weekFilteredPrs);
+  List<LeaderboardEntry> get leaderboard => _leaderboard;
 
 
   // ─── Actions ─────────────────────────────────────────────
+
+  Future<void> _updateLeaderboard() async {
+    try {
+      _leaderboard = await _repository.calculateLeaderboard(weekFilteredPrs);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error updating leaderboard remotely: $e');
+    }
+  }
 
   /// Ensure data is loaded only if the repos have changed.
   Future<void> ensureDataLoaded(List<RepoInfo> repos) async {
@@ -152,6 +158,7 @@ class DashboardProvider extends ChangeNotifier {
       debugPrint('Error loading PR data: $e');
     }
     notifyListeners();
+    await _updateLeaderboard();
   }
 
   Future<void> refresh() async {
@@ -176,6 +183,7 @@ class DashboardProvider extends ChangeNotifier {
       debugPrint('Error refreshing PR data: $e');
     }
     notifyListeners();
+    await _updateLeaderboard();
   }
 
 
@@ -189,5 +197,6 @@ class DashboardProvider extends ChangeNotifier {
     _startDate = start;
     _endDate = end;
     notifyListeners();
+    _updateLeaderboard();
   }
 }

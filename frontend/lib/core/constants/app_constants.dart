@@ -73,7 +73,7 @@ class LeaderboardWeights {
 
   static const int prsCreated = 3;
   static const int prsMerged = 2;
-  static const int reviewsGiven = 2;
+  static const int reviewsGiven = 0;
   static const int commentsGiven = 1;
 }
 

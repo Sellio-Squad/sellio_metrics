@@ -13,6 +13,7 @@ import '../models/pr_model.dart';
 abstract class MetricsDataSource {
   Future<List<PrModel>> fetchPullRequests(String owner, String repo);
   Future<List<RepoModel>> fetchRepositories();
+  Future<List<dynamic>> calculateLeaderboard(List<Map<String, dynamic>> prData);
 }
 
 /// A lightweight model for repository info from the backend.
@@ -90,5 +91,23 @@ class RemoteDataSource implements MetricsDataSource {
     return repoList
         .map((e) => RepoModel.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  @override
+  Future<List<dynamic>> calculateLeaderboard(List<Map<String, dynamic>> prData) async {
+    final url = Uri.parse('$baseUrl/api/metrics/leaderboard');
+    final response = await _client.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'prs': prData}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to calculate leaderboard on backend: ${response.statusCode} ${response.body}',
+      );
+    }
+
+    return json.decode(response.body) as List<dynamic>;
   }
 }

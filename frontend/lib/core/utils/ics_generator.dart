@@ -21,9 +21,9 @@ class IcsGenerator {
 
     // Use a clean custom format for ICS dates (YYYYMMDDTHHMMSS)
     final format = DateFormat("yyyyMMdd'T'HHmmss");
-    final dtStart = format.format(startTime.toUtc()) + 'Z';
-    final dtEnd = format.format(endTime.toUtc()) + 'Z';
-    final dtStamp = format.format(now) + 'Z';
+    final dtStart = '${format.format(startTime.toUtc())}Z';
+    final dtEnd = '${format.format(endTime.toUtc())}Z';
+    final dtStamp = '${format.format(now)}Z';
 
     // Unique ID for the event based on timestamp and name
     final uid = '${now.millisecondsSinceEpoch}-${title.replaceAll(' ', '')}@sellio.sqaud';
