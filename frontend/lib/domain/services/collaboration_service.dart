@@ -18,17 +18,22 @@ class CollaborationService {
       final creator = pr.creator.login;
       scores.putIfAbsent(creator, () => _LeaderboardAccumulator());
       scores[creator]!.prsCreated++;
+      scores[creator]!.avatarUrl ??= pr.creator.avatarUrl;
       if (pr.isMerged) scores[creator]!.prsMerged++;
 
-      for (final reviewer in pr.reviewerLogins) {
+      for (final approval in pr.approvals) {
+        final reviewer = approval.reviewer.login;
         if (reviewer == creator) continue;
         scores.putIfAbsent(reviewer, () => _LeaderboardAccumulator());
         scores[reviewer]!.reviewsGiven++;
+        scores[reviewer]!.avatarUrl ??= approval.reviewer.avatarUrl;
       }
 
-      for (final commenter in pr.commenterLogins) {
+      for (final comment in pr.comments) {
+        final commenter = comment.author.login;
         scores.putIfAbsent(commenter, () => _LeaderboardAccumulator());
         scores[commenter]!.commentsGiven++;
+        scores[commenter]!.avatarUrl ??= comment.author.avatarUrl;
       }
     }
 
@@ -40,6 +45,7 @@ class CollaborationService {
           a.commentsGiven * LeaderboardWeights.commentsGiven;
       return LeaderboardEntry(
         developer: e.key,
+        avatarUrl: a.avatarUrl,
         prsCreated: a.prsCreated,
         prsMerged: a.prsMerged,
         reviewsGiven: a.reviewsGiven,
@@ -53,6 +59,7 @@ class CollaborationService {
 
 
 class _LeaderboardAccumulator {
+  String? avatarUrl;
   int prsCreated = 0;
   int prsMerged = 0;
   int reviewsGiven = 0;

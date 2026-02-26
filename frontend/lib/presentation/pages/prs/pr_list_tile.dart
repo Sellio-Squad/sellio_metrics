@@ -68,7 +68,11 @@ class _PrListTileState extends State<PrListTile> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              SAvatar(name: pr.creator.login, size: SAvatarSize.small),
+              SAvatar(
+                name: pr.creator.login,
+                imageUrl: pr.creator.avatarUrl.isNotEmpty ? pr.creator.avatarUrl : null,
+                size: SAvatarSize.small,
+              ),
               const SizedBox(width: AppSpacing.md),
               Expanded(
                 child: Column(
