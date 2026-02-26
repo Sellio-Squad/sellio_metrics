@@ -8,6 +8,7 @@
 import { FastifyPluginAsync } from "fastify";
 import type { Cradle } from "../../core/container";
 import type { MetricsRouteParams, MetricsQueryParams, MetricsResponse } from "./metrics.types";
+import type { PrMetric, LeaderboardEntry } from "../../core/types";
 
 const metricsRoute: FastifyPluginAsync = async (fastify) => {
     /**
@@ -54,6 +55,18 @@ const metricsRoute: FastifyPluginAsync = async (fastify) => {
                 count: metrics.length,
                 metrics,
             };
+        },
+    );
+
+    /**
+     * POST /api/metrics/leaderboard
+     * Receives a filtered array of PRs and returns the calculated leaderboard.
+     */
+    fastify.post<{ Body: { prs: PrMetric[] } }>(
+        "/leaderboard",
+        async (request): Promise<LeaderboardEntry[]> => {
+            const { metricsService } = request.diScope.cradle as Cradle;
+            return metricsService.calculateLeaderboard(request.body.prs);
         },
     );
 };

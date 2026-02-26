@@ -75,3 +75,15 @@ export interface RepoInfo {
     private: boolean;
     default_branch: string;
 }
+
+// ─── Leaderboard ─────────────────────────────────────────────
+
+export interface LeaderboardEntry {
+    developer: string;
+    avatarUrl: string | null;
+    prsCreated: number;
+    prsMerged: number;
+    reviewsGiven: number;
+    commentsGiven: number;
+    totalScore: number;
+}
