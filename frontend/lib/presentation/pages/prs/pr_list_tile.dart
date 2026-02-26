@@ -98,10 +98,15 @@ class _PrListTileState extends State<PrListTile> {
                         _InfoChip(
                             text: formatRelativeTime(pr.openedAt),
                             icon: Icons.schedule),
+                        _DiffStatsChip(
+                          additions: pr.diffStats.additions,
+                          deletions: pr.diffStats.deletions,
+                          changedFiles: pr.diffStats.changedFiles,
+                        ),
                         _InfoChip(
-                            text:
-                                '+${pr.diffStats.additions} / -${pr.diffStats.deletions}',
-                            icon: Icons.code),
+                          text: '${pr.approvals.length} / ${pr.requiredApprovals} approvals',
+                          icon: Icons.check_circle_outline,
+                        ),
                       ],
                     ),
                   ],
@@ -163,6 +168,62 @@ class _InfoChip extends StatelessWidget {
         ],
         Text(
           text,
+          style: AppTypography.caption.copyWith(
+            color: scheme.body,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Diff stats chip with colored additions and deletions, and files changed.
+class _DiffStatsChip extends StatelessWidget {
+  final int additions;
+  final int deletions;
+  final int changedFiles;
+
+  const _DiffStatsChip({
+    required this.additions,
+    required this.deletions,
+    required this.changedFiles,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.code, size: 12, color: scheme.hint),
+        const SizedBox(width: 3),
+        Text(
+          '+$additions',
+          style: AppTypography.caption.copyWith(
+            color: scheme.green,
+            fontWeight: FontWeight.w600,
+            fontSize: 11,
+          ),
+        ),
+        Text(
+          ' / ',
+          style: AppTypography.caption.copyWith(
+            color: scheme.body,
+            fontSize: 11,
+          ),
+        ),
+        Text(
+          '-$deletions',
+          style: AppTypography.caption.copyWith(
+            color: scheme.red,
+            fontWeight: FontWeight.w600,
+            fontSize: 11,
+          ),
+        ),
+        Text(
+          ' ($changedFiles files)',
           style: AppTypography.caption.copyWith(
             color: scheme.body,
             fontSize: 11,
