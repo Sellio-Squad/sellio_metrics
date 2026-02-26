@@ -9,7 +9,7 @@
 import type { GitHubClient } from "../../infra/github/github.client";
 import type { Logger } from "../../core/logger";
 import type { Env } from "../../config/env";
-import type { PrMetric, LeaderboardEntry } from "../../core/types";
+import type { PrMetric } from "../../core/types";
 import { GitHubApiError } from "../../core/errors";
 import { mapToPrMetric } from "./metrics.mapper";
 
@@ -63,77 +63,6 @@ export class MetricsService {
             this.logger.error({ error: error.message }, "Failed to fetch metrics");
             throw new GitHubApiError(`Failed to fetch metrics: ${error.message}`);
         }
-    }
-
-    /**
-     * Calculate leaderboard entries from a list of PRs.
-     * Logic is hosted on backend so it can be updated live.
-     */
-    calculateLeaderboard(prs: PrMetric[]): LeaderboardEntry[] {
-        const weights = {
-            prsCreated: 3,
-            prsMerged: 2,
-            reviewsGiven: 0, // Removed from points as requested
-            commentsGiven: 1,
-        };
-
-        const scores = new Map<string, {
-            avatarUrl: string | null;
-            prsCreated: number;
-            prsMerged: number;
-            reviewsGiven: number;
-            commentsGiven: number;
-        }>();
-
-        const getOrCreate = (login: string) => {
-            let entry = scores.get(login);
-            if (!entry) {
-                entry = { avatarUrl: null, prsCreated: 0, prsMerged: 0, reviewsGiven: 0, commentsGiven: 0 };
-                scores.set(login, entry);
-            }
-            return entry;
-        };
-
-        for (const pr of prs) {
-            const creator = pr.creator.login;
-            const cEntry = getOrCreate(creator);
-            cEntry.prsCreated++;
-            cEntry.avatarUrl ??= pr.creator.avatar_url;
-            if (pr.status === "merged") cEntry.prsMerged++;
-
-            for (const approval of pr.approvals) {
-                const reviewer = approval.reviewer.login;
-                if (reviewer === creator) continue;
-                const rEntry = getOrCreate(reviewer);
-                rEntry.reviewsGiven++;
-                rEntry.avatarUrl ??= approval.reviewer.avatar_url;
-            }
-
-            for (const comment of pr.comments) {
-                const commenter = comment.author.login;
-                const coEntry = getOrCreate(commenter);
-                coEntry.commentsGiven++;
-                coEntry.avatarUrl ??= comment.author.avatar_url;
-            }
-        }
-
-        return Array.from(scores.entries()).map(([login, a]) => {
-            const totalScore =
-                a.prsCreated * weights.prsCreated +
-                a.prsMerged * weights.prsMerged +
-                a.reviewsGiven * weights.reviewsGiven +
-                a.commentsGiven * weights.commentsGiven;
-
-            return {
-                developer: login,
-                avatarUrl: a.avatarUrl,
-                prsCreated: a.prsCreated,
-                prsMerged: a.prsMerged,
-                reviewsGiven: a.reviewsGiven,
-                commentsGiven: a.commentsGiven,
-                totalScore,
-            };
-        }).sort((a, b) => b.totalScore - a.totalScore);
     }
 
     // ─── Private: Fetch ──────────────────────────────────────

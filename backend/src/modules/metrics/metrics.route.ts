@@ -65,8 +65,8 @@ const metricsRoute: FastifyPluginAsync = async (fastify) => {
     fastify.post<{ Body: { prs: PrMetric[] } }>(
         "/leaderboard",
         async (request): Promise<LeaderboardEntry[]> => {
-            const { metricsService } = request.diScope.cradle as Cradle;
-            return metricsService.calculateLeaderboard(request.body.prs);
+            const { leaderboardService } = request.diScope.cradle as Cradle;
+            return leaderboardService.calculateLeaderboard(request.body.prs);
         },
     );
 };
