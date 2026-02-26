@@ -35,7 +35,7 @@ class LeaderboardPage extends StatelessWidget {
 
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final crossAxisCount = constraints.maxWidth > LayoutConstants.mobileBreakpoint ? 3 : 1;
+                  final crossAxisCount = constraints.maxWidth > LayoutConstants.mobileBreakpoint ? 2 : 1;
                   return GridView.count(
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: AppSpacing.lg,
@@ -49,12 +49,6 @@ class LeaderboardPage extends StatelessWidget {
                         title: l10n.spotlightHotStreak,
                         metric: provider.spotlightMetrics.hotStreak,
                         accentColor: scheme.secondary,
-                      ),
-                      SpotlightCard(
-                        icon: LucideIcons.zap,
-                        title: l10n.spotlightFastestReviewer,
-                        metric: provider.spotlightMetrics.fastestReviewer,
-                        accentColor: scheme.green,
                       ),
                       SpotlightCard(
                         icon: LucideIcons.messageCircle,

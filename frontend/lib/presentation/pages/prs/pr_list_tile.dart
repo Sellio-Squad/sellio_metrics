@@ -7,6 +7,7 @@ library;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/constants/app_constants.dart';
 import '../../../core/constants/layout_constants.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/utils/date_utils.dart';
@@ -130,9 +131,9 @@ class _PrListTileState extends State<PrListTile> {
 
   SBadgeVariant _getBadgeVariant(String status) {
     return switch (status) {
-      'merged' => SBadgeVariant.primary,
-      'closed' => SBadgeVariant.error,
-      'approved' => SBadgeVariant.success,
+      PrStatus.merged => SBadgeVariant.primary,
+      PrStatus.closed => SBadgeVariant.error,
+      PrStatus.approved => SBadgeVariant.success,
       _ => SBadgeVariant.secondary,
     };
   }

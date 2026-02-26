@@ -4,8 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:sellio_metrics/core/constants/layout_constants.dart';
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/navigation/app_navigation.dart';
-import '../widgets/navigation/app_sidebar.dart';
-import '../widgets/navigation/app_bottom_nav.dart';
+import '../navigation/app_bottom_nav.dart';
+import '../navigation/app_sidebar.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});

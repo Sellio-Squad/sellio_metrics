@@ -36,10 +36,10 @@ class DashboardProvider extends ChangeNotifier {
   // ─── State ───────────────────────────────────────────────
   DashboardStatus _status = DashboardStatus.loading;
   List<PrEntity> _allPrs = [];
-  String _weekFilter = 'all';
-  String _developerFilter = 'all';
+  String _weekFilter = FilterOptions.all;
+  String _developerFilter = FilterOptions.all;
   String _searchTerm = '';
-  String _statusFilter = 'all';
+  String _statusFilter = FilterOptions.all;
   int _currentPageIndex = 0;
   double _bottleneckThreshold = BottleneckConfig.defaultThresholdHours;
   DateTime? _startDate;
