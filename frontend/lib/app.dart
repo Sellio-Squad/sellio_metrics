@@ -8,6 +8,7 @@ import 'core/l10n/app_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'presentation/providers/dashboard_provider.dart';
 import 'presentation/providers/app_settings_provider.dart';
+import 'presentation/providers/observability_provider.dart';
 import 'presentation/widgets/common/loading_screen.dart';
 import 'presentation/widgets/common/error_screen.dart';
 import 'presentation/pages/dashboard_page.dart';
@@ -21,6 +22,7 @@ class SellioMetricsApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => sl.get<AppSettingsProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<DashboardProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<ObservabilityProvider>()),
       ],
       child: Consumer<AppSettingsProvider>(
         builder: (context, settings, _) {

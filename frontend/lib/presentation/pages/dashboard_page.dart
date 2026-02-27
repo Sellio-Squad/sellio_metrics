@@ -43,7 +43,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildDesktopLayout() {
     final currentRoute = AppNavigation.routes[_selectedIndex];
     final showDateFilter =
-        currentRoute.id != 'about' && currentRoute.id != 'settings';
+        currentRoute.id != 'about' && currentRoute.id != 'settings' && currentRoute.id != 'observability';
 
     return Row(
       children: [
@@ -80,7 +80,7 @@ class _DashboardPageState extends State<DashboardPage> {
   Widget _buildMobileLayout() {
     final currentRoute = AppNavigation.routes[_selectedIndex];
     final showDateFilter =
-        currentRoute.id != 'about' && currentRoute.id != 'settings';
+        currentRoute.id != 'about' && currentRoute.id != 'settings' && currentRoute.id != 'observability';
 
     return Column(
       children: [
