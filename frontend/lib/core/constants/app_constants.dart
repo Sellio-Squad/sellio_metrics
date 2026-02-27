@@ -61,13 +61,19 @@ class PrStatus {
   static const String approved = 'approved';
 }
 
+class FilterOptions {
+  const FilterOptions._();
+
+  static const String all = 'all';
+}
+
 /// Scoring weights for the leaderboard algorithm.
 class LeaderboardWeights {
   const LeaderboardWeights._();
 
   static const int prsCreated = 3;
   static const int prsMerged = 2;
-  static const int reviewsGiven = 2;
+  static const int reviewsGiven = 0;
   static const int commentsGiven = 1;
 }
 

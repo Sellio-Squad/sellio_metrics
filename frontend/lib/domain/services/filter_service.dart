@@ -55,7 +55,7 @@ class FilterService {
 
   /// Filter PRs by week key.
   List<PrEntity> filterByWeek(List<PrEntity> prData, String weekKey) {
-    if (weekKey == 'all') return prData;
+    if (weekKey == FilterOptions.all) return prData;
     return prData.where((pr) {
       return getWeekStartDate(pr.openedAt).toIso8601String() == weekKey;
     }).toList();
@@ -65,7 +65,7 @@ class FilterService {
   List<PrEntity> filterPrs(
     List<PrEntity> prData, {
     String searchTerm = '',
-    String statusFilter = 'all',
+    String statusFilter = FilterOptions.all,
   }) {
     var result = prData;
 
@@ -78,7 +78,7 @@ class FilterService {
       }).toList();
     }
 
-    if (statusFilter != 'all') {
+    if (statusFilter != FilterOptions.all) {
       result = result.where((pr) => pr.status == statusFilter).toList();
     }
 

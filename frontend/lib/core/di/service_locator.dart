@@ -6,7 +6,6 @@ import '../../data/repositories/metrics_repository_impl.dart';
 import '../../domain/repositories/metrics_repository.dart';
 import '../../domain/services/kpi_service.dart';
 import '../../domain/services/bottleneck_service.dart';
-import '../../domain/services/collaboration_service.dart';
 import '../../domain/services/filter_service.dart';
 import '../../presentation/providers/dashboard_provider.dart';
 import '../../presentation/providers/app_settings_provider.dart';
@@ -68,7 +67,6 @@ void setupDependencies() {
   // Domain services
   sl.registerSingleton<KpiService>(const KpiService());
   sl.registerSingleton<BottleneckService>(const BottleneckService());
-  sl.registerSingleton<CollaborationService>(const CollaborationService());
   sl.registerSingleton<FilterService>(const FilterService());
 
   // Providers
@@ -80,7 +78,6 @@ void setupDependencies() {
       repository: sl.get<MetricsRepository>(),
       kpiService: sl.get<KpiService>(),
       bottleneckService: sl.get<BottleneckService>(),
-      collaborationService: sl.get<CollaborationService>(),
       filterService: sl.get<FilterService>(),
     ),
   );

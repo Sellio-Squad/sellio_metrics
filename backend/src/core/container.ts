@@ -18,6 +18,7 @@ import {
 import { createGitHubClient, GitHubClient } from "../infra/github/github.client";
 import { ReposService } from "../modules/repos/repos.service";
 import { MetricsService } from "../modules/metrics/metrics.service";
+import { LeaderboardService } from "../modules/metrics/leaderboard.service";
 import { env } from "../config/env";
 import { logger } from "./logger";
 
@@ -29,6 +30,7 @@ export interface Cradle {
     githubClient: GitHubClient;
     reposService: ReposService;
     metricsService: MetricsService;
+    leaderboardService: LeaderboardService;
 }
 
 // ─── Builder ────────────────────────────────────────────────
@@ -49,6 +51,7 @@ export function buildContainer(): AwilixContainer<Cradle> {
         // Module services
         reposService: asClass(ReposService).singleton(),
         metricsService: asClass(MetricsService).singleton(),
+        leaderboardService: asClass(LeaderboardService).singleton(),
     });
 
     return container;

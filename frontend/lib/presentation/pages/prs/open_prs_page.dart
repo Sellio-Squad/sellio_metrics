@@ -9,9 +9,26 @@ import '../../providers/dashboard_provider.dart';
 import 'pr_list_tile.dart';
 import '../../widgets/section_header.dart';
 import 'bottleneck_item.dart';
+import '../../providers/app_settings_provider.dart';
 
-class OpenPrsPage extends StatelessWidget {
+class OpenPrsPage extends StatefulWidget {
   const OpenPrsPage({super.key});
+
+  @override
+  State<OpenPrsPage> createState() => _OpenPrsPageState();
+}
+
+class _OpenPrsPageState extends State<OpenPrsPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final settings = context.read<AppSettingsProvider>();
+      final dashboard = context.read<DashboardProvider>();
+      dashboard.ensureDataLoaded(settings.selectedRepos);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {

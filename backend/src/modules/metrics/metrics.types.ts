@@ -4,7 +4,7 @@
  * Request/response shapes specific to the metrics module.
  */
 
-import type { PrMetric } from "../../core/types";
+import type { PrMetric, LeaderboardEntry } from "../../core/types";
 
 /** Query parameters for GET /api/metrics/:owner/:repo */
 export interface MetricsQueryParams {

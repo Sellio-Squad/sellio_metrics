@@ -14,11 +14,11 @@ class KpiService {
   /// Calculate KPI metrics from PR data.
   KpiEntity calculateKpis(
     List<PrEntity> prData, {
-    String developerFilter = 'all',
+    String developerFilter = FilterOptions.all,
   }) {
     var filtered = prData;
 
-    if (developerFilter != 'all') {
+    if (developerFilter != FilterOptions.all) {
       filtered = prData.where((pr) {
         return pr.creator.login == developerFilter ||
             pr.mergedBy?.login == developerFilter ||
@@ -76,9 +76,9 @@ class KpiService {
   /// Calculate spotlight metrics.
   SpotlightEntity calculateSpotlightMetrics(
     List<PrEntity> prData, {
-    String developerFilter = 'all',
+    String developerFilter = FilterOptions.all,
   }) {
-    if (developerFilter != 'all') {
+    if (developerFilter != FilterOptions.all) {
       final devPrs =
           prData.where((pr) => pr.creator.login == developerFilter).length;
       final commentedOn = prData
@@ -99,37 +99,13 @@ class KpiService {
       );
     }
 
-    // Hot streak: most active
+    // Hot streak: based only on PRs created (exclude reviews/approvals)
     final activity = <String, int>{};
     for (final pr in prData) {
       activity[pr.creator.login] = (activity[pr.creator.login] ?? 0) + 1;
-      if (pr.mergedBy != null) {
-        activity[pr.mergedBy!.login] =
-            (activity[pr.mergedBy!.login] ?? 0) + 1;
-      }
-      for (final r in pr.reviewerLogins) {
-        if (r != pr.creator.login) activity[r] = (activity[r] ?? 0) + 1;
-      }
     }
     final hotStreakEntry = activity.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
-
-    // Fastest reviewer
-    final reviewTimes = <String, List<double>>{};
-    for (final pr in prData) {
-      if (pr.timeToFirstApprovalMinutes != null && pr.approvals.isNotEmpty) {
-        final reviewer = pr.approvals.first.reviewer.login;
-        reviewTimes.putIfAbsent(reviewer, () => []);
-        reviewTimes[reviewer]!.add(pr.timeToFirstApprovalMinutes!);
-      }
-    }
-    MapEntry<String, double>? fastestEntry;
-    for (final entry in reviewTimes.entries) {
-      final avg = entry.value.reduce((a, b) => a + b) / entry.value.length;
-      if (fastestEntry == null || avg < fastestEntry.value) {
-        fastestEntry = MapEntry(entry.key, avg);
-      }
-    }
 
     // Top commenter
     final commenterCounts = <String, int>{};
@@ -145,16 +121,8 @@ class KpiService {
       hotStreak: hotStreakEntry.isNotEmpty
           ? SpotlightMetric(
               user: hotStreakEntry.first.key,
-              label: '${hotStreakEntry.first.value} activities',
+              label: 'Created ${hotStreakEntry.first.value} PRs',
               value: hotStreakEntry.first.value,
-            )
-          : null,
-      fastestReviewer: fastestEntry != null
-          ? SpotlightMetric(
-              user: fastestEntry.key,
-              label:
-                  'Avg. review: ${formatDetailedDuration(fastestEntry.value)}',
-              value: fastestEntry.value,
             )
           : null,
       topCommenter: topCommenterEntry.isNotEmpty

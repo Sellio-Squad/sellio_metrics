@@ -10,9 +10,26 @@ import '../../providers/dashboard_provider.dart';
 import '../../widgets/section_header.dart';
 import 'spotlight_card.dart';
 import 'leaderboard_section.dart';
+import '../../providers/app_settings_provider.dart';
 
-class LeaderboardPage extends StatelessWidget {
+class LeaderboardPage extends StatefulWidget {
   const LeaderboardPage({super.key});
+
+  @override
+  State<LeaderboardPage> createState() => _LeaderboardPageState();
+}
+
+class _LeaderboardPageState extends State<LeaderboardPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final settings = context.read<AppSettingsProvider>();
+      final dashboard = context.read<DashboardProvider>();
+      dashboard.ensureDataLoaded(settings.selectedRepos);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,7 +52,7 @@ class LeaderboardPage extends StatelessWidget {
 
               LayoutBuilder(
                 builder: (context, constraints) {
-                  final crossAxisCount = constraints.maxWidth > LayoutConstants.mobileBreakpoint ? 3 : 1;
+                  final crossAxisCount = constraints.maxWidth > LayoutConstants.mobileBreakpoint ? 2 : 1;
                   return GridView.count(
                     crossAxisCount: crossAxisCount,
                     crossAxisSpacing: AppSpacing.lg,
@@ -49,12 +66,6 @@ class LeaderboardPage extends StatelessWidget {
                         title: l10n.spotlightHotStreak,
                         metric: provider.spotlightMetrics.hotStreak,
                         accentColor: scheme.secondary,
-                      ),
-                      SpotlightCard(
-                        icon: LucideIcons.zap,
-                        title: l10n.spotlightFastestReviewer,
-                        metric: provider.spotlightMetrics.fastestReviewer,
-                        accentColor: scheme.green,
                       ),
                       SpotlightCard(
                         icon: LucideIcons.messageCircle,

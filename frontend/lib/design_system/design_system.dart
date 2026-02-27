@@ -20,6 +20,7 @@ export 'components/s_input.dart';
 export 'components/s_loading.dart';
 export 'components/s_progress.dart';
 export 'components/s_sidebar.dart';
+export 'components/s_checkbox.dart';
 export 'components/s_switch.dart';
 
 // ─── Icons (re-exported for convenience) ─────────────────────

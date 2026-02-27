@@ -46,12 +46,10 @@ class SpotlightMetric {
 /// Spotlight metrics collection.
 class SpotlightEntity {
   final SpotlightMetric? hotStreak;
-  final SpotlightMetric? fastestReviewer;
   final SpotlightMetric? topCommenter;
 
   const SpotlightEntity({
     this.hotStreak,
-    this.fastestReviewer,
     this.topCommenter,
   });
 }
