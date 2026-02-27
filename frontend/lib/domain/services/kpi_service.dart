@@ -99,17 +99,10 @@ class KpiService {
       );
     }
 
-    // Hot streak: most active
+    // Hot streak: based only on PRs created (exclude reviews/approvals)
     final activity = <String, int>{};
     for (final pr in prData) {
       activity[pr.creator.login] = (activity[pr.creator.login] ?? 0) + 1;
-      if (pr.mergedBy != null) {
-        activity[pr.mergedBy!.login] =
-            (activity[pr.mergedBy!.login] ?? 0) + 1;
-      }
-      for (final r in pr.reviewerLogins) {
-        if (r != pr.creator.login) activity[r] = (activity[r] ?? 0) + 1;
-      }
     }
     final hotStreakEntry = activity.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
@@ -128,7 +121,7 @@ class KpiService {
       hotStreak: hotStreakEntry.isNotEmpty
           ? SpotlightMetric(
               user: hotStreakEntry.first.key,
-              label: '${hotStreakEntry.first.value} activities',
+              label: 'Created ${hotStreakEntry.first.value} PRs',
               value: hotStreakEntry.first.value,
             )
           : null,
