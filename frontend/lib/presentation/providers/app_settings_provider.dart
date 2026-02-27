@@ -1,6 +1,3 @@
-/// Sellio Metrics — App Settings Provider
-///
-/// Manages theme mode, locale, and selected repository.
 library;
 
 import 'package:flutter/material.dart';
@@ -9,7 +6,7 @@ import '../../domain/repositories/metrics_repository.dart';
 class AppSettingsProvider extends ChangeNotifier {
   final MetricsRepository _repository;
 
-  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode _themeMode = ThemeMode.light;
   Locale _locale = const Locale('en');
 
   List<RepoInfo> _selectedRepos = [];
@@ -55,7 +52,6 @@ class AppSettingsProvider extends ChangeNotifier {
   }
 
   // ─── Repository Selection ────────────────────────────────
-  /// Load the list of available repositories from the backend.
   Future<void> loadRepositories() async {
     _isLoadingRepos = true;
     notifyListeners();
@@ -63,9 +59,8 @@ class AppSettingsProvider extends ChangeNotifier {
     try {
       _availableRepos = await _repository.getRepositories();
 
-      // Auto-select the first repo if none selected
       if (_selectedRepos.isEmpty && _availableRepos.isNotEmpty) {
-        _selectedRepos = [_availableRepos.first];
+        _selectedRepos =_availableRepos ;
       }
     } catch (e) {
       debugPrint('Error loading repositories: $e');
@@ -75,7 +70,6 @@ class AppSettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Toggle a repository selection.
   void toggleRepoSelection(RepoInfo repo) {
     if (_selectedRepos.any((r) => r.fullName == repo.fullName)) {
       _selectedRepos = _selectedRepos.where((r) => r.fullName != repo.fullName).toList();
