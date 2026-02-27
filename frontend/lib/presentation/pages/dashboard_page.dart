@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:sellio_metrics/core/constants/layout_constants.dart';
 import '../../core/extensions/theme_extensions.dart';
 import '../../core/navigation/app_navigation.dart';
+import '../../design_system/design_system.dart';
 import '../navigation/app_bottom_nav.dart';
 import '../navigation/app_sidebar.dart';
+import 'analytics/date_filter/date_range_filter.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -46,9 +48,24 @@ class _DashboardPageState extends State<DashboardPage> {
           onItemSelected: (index) => setState(() => _selectedIndex = index),
         ),
         Expanded(
-          child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: AppNavigation.routes[_selectedIndex].page,
+          child: Column(
+            children: [
+              // Global date range filter, shared by all pages
+              const SafeArea(
+                bottom: false,
+                child: Padding(
+                  padding: EdgeInsets.all(AppSpacing.lg),
+                  child: DateRangeFilter(),
+                ),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 200),
+                  child: AppNavigation.routes[_selectedIndex].page,
+                ),
+              ),
+            ],
           ),
         ),
       ],
@@ -56,9 +73,23 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildMobileLayout() {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 200),
-      child: AppNavigation.routes[_selectedIndex].page,
+    return Column(
+      children: [
+        const SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: DateRangeFilter(),
+          ),
+        ),
+        const Divider(height: 1),
+        Expanded(
+          child: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: AppNavigation.routes[_selectedIndex].page,
+          ),
+        ),
+      ],
     );
   }
 }

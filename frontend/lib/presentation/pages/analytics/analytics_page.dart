@@ -11,7 +11,6 @@ import '../../../domain/entities/pr_entity.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../widgets/kpi_card.dart';
 import '../../widgets/section_header.dart';
-import 'date_filter/date_range_filter.dart';
 
 class AnalyticsPage extends StatelessWidget {
   const AnalyticsPage({super.key});
@@ -39,10 +38,6 @@ class AnalyticsPage extends StatelessWidget {
                 icon: LucideIcons.barChart3,
                 title: l10n.navAnalytics,
               ),
-              const SizedBox(height: AppSpacing.lg),
-
-              // Date range filter
-              const DateRangeFilter(),
               const SizedBox(height: AppSpacing.xxl),
 
               // KPI row
