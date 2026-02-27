@@ -41,6 +41,10 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildDesktopLayout() {
+    final currentRoute = AppNavigation.routes[_selectedIndex];
+    final showDateFilter =
+        currentRoute.id != 'about' && currentRoute.id != 'settings';
+
     return Row(
       children: [
         AppSidebar(
@@ -50,19 +54,20 @@ class _DashboardPageState extends State<DashboardPage> {
         Expanded(
           child: Column(
             children: [
-              // Global date range filter, shared by all pages
-              const SafeArea(
-                bottom: false,
-                child: Padding(
-                  padding: EdgeInsets.all(AppSpacing.lg),
-                  child: DateRangeFilter(),
+              if (showDateFilter) ...[
+                const SafeArea(
+                  bottom: false,
+                  child: Padding(
+                    padding: EdgeInsets.all(AppSpacing.lg),
+                    child: DateRangeFilter(),
+                  ),
                 ),
-              ),
-              const Divider(height: 1),
+                const Divider(height: 1),
+              ],
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
-                  child: AppNavigation.routes[_selectedIndex].page,
+                  child: currentRoute.page,
                 ),
               ),
             ],
@@ -73,20 +78,26 @@ class _DashboardPageState extends State<DashboardPage> {
   }
 
   Widget _buildMobileLayout() {
+    final currentRoute = AppNavigation.routes[_selectedIndex];
+    final showDateFilter =
+        currentRoute.id != 'about' && currentRoute.id != 'settings';
+
     return Column(
       children: [
-        const SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: EdgeInsets.all(AppSpacing.md),
-            child: DateRangeFilter(),
+        if (showDateFilter) ...[
+          const SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: DateRangeFilter(),
+            ),
           ),
-        ),
-        const Divider(height: 1),
+          const Divider(height: 1),
+        ],
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: AppNavigation.routes[_selectedIndex].page,
+            child: currentRoute.page,
           ),
         ),
       ],
