@@ -17,8 +17,6 @@ class IcsGenerator {
   }) {
     final endTime = startTime.add(duration);
     final now = DateTime.now().toUtc();
-    final tz = startTime.timeZoneName;
-
     // Use a clean custom format for ICS dates (YYYYMMDDTHHMMSS)
     final format = DateFormat("yyyyMMdd'T'HHmmss");
     final dtStart = '${format.format(startTime.toUtc())}Z';
