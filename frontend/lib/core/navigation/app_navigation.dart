@@ -4,6 +4,7 @@ import '../l10n/app_localizations.dart';
 import '../../presentation/pages/leaderboard/leaderboard_page.dart';
 import '../../presentation/pages/prs/open_prs_page.dart';
 import '../../presentation/pages/analytics/analytics_page.dart';
+import '../../presentation/pages/observability/observability_page.dart';
 import '../../presentation/pages/about/about_page.dart';
 import '../../presentation/pages/setting/settings_page.dart';
 
@@ -41,12 +42,12 @@ class AppNavigation {
       labelBuilder: (l10n) => l10n.navAnalytics,
       page: const AnalyticsPage(),
     ),
-/*    AppRoute(
-      id: 'charts',
-      icon: LucideIcons.pieChart,
-      labelBuilder: (l10n) => l10n.navCharts,
-      page: const ChartsPage(),
-    ),*/
+    AppRoute(
+      id: 'observability',
+      icon: LucideIcons.activity,
+      labelBuilder: (l10n) => l10n.navObservability,
+      page: const ObservabilityPage(),
+    ),
     AppRoute(
       id: 'about',
       icon: LucideIcons.info,

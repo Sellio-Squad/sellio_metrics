@@ -16,9 +16,11 @@ import {
 } from "awilix";
 
 import { createGitHubClient, GitHubClient } from "../infra/github/github.client";
+import { attachTrackingHooks } from "../infra/github/tracked-github.client";
 import { ReposService } from "../modules/repos/repos.service";
 import { MetricsService } from "../modules/metrics/metrics.service";
 import { LeaderboardService } from "../modules/metrics/leaderboard.service";
+import { ObservabilityService } from "../modules/observability/observability.service";
 import { env } from "../config/env";
 import { logger } from "./logger";
 
@@ -31,6 +33,7 @@ export interface Cradle {
     reposService: ReposService;
     metricsService: MetricsService;
     leaderboardService: LeaderboardService;
+    observabilityService: ObservabilityService;
 }
 
 // ─── Builder ────────────────────────────────────────────────
@@ -45,8 +48,17 @@ export function buildContainer(): AwilixContainer<Cradle> {
         env: asFunction(() => env).singleton(),
         logger: asFunction(() => logger).singleton(),
 
-        // Infrastructure
-        githubClient: asFunction(createGitHubClient).singleton(),
+        // Observability (registered early — other infra depends on it)
+        observabilityService: asFunction(({ logger }) => {
+            return new ObservabilityService({ logger });
+        }).singleton(),
+
+        // Infrastructure (GitHub client with tracking hooks)
+        githubClient: asFunction(({ env, observabilityService }) => {
+            const client = createGitHubClient({ env });
+            attachTrackingHooks(client, observabilityService);
+            return client;
+        }).singleton(),
 
         // Module services
         reposService: asClass(ReposService).singleton(),

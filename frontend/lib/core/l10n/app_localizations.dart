@@ -36,6 +36,41 @@ class AppLocalizations {
   String get navCharts => _t('navCharts');
   String get navAbout => _t('navAbout');
   String get navSettings => _t('navSettings');
+  String get navObservability => _t('navObservability');
+
+  // Observability
+  String get obsTitle => _t('obsTitle');
+  String get obsSubtitle => _t('obsSubtitle');
+  String get obsLive => _t('obsLive');
+  String get obsTotalCalls => _t('obsTotalCalls');
+  String get obsAvgLatency => _t('obsAvgLatency');
+  String get obsP95Latency => _t('obsP95Latency');
+  String get obsErrorRate => _t('obsErrorRate');
+  String get obsUptime => _t('obsUptime');
+  String get obsAllSources => _t('obsAllSources');
+  String get obsSourceInternal => _t('obsSourceInternal');
+  String get obsSourceGithub => _t('obsSourceGithub');
+  String get obsSourceGoogle => _t('obsSourceGoogle');
+  String get obsSourceExternal => _t('obsSourceExternal');
+  String get obsSourceBreakdown => _t('obsSourceBreakdown');
+  String get obsSlowestEndpoints => _t('obsSlowestEndpoints');
+  String get obsRecentErrors => _t('obsRecentErrors');
+  String get obsLiveFeed => _t('obsLiveFeed');
+  String get obsRecords => _t('obsRecords');
+  String get obsNoData => _t('obsNoData');
+  String get obsLoadMore => _t('obsLoadMore');
+  String get obsRateLimits => _t('obsRateLimits');
+  String get obsCallsPerMin => _t('obsCallsPerMin');
+  String get obsTrafficAnalysis => _t('obsTrafficAnalysis');
+  String get obsSpike => _t('obsSpike');
+  String get obsCurrentRate => _t('obsCurrentRate');
+  String get obsPreviousRate => _t('obsPreviousRate');
+  String get obsTrailingAvg => _t('obsTrailingAvg');
+  String get obsPeakRate => _t('obsPeakRate');
+  String get obsHotEndpoints => _t('obsHotEndpoints');
+  String get obsLatencyDistribution => _t('obsLatencyDistribution');
+  String get obsLatencyBySource => _t('obsLatencyBySource');
+  String get obsDependencyGraph => _t('obsDependencyGraph');
 
   // KPI
   String get kpiTotalPrs => _t('kpiTotalPrs');
@@ -418,6 +453,41 @@ class AppLocalizations {
     'duration45Min': '45 min',
     'duration1Hour': '1 hour',
     'locationGoogleMeet': 'Google Meet',
+
+    // Observability
+    'navObservability': 'Observability',
+    'obsTitle': 'API Observability',
+    'obsSubtitle': 'Real-time API tracking & performance monitoring',
+    'obsLive': 'LIVE',
+    'obsTotalCalls': 'Total Calls',
+    'obsAvgLatency': 'Avg Latency',
+    'obsP95Latency': 'P95 Latency',
+    'obsErrorRate': 'Error Rate',
+    'obsUptime': 'Uptime',
+    'obsAllSources': 'All Sources',
+    'obsSourceInternal': 'Internal',
+    'obsSourceGithub': 'GitHub',
+    'obsSourceGoogle': 'Google',
+    'obsSourceExternal': 'External',
+    'obsSourceBreakdown': 'Source Breakdown',
+    'obsSlowestEndpoints': 'Slowest Endpoints',
+    'obsRecentErrors': 'Recent Errors',
+    'obsLiveFeed': 'Live API Feed',
+    'obsRecords': 'records',
+    'obsNoData': 'No API calls recorded yet. Make some requests to see data.',
+    'obsLoadMore': 'Load More',
+    'obsRateLimits': 'Rate Limits',
+    'obsCallsPerMin': 'Calls/min',
+    'obsTrafficAnalysis': 'Traffic Analysis',
+    'obsSpike': 'SPIKE',
+    'obsCurrentRate': 'Current',
+    'obsPreviousRate': 'Previous',
+    'obsTrailingAvg': '5m Avg',
+    'obsPeakRate': 'Peak',
+    'obsHotEndpoints': 'Hot Endpoints (last 1 min)',
+    'obsLatencyDistribution': 'Latency Distribution',
+    'obsLatencyBySource': 'Latency by Source',
+    'obsDependencyGraph': 'Service Dependency Graph',
   };
 
   static const Map<String, String> _ar = {
@@ -609,6 +679,41 @@ class AppLocalizations {
     'duration45Min': '45 دقيقة',
     'duration1Hour': 'ساعة واحدة',
     'locationGoogleMeet': 'جوجل ميت',
+
+    // Observability
+    'navObservability': 'المراقبة',
+    'obsTitle': 'مراقبة الواجهات البرمجية',
+    'obsSubtitle': 'تتبع وأداء الواجهات البرمجية في الوقت الفعلي',
+    'obsLive': 'مباشر',
+    'obsTotalCalls': 'إجمالي الاستدعاءات',
+    'obsAvgLatency': 'متوسط التأخير',
+    'obsP95Latency': 'تأخير P95',
+    'obsErrorRate': 'معدل الأخطاء',
+    'obsUptime': 'وقت التشغيل',
+    'obsAllSources': 'جميع المصادر',
+    'obsSourceInternal': 'داخلي',
+    'obsSourceGithub': 'جيت هب',
+    'obsSourceGoogle': 'جوجل',
+    'obsSourceExternal': 'خارجي',
+    'obsSourceBreakdown': 'توزيع المصادر',
+    'obsSlowestEndpoints': 'أبطأ نقاط النهاية',
+    'obsRecentErrors': 'أخطاء حديثة',
+    'obsLiveFeed': 'بث الواجهات المباشر',
+    'obsRecords': 'سجلات',
+    'obsNoData': 'لم يتم تسجيل أي استدعاءات حتى الآن. قم ببعض الطلبات لرؤية البيانات.',
+    'obsLoadMore': 'تحميل المزيد',
+    'obsRateLimits': 'حدود الاستخدام',
+    'obsCallsPerMin': 'استدعاء/دقيقة',
+    'obsTrafficAnalysis': 'تحليل الحركة',
+    'obsSpike': 'ذروة',
+    'obsCurrentRate': 'الحالي',
+    'obsPreviousRate': 'السابق',
+    'obsTrailingAvg': 'متوسط 5د',
+    'obsPeakRate': 'الذروة',
+    'obsHotEndpoints': 'النقاط الأكثر نشاطاً (آخر دقيقة)',
+    'obsLatencyDistribution': 'توزيع التأخير',
+    'obsLatencyBySource': 'التأخير حسب المصدر',
+    'obsDependencyGraph': 'رسم الاعتمادية البياني',
   };
 }
 

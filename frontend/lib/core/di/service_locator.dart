@@ -9,6 +9,7 @@ import '../../domain/services/bottleneck_service.dart';
 import '../../domain/services/filter_service.dart';
 import '../../presentation/providers/dashboard_provider.dart';
 import '../../presentation/providers/app_settings_provider.dart';
+import '../../presentation/providers/observability_provider.dart';
 
 /// Global service locator instance.
 final sl = ServiceLocator();
@@ -81,4 +82,8 @@ void setupDependencies() {
       filterService: sl.get<FilterService>(),
     ),
   );
+  sl.registerFactory<ObservabilityProvider>(
+    () => ObservabilityProvider(repository: sl.get<MetricsRepository>()),
+  );
 }
+

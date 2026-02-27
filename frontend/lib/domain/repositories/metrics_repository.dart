@@ -7,6 +7,7 @@ library;
 
 import '../entities/pr_entity.dart';
 import '../entities/leaderboard_entry.dart';
+import '../entities/api_call_entity.dart';
 
 /// Lightweight repository info for the settings UI.
 class RepoInfo {
@@ -34,4 +35,11 @@ abstract class MetricsRepository {
 
   /// Calculate leaderboard remotely on the backend based on selected PRs.
   Future<List<LeaderboardEntry>> calculateLeaderboard(List<PrEntity> prs);
+
+  /// Fetch aggregated observability statistics from the backend.
+  Future<ObservabilityStatsEntity> getObservabilityStats();
+
+  /// Fetch recent API call records, optionally filtered by [source].
+  Future<List<ApiCallEntity>> getApiCalls({String? source, int limit = 50});
 }
+
