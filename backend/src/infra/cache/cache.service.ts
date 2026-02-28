@@ -1,20 +1,29 @@
 /**
- * Sellio Metrics Backend — Cache Service
+ * Sellio Metrics Backend — Cache Service (Workers KV)
  *
- * Typed caching layer wrapping Redis.
- * Gracefully degrades to cache-miss on every call if Redis is unavailable.
+ * Typed caching layer using Cloudflare Workers KV.
+ * Falls back to no-op (cache-miss) when no KV binding is available
+ * (e.g. local development without wrangler).
  *
  * Features:
  * - JSON serialize/deserialize
  * - Key-prefix namespace (sellio:)
- * - ETag storage alongside cached values
- * - Cache stats tracking for observability
+ * - TTL-based expiration via KV's built-in expirationTtl
  */
 
-import type { RedisClient } from "./cache.client";
 import type { Logger } from "../../core/logger";
 
 // ─── Types ──────────────────────────────────────────────────
+
+/**
+ * Workers KV namespace interface.
+ * Matches Cloudflare's KVNamespace API.
+ */
+export interface KVNamespace {
+    get(key: string, options?: { type?: "text" | "json" }): Promise<string | null>;
+    put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
+    delete(key: string): Promise<void>;
+}
 
 export interface CachedValue<T> {
     data: T;
@@ -22,60 +31,34 @@ export interface CachedValue<T> {
     cachedAt: string;
 }
 
-export interface CacheStats {
-    connected: boolean;
-    hits: number;
-    misses: number;
-    sets: number;
-    errors: number;
-    hitRate: number;
-    keyCount: number;
-}
-
 // ─── Service ────────────────────────────────────────────────
 
 export class CacheService {
-    private readonly redis: RedisClient;
+    private readonly kv: KVNamespace | null;
     private readonly logger: Logger;
     private readonly prefix = "sellio:";
 
-    // Stats counters
-    private hits = 0;
-    private misses = 0;
-    private sets = 0;
-    private errors = 0;
-
-    constructor({ redisClient, logger }: { redisClient: RedisClient; logger: Logger }) {
-        this.redis = redisClient;
+    constructor({ kvNamespace, logger }: { kvNamespace: KVNamespace | null; logger: Logger }) {
+        this.kv = kvNamespace;
         this.logger = logger.child({ module: "cache" });
-    }
 
-    /** Whether Redis is connected and available. */
-    get isConnected(): boolean {
-        return this.redis !== null && this.redis.status === "ready";
+        if (!this.kv) {
+            this.logger.warn("⚠️  No KV namespace bound — caching disabled (pass-through mode)");
+        }
     }
 
     /**
      * Get a cached value by key.
-     * Returns null on miss or if Redis is unavailable.
+     * Returns null on miss or if KV is unavailable.
      */
     async get<T>(key: string): Promise<CachedValue<T> | null> {
-        if (!this.redis) {
-            this.misses++;
-            return null;
-        }
+        if (!this.kv) return null;
 
         try {
-            const raw = await this.redis.get(this.prefix + key);
-            if (!raw) {
-                this.misses++;
-                return null;
-            }
-
-            this.hits++;
+            const raw = await this.kv.get(this.prefix + key);
+            if (!raw) return null;
             return JSON.parse(raw) as CachedValue<T>;
         } catch (err: any) {
-            this.errors++;
             this.logger.warn({ err: err.message, key }, "Cache get failed");
             return null;
         }
@@ -85,7 +68,7 @@ export class CacheService {
      * Store a value in the cache with a TTL in seconds.
      */
     async set<T>(key: string, data: T, ttlSeconds: number, etag?: string): Promise<void> {
-        if (!this.redis) return;
+        if (!this.kv) return;
 
         try {
             const value: CachedValue<T> = {
@@ -94,82 +77,26 @@ export class CacheService {
                 cachedAt: new Date().toISOString(),
             };
 
-            await this.redis.setex(this.prefix + key, ttlSeconds, JSON.stringify(value));
-            this.sets++;
+            await this.kv.put(this.prefix + key, JSON.stringify(value), {
+                expirationTtl: ttlSeconds,
+            });
         } catch (err: any) {
-            this.errors++;
             this.logger.warn({ err: err.message, key }, "Cache set failed");
         }
     }
 
     /**
-     * Delete a specific cache key. Returns true if the key existed.
+     * Delete a specific cache key. Returns true if successful.
      */
     async del(key: string): Promise<boolean> {
-        if (!this.redis) return false;
+        if (!this.kv) return false;
 
         try {
-            const result = await this.redis.del(this.prefix + key);
-            return result > 0;
+            await this.kv.delete(this.prefix + key);
+            return true;
         } catch (err: any) {
-            this.errors++;
             this.logger.warn({ err: err.message, key }, "Cache del failed");
             return false;
         }
-    }
-
-    /**
-     * Delete keys matching a pattern (e.g. "github:repos:*").
-     */
-    async invalidate(pattern: string): Promise<number> {
-        if (!this.redis) return 0;
-
-        try {
-            const keys = await this.redis.keys(this.prefix + pattern);
-            if (keys.length === 0) return 0;
-
-            const deleted = await this.redis.del(...keys);
-            this.logger.info({ pattern, deleted }, "Cache invalidated");
-            return deleted;
-        } catch (err: any) {
-            this.errors++;
-            this.logger.warn({ err: err.message, pattern }, "Cache invalidate failed");
-            return 0;
-        }
-    }
-
-    /**
-     * Get cache stats for the observability dashboard.
-     */
-    async getStats(): Promise<CacheStats> {
-        const total = this.hits + this.misses;
-        let keyCount = 0;
-
-        if (this.redis) {
-            try {
-                const keys = await this.redis.keys(this.prefix + "*");
-                keyCount = keys.length;
-            } catch {
-                // ignore
-            }
-        }
-
-        return {
-            connected: this.isConnected,
-            hits: this.hits,
-            misses: this.misses,
-            sets: this.sets,
-            errors: this.errors,
-            hitRate: total > 0 ? Math.round((this.hits / total) * 10000) / 10000 : 0,
-            keyCount,
-        };
-    }
-
-    /** Reset stats (useful for testing). */
-    resetStats(): void {
-        this.hits = 0;
-        this.misses = 0;
-        this.sets = 0;
-        this.errors = 0;
     }
 }
