@@ -75,6 +75,9 @@ interface EnvSchema {
     LOG_LEVEL?: string;
     RATE_LIMIT_MAX?: string;
     RATE_LIMIT_WINDOW_MS?: string;
+    REDIS_URL?: string;
+    GITHUB_RATE_LIMIT_THRESHOLD?: string;
+    GITHUB_WEBHOOK_SECRET?: string;
 }
 
 function requireEnv(name: keyof EnvSchema): string {
@@ -126,6 +129,18 @@ export const env = Object.freeze({
         optionalEnv("RATE_LIMIT_WINDOW_MS", "60000"),
         10,
     ),
+
+    /** Redis connection URL for caching (optional — gracefully degrades). */
+    redisUrl: optionalEnv("REDIS_URL", ""),
+
+    /** GitHub rate limit threshold — delays requests when remaining quota is below this. */
+    githubRateLimitThreshold: parseInt(
+        optionalEnv("GITHUB_RATE_LIMIT_THRESHOLD", "100"),
+        10,
+    ),
+
+    /** GitHub webhook secret for verifying webhook payloads (optional). */
+    githubWebhookSecret: optionalEnv("GITHUB_WEBHOOK_SECRET", ""),
 });
 
 export type Env = typeof env;

@@ -8,7 +8,7 @@
 
 // ─── Source Discriminator ───────────────────────────────────
 
-export type ApiSource = "internal" | "github" | "google" | "external";
+export type ApiSource = "internal" | "github" | "google" | "external" | "cache";
 
 // ─── Single Call Record ─────────────────────────────────────
 
@@ -134,6 +134,18 @@ export interface RecentError {
     timestamp: string;
 }
 
+// ─── Cache Stats ────────────────────────────────────────────
+
+export interface CacheStatsInfo {
+    connected: boolean;
+    hits: number;
+    misses: number;
+    sets: number;
+    errors: number;
+    hitRate: number;
+    keyCount: number;
+}
+
 // ─── Aggregated Statistics (v2) ─────────────────────────────
 
 export interface ObservabilityStats {
@@ -165,6 +177,9 @@ export interface ObservabilityStats {
 
     /** Service dependency graph. */
     dependencyGraph: DependencyGraph;
+
+    /** Redis cache stats. */
+    cacheStats: CacheStatsInfo;
 }
 
 // ─── Query Filters ──────────────────────────────────────────

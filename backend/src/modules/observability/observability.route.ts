@@ -16,9 +16,10 @@ const observabilityRoute: FastifyPluginAsync = async (fastify) => {
         "/stats",
         async (request, reply) => {
             try {
-                const { observabilityService } = request.diScope.cradle as Cradle;
+                const { observabilityService, cacheService } = request.diScope.cradle as Cradle;
                 const stats = observabilityService.getStats();
-                return stats;
+                const cacheStats = await cacheService.getStats();
+                return { ...stats, cacheStats };
             } catch (err) {
                 request.log.error({ err }, "Failed to compute observability stats");
                 reply.code(500);
@@ -37,7 +38,7 @@ const observabilityRoute: FastifyPluginAsync = async (fastify) => {
                 querystring: {
                     type: "object",
                     properties: {
-                        source: { type: "string", enum: ["internal", "github", "google", "external"] },
+                        source: { type: "string", enum: ["internal", "github", "google", "external", "cache"] },
                         limit: { type: "integer", minimum: 1, maximum: 500, default: 100 },
                         offset: { type: "integer", minimum: 0, default: 0 },
                     },

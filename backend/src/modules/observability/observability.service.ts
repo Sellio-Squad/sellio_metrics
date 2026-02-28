@@ -1,10 +1,10 @@
 /**
- * Observability Module — Service (v3 — File-Persisted)
+ * Observability Module — Service (v4 — In-Memory)
  *
  * Business logic only. No HTTP concerns.
  *
  * Features:
- * - File-persisted ring buffer (JSON file, async writes)
+ * - In-memory ring buffer (lightweight, no disk I/O)
  * - Latency percentiles (p50, p75, p90, p95, p99)
  * - Rate limit tracking per source (GitHub headers)
  * - Abuse / spike detection (calls-per-minute windows)
@@ -12,9 +12,6 @@
  * - Source-level breakdown with error rates
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "fs";
-import { writeFile } from "fs/promises";
-import { join, dirname } from "path";
 import type { Logger } from "../../core/logger";
 import type {
     ApiCallRecord,
@@ -45,29 +42,6 @@ export interface RecordCallInput {
     metadata?: Record<string, unknown>;
 }
 
-// ─── Persistent State Shape ─────────────────────────────────
-
-interface PersistedState {
-    nextId: number;
-    buffer: ApiCallRecord[];
-    rateLimits: Array<{
-        source: ApiSource;
-        limit: number;
-        remaining: number;
-        used: number;
-        resetAt: string;
-    }>;
-    edges: Array<{
-        key: string;
-        from: string;
-        to: string;
-        count: number;
-        totalMs: number;
-        errors: number;
-        lastAt: string;
-    }>;
-}
-
 // ─── Service ────────────────────────────────────────────────
 
 export class ObservabilityService {
@@ -76,9 +50,6 @@ export class ObservabilityService {
     private nextId = 1;
     private readonly maxBufferSize: number;
     private readonly startedAt = Date.now();
-    private readonly persistPath: string;
-    private flushTimer: ReturnType<typeof setTimeout> | null = null;
-    private dirty = false;
 
     // Rate limit state per source
     private readonly rateLimits = new Map<
@@ -98,11 +69,10 @@ export class ObservabilityService {
     private static readonly MAX_RECENT_ERRORS = 20;
     private static readonly MAX_SLOW_ENDPOINTS = 10;
     private static readonly ABUSE_WINDOW_MINUTES = 5;
-    private static readonly FLUSH_INTERVAL_MS = 5_000; // flush every 5 seconds
 
     constructor({
         logger,
-        maxBufferSize = 2000,
+        maxBufferSize = 500,
     }: {
         logger: Logger;
         maxBufferSize?: number;
@@ -110,131 +80,10 @@ export class ObservabilityService {
         this.logger = logger.child({ module: "observability" });
         this.maxBufferSize = maxBufferSize;
 
-        // Persist in the data directory next to the backend src
-        this.persistPath = join(process.cwd(), "data", "observability.json");
-
-        // Load persisted state
-        this.loadFromDisk();
-
-        // Schedule periodic flushing
-        this.flushTimer = setInterval(() => {
-            if (this.dirty) {
-                this.flushToDisk();
-            }
-        }, ObservabilityService.FLUSH_INTERVAL_MS);
-
         this.logger.info(
-            { maxBufferSize: this.maxBufferSize, persistPath: this.persistPath, restoredCalls: this.buffer.length },
-            "ObservabilityService v3 (file-persisted) initialized",
+            { maxBufferSize: this.maxBufferSize },
+            "ObservabilityService v4 (in-memory) initialized",
         );
-    }
-
-    // ─── Persistence ────────────────────────────────────────
-
-    private loadFromDisk(): void {
-        try {
-            if (existsSync(this.persistPath)) {
-                const raw = readFileSync(this.persistPath, "utf-8");
-                const state: PersistedState = JSON.parse(raw);
-
-                this.buffer = state.buffer ?? [];
-                this.nextId = state.nextId ?? (this.buffer.length > 0 ? Math.max(...this.buffer.map((c) => c.id)) + 1 : 1);
-
-                // Restore rate limits
-                if (state.rateLimits) {
-                    for (const rl of state.rateLimits) {
-                        this.rateLimits.set(rl.source, {
-                            limit: rl.limit,
-                            remaining: rl.remaining,
-                            used: rl.used,
-                            resetAt: rl.resetAt,
-                        });
-                    }
-                }
-
-                // Restore edges
-                if (state.edges) {
-                    for (const e of state.edges) {
-                        this.edges.set(e.key, {
-                            from: e.from,
-                            to: e.to,
-                            count: e.count,
-                            totalMs: e.totalMs,
-                            errors: e.errors,
-                            lastAt: e.lastAt,
-                        });
-                    }
-                }
-
-                this.logger.info(
-                    { restoredCalls: this.buffer.length, nextId: this.nextId },
-                    "Restored observability state from disk",
-                );
-            }
-        } catch (err) {
-            this.logger.warn({ err }, "Failed to load observability state, starting fresh");
-            this.buffer = [];
-            this.nextId = 1;
-        }
-    }
-
-    private flushToDisk(): void {
-        try {
-            const state: PersistedState = {
-                nextId: this.nextId,
-                buffer: this.buffer,
-                rateLimits: Array.from(this.rateLimits.entries()).map(([source, rl]) => ({
-                    source,
-                    ...rl,
-                })),
-                edges: Array.from(this.edges.entries()).map(([key, e]) => ({
-                    key,
-                    ...e,
-                })),
-            };
-
-            const dir = dirname(this.persistPath);
-            if (!existsSync(dir)) {
-                mkdirSync(dir, { recursive: true });
-            }
-
-            // Async write — fire and forget, errors logged
-            writeFile(this.persistPath, JSON.stringify(state), "utf-8").catch((err) => {
-                this.logger.warn({ err }, "Failed to persist observability state");
-            });
-
-            this.dirty = false;
-        } catch (err) {
-            this.logger.warn({ err }, "Failed to flush observability state");
-        }
-    }
-
-    /** Sync flush for shutdown. */
-    flushSync(): void {
-        try {
-            const state: PersistedState = {
-                nextId: this.nextId,
-                buffer: this.buffer,
-                rateLimits: Array.from(this.rateLimits.entries()).map(([source, rl]) => ({
-                    source,
-                    ...rl,
-                })),
-                edges: Array.from(this.edges.entries()).map(([key, e]) => ({
-                    key,
-                    ...e,
-                })),
-            };
-
-            const dir = dirname(this.persistPath);
-            if (!existsSync(dir)) {
-                mkdirSync(dir, { recursive: true });
-            }
-
-            writeFileSync(this.persistPath, JSON.stringify(state), "utf-8");
-            this.logger.info("Observability state flushed to disk (sync)");
-        } catch (err) {
-            this.logger.warn({ err }, "Sync flush failed");
-        }
     }
 
     // ─── Record ─────────────────────────────────────────────
@@ -258,7 +107,6 @@ export class ObservabilityService {
                 this.buffer.shift();
             }
             this.buffer.push(record);
-            this.dirty = true;
 
             // Update rate limits from metadata (GitHub headers)
             if (input.metadata) {
@@ -345,6 +193,7 @@ export class ObservabilityService {
                 slowestEndpoints: this.computeSlowestEndpoints(),
                 recentErrors: this.computeRecentErrors(),
                 dependencyGraph: this.computeDependencyGraph(),
+                cacheStats: { connected: false, hits: 0, misses: 0, sets: 0, errors: 0, hitRate: 0, keyCount: 0 },
             };
         } catch (err) {
             this.logger.error({ err }, "Failed to compute stats");
@@ -358,17 +207,11 @@ export class ObservabilityService {
         this.edges.clear();
         this.minuteBuckets.length = 0;
         this.nextId = 1;
-        this.dirty = true;
-        this.flushToDisk();
         this.logger.info("Observability buffer cleared");
     }
 
     dispose(): void {
-        if (this.flushTimer) {
-            clearInterval(this.flushTimer);
-            this.flushTimer = null;
-        }
-        this.flushSync();
+        // No-op — nothing to clean up for in-memory service
     }
 
     // ─── Latency Percentiles ────────────────────────────────
@@ -667,6 +510,7 @@ export class ObservabilityService {
             slowestEndpoints: [],
             recentErrors: [],
             dependencyGraph: { nodes: [], edges: [] },
+            cacheStats: { connected: false, hits: 0, misses: 0, sets: 0, errors: 0, hitRate: 0, keyCount: 0 },
         };
     }
 
