@@ -1,71 +1,10 @@
-/// Sellio Metrics — Domain Entities
-///
-/// Core business types owned by the domain layer.
-/// Data models map to/from these; presentation consumes these.
-/// No JSON parsing here — that's a data-layer concern.
 library;
 
-/// A GitHub user reference.
-class UserEntity {
-  final String login;
-  final int id;
-  final String url;
-  final String avatarUrl;
+import 'approval_entity.dart';
+import 'comment_entity.dart';
+import 'diff_stats_entity.dart';
+import 'user_entity.dart';
 
-  const UserEntity({
-    required this.login,
-    required this.id,
-    this.url = '',
-    this.avatarUrl = '',
-  });
-}
-
-/// Aggregated comment data per author on a PR.
-class CommentEntity {
-  final UserEntity author;
-  final DateTime? firstCommentAt;
-  final DateTime? lastCommentAt;
-  final int count;
-
-  const CommentEntity({
-    required this.author,
-    this.firstCommentAt,
-    this.lastCommentAt,
-    required this.count,
-  });
-}
-
-/// A review approval on a PR.
-class ApprovalEntity {
-  final UserEntity reviewer;
-  final DateTime submittedAt;
-  final String commitId;
-  final String? note;
-
-  const ApprovalEntity({
-    required this.reviewer,
-    required this.submittedAt,
-    required this.commitId,
-    this.note,
-  });
-}
-
-/// Diff statistics for a PR.
-class DiffStatsEntity {
-  final int additions;
-  final int deletions;
-  final int changedFiles;
-
-  const DiffStatsEntity({
-    required this.additions,
-    required this.deletions,
-    required this.changedFiles,
-  });
-
-  int get totalChanges => additions + deletions;
-}
-
-/// Complete Pull Request entity.
 class PrEntity {
   final int prNumber;
   final String url;
