@@ -95,8 +95,8 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
           child: switch (provider.status) {
             DashboardStatus.loading => const LoadingScreen(),
             DashboardStatus.error => ErrorScreen(
-                onRetry: () => _initializeData(),
-              ),
+              onRetry: () => _initializeData(),
+            ),
             DashboardStatus.loaded => const DashboardPage(),
           },
         );
