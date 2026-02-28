@@ -19,6 +19,49 @@ import dotenv from "dotenv";
 // ─── Private Key Reader ──────────────────────────────────────
 
 /**
+ * Normalizes a PEM private key from an environment variable.
+ *
+ * Handles common issues when PEM keys are stored as env vars:
+ *   - Literal \n (backslash + n) instead of real newlines
+ *   - Windows-style \r\n line endings
+ *   - Missing final newline
+ *
+ * IMPORTANT for Cloudflare Workers:
+ *   Workers' WebCrypto API requires PKCS#8 format ("-----BEGIN PRIVATE KEY-----").
+ *   GitHub generates PKCS#1 keys ("-----BEGIN RSA PRIVATE KEY-----").
+ *   Convert your key with:
+ *     openssl pkcs8 -topk8 -inform PEM -outform PEM -in github-key.pem -out pkcs8-key.pem -nocrypt
+ */
+function normalizePemKey(raw: string): string {
+    let key = raw
+        .replace(/\\n/g, "\n")      // literal \n → real newline
+        .replace(/\r\n/g, "\n")     // Windows CRLF → LF
+        .trim();
+
+    // If the key looks like it has no newlines at all (single line base64),
+    // reconstruct the PEM format
+    if (key.includes("-----") && !key.includes("\n")) {
+        key = key
+            .replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+            .replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+            .replace("-----BEGIN RSA PRIVATE KEY-----", "-----BEGIN RSA PRIVATE KEY-----\n")
+            .replace("-----END RSA PRIVATE KEY-----", "\n-----END RSA PRIVATE KEY-----");
+
+        // Split the base64 content into 64-char lines (PEM standard)
+        const match = key.match(/-----BEGIN [^-]+-----\n?([\s\S]+?)\n?-----END [^-]+-----/);
+        if (match) {
+            const header = key.substring(0, key.indexOf("\n") + 1);
+            const footer = key.substring(key.lastIndexOf("\n"));
+            const base64 = match[1].replace(/\s/g, "");
+            const lines = base64.match(/.{1,64}/g) || [];
+            key = header + lines.join("\n") + footer;
+        }
+    }
+
+    return key;
+}
+
+/**
  * Reads the GitHub App RSA private key.
  *
  * Resolution order (first found wins):
@@ -34,7 +77,7 @@ function loadPrivateKey(): string {
     // Option 1: env var (Workers-friendly — check first)
     const envKey = process.env["APP_PRIVATE_KEY"];
     if (envKey) {
-        return envKey.replace(/\\n/g, "\n");
+        return normalizePemKey(envKey);
     }
 
     // Option 2: explicit path from env
@@ -64,6 +107,7 @@ function loadPrivateKey(): string {
         `  3. Set PRIVATE_KEY_PATH=/absolute/path/to/your-key.pem`,
     );
 }
+
 
 // ─── Validation ─────────────────────────────────────────────
 
