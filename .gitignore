@@ -34,3 +34,9 @@ private-key.pem
 
 # ─── Misc ────────────────────────────────────────────────────
 *.log
+
+# ─── Wrangler (Cloudflare local cache) ────────────────────────
+.wrangler/
+frontend/.wrangler/
+backend/.wrangler/
+.dev.vars

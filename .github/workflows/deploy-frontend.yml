@@ -30,6 +30,10 @@ jobs:
       - name: Build web
         run: flutter build web --release --dart-define=API_BASE_URL=
 
+      # Pages Functions must be at the root of the deploy directory
+      - name: Copy Pages Functions into build output
+        run: cp -r functions build/web/functions
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v3
         with:
