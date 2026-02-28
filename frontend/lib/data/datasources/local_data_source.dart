@@ -14,8 +14,6 @@ abstract class MetricsDataSource {
   Future<List<PrModel>> fetchPullRequests(String owner, String repo);
   Future<List<RepoModel>> fetchRepositories();
   Future<List<dynamic>> calculateLeaderboard(List<Map<String, dynamic>> prData);
-  Future<Map<String, dynamic>> fetchObservabilityStats();
-  Future<List<dynamic>> fetchApiCalls({String? source, int limit = 50});
 }
 
 /// A lightweight model for repository info from the backend.
@@ -111,47 +109,6 @@ class RemoteDataSource implements MetricsDataSource {
     }
 
     return json.decode(response.body) as List<dynamic>;
-  }
-
-  // ─── Observability ──────────────────────────────────────
-
-  @override
-  Future<Map<String, dynamic>> fetchObservabilityStats() async {
-    final url = Uri.parse('$baseUrl/api/observability/stats');
-    debugPrint('[RemoteDataSource] GET $url');
-
-    final response = await _client.get(url);
-
-    if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to fetch observability stats: ${response.statusCode} ${response.body}',
-      );
-    }
-
-    return json.decode(response.body) as Map<String, dynamic>;
-  }
-
-  @override
-  Future<List<dynamic>> fetchApiCalls({String? source, int limit = 50}) async {
-    final params = <String, String>{
-      'limit': limit.toString(),
-      if (source != null) 'source': source,
-    };
-    final url = Uri.parse('$baseUrl/api/observability/calls')
-        .replace(queryParameters: params);
-    debugPrint('[RemoteDataSource] GET $url');
-
-    final response = await _client.get(url);
-
-    if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to fetch API calls: ${response.statusCode} ${response.body}',
-      );
-    }
-
-    final Map<String, dynamic> body =
-        json.decode(response.body) as Map<String, dynamic>;
-    return body['calls'] as List<dynamic>? ?? [];
   }
 }
 

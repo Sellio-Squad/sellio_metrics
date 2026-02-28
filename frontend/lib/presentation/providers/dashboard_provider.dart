@@ -104,6 +104,12 @@ class DashboardProvider extends ChangeNotifier {
 
   List<LeaderboardEntry> get leaderboard => _leaderboard;
 
+  /// Allows external callers to set the error state (e.g. when repo loading fails).
+  void setError(String message) {
+    _status = DashboardStatus.error;
+    debugPrint('[DashboardProvider] $message');
+    notifyListeners();
+  }
 
   // ─── Actions ─────────────────────────────────────────────
 

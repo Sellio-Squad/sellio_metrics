@@ -8,7 +8,6 @@ import 'core/l10n/app_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'presentation/providers/dashboard_provider.dart';
 import 'presentation/providers/app_settings_provider.dart';
-import 'presentation/providers/observability_provider.dart';
 import 'presentation/widgets/common/loading_screen.dart';
 import 'presentation/widgets/common/error_screen.dart';
 import 'presentation/pages/dashboard_page.dart';
@@ -22,7 +21,6 @@ class SellioMetricsApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => sl.get<AppSettingsProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<DashboardProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<ObservabilityProvider>()),
       ],
       child: Consumer<AppSettingsProvider>(
         builder: (context, settings, _) {
@@ -77,6 +75,12 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
 
     // Load available repos first, then load data for the selected repo
     await settings.loadRepositories();
+
+    // If no repos were loaded (e.g. network error), trigger error state
+    if (settings.selectedRepos.isEmpty) {
+      dashboard.setError('No repositories available. Check your network connection.');
+      return;
+    }
 
     // Load dashboard data for the selected (or default) repos
     dashboard.loadData(repos: settings.selectedRepos);

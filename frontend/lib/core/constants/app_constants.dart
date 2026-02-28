@@ -1,20 +1,21 @@
 library;
 
-import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 
 class ApiConfig {
   const ApiConfig._();
 
-  /// Base URL for the TypeScript backend.
-  /// Uses localhost in debug mode, configure for production deployment.
-  static String get baseUrl {
-    if (kDebugMode) {
-      return 'http://localhost:3001';
-    }
-    // TODO: Replace with your production backend URL
-    return 'http://localhost:3001';
-  }
+  /// Base URL for the backend API.
+  ///
+  /// Set at compile time via:
+  ///   flutter run --dart-define=API_BASE_URL=https://your-worker.workers.dev
+  ///   flutter build web --dart-define=API_BASE_URL=https://your-worker.workers.dev
+  ///
+  /// Falls back to localhost:3001 for local development.
+  static const String baseUrl = String.fromEnvironment(
+    'API_BASE_URL',
+    defaultValue: 'http://localhost:3001',
+  );
 
   static const String defaultOrg = 'Sellio-Squad';
   static const String defaultRepo = 'sellio_mobile';
