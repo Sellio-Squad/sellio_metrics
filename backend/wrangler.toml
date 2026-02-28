@@ -22,4 +22,4 @@ NODE_ENV = "production"
 # Then paste the generated id below.
 [[kv_namespaces]]
 binding = "CACHE"
-id = "PLACEHOLDER_REPLACE_WITH_ACTUAL_KV_ID"
+id = "4670f71d4e744e9f83da2e785aaba700"
