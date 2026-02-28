@@ -139,6 +139,13 @@ class SellioColors {
   static const Color productBlack = Colors.black;
   static const Color productWhite = Colors.white;
 
+  // ─── Named colors (used by observability, charts, etc.) ──
+  static const Color blue   = Color(0xFF3B82F6);
+  static const Color purple = Color(0xFF8B5CF6);
+  static const Color amber  = Color(0xFFF5A623);
+  static const Color green  = Color(0xFF0D6620);
+  static const Color red    = Color(0xFFE54F40);
+
 
   static const LinearGradient primaryGradient = LinearGradient(
     colors: [Color(0xFF520826), Color(0xFF7A1040)],

@@ -9,6 +9,7 @@ import '../mappers/pr_mappers.dart';
 
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/entities/leaderboard_entry.dart';
+import '../../domain/entities/api_call_entity.dart';
 import '../../domain/repositories/metrics_repository.dart';
 
 class MetricsRepositoryImpl implements MetricsRepository {
@@ -87,6 +88,28 @@ class MetricsRepositoryImpl implements MetricsRepository {
     )).toList();
   }
 
+  // ─── Observability ──────────────────────────────────────
+
+  @override
+  Future<ObservabilityStatsEntity> getObservabilityStats() async {
+    final json = await _dataSource.fetchObservabilityStats();
+    return ObservabilityStatsEntity.fromJson(json);
+  }
+
+  @override
+  Future<List<ApiCallEntity>> getApiCalls({
+    String? source,
+    int limit = 50,
+  }) async {
+    final rawList = await _dataSource.fetchApiCalls(
+      source: source,
+      limit: limit,
+    );
+    return rawList
+        .map((e) => ApiCallEntity.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   Future<List<PrEntity>> _fetchAndMap(String owner, String repo) async {
     final key = '$owner/$repo';
     final models = await _dataSource.fetchPullRequests(owner, repo);
@@ -95,3 +118,4 @@ class MetricsRepositoryImpl implements MetricsRepository {
     return entities;
   }
 }
+

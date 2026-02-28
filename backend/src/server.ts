@@ -51,6 +51,8 @@ async function main() {
                     "GET /api/health",
                     "GET /api/repos",
                     "GET /api/metrics/:owner/:repo",
+                    "GET /api/observability/stats",
+                    "GET /api/observability/calls",
                 ],
             },
             `🚀 Sellio Metrics Backend running on http://localhost:${env.port}`,
