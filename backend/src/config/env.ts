@@ -122,7 +122,6 @@ interface EnvSchema {
     LOG_LEVEL?: string;
     RATE_LIMIT_MAX?: string;
     RATE_LIMIT_WINDOW_MS?: string;
-    REDIS_URL?: string;
     GITHUB_RATE_LIMIT_THRESHOLD?: string;
     GITHUB_WEBHOOK_SECRET?: string;
 }
@@ -186,9 +185,6 @@ function _createEnv() {
             optionalEnv("RATE_LIMIT_WINDOW_MS", "60000"),
             10,
         ),
-
-        /** Redis connection URL for caching (optional — gracefully degrades). */
-        redisUrl: optionalEnv("REDIS_URL", ""),
 
         /** GitHub rate limit threshold — delays requests when remaining quota is below this. */
         githubRateLimitThreshold: parseInt(

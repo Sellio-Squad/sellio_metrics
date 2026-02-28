@@ -10,24 +10,28 @@
  *   GET  /api/repos
  *   GET  /api/metrics/:owner/:repo
  *   POST /api/metrics/leaderboard
- *   GET  /api/observability/stats
- *   GET  /api/observability/calls
- *   DELETE /api/observability/calls
  *   POST /api/webhooks/github
  */
 
 import type { AwilixContainer } from "awilix";
 import type { Cradle } from "./core/container";
+import type { KVNamespace } from "./infra/cache/cache.service";
 
 // ─── Worker Env Bindings ────────────────────────────────────
 
 interface WorkerEnv {
+    // Secrets (set via dashboard / wrangler secret put)
     APP_ID: string;
     INSTALLATION_ID: string;
     APP_PRIVATE_KEY: string;
+
+    // Vars (set in wrangler.toml [vars])
     GITHUB_ORG?: string;
     LOG_LEVEL?: string;
     NODE_ENV?: string;
+
+    // KV namespace binding
+    CACHE: KVNamespace;
 }
 
 // ─── Console Logger (pino-compatible API for services) ──────
@@ -70,22 +74,19 @@ function createConsoleLogger(bindings: Record<string, unknown> = {}): any {
 
 let containerPromise: Promise<AwilixContainer<Cradle>> | null = null;
 
-function getContainer(): Promise<AwilixContainer<Cradle>> {
+function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<Cradle>> {
     if (!containerPromise) {
         containerPromise = (async () => {
             // Dynamic import so env.ts reads process.env AFTER we populate it
             const { createContainer, asFunction, asClass, InjectionMode } = await import("awilix");
             const { env } = await import("./config/env");
             const { createGitHubClient } = await import("./infra/github/github.client");
-            const { attachTrackingHooks } = await import("./infra/github/tracked-github.client");
-            const { createRedisClient } = await import("./infra/cache/cache.client");
             const { CacheService } = await import("./infra/cache/cache.service");
             const { RateLimitGuard } = await import("./infra/github/rate-limit-guard");
             const { CachedGitHubClient } = await import("./infra/github/cached-github.client");
             const { ReposService } = await import("./modules/repos/repos.service");
             const { MetricsService } = await import("./modules/metrics/metrics.service");
             const { LeaderboardService } = await import("./modules/metrics/leaderboard.service");
-            const { ObservabilityService } = await import("./modules/observability/observability.service");
 
             const logger = createConsoleLogger();
 
@@ -97,28 +98,19 @@ function getContainer(): Promise<AwilixContainer<Cradle>> {
                 env: asFunction(() => env).singleton(),
                 logger: asFunction(() => logger).singleton(),
 
-                observabilityService: asFunction(({ logger }: Cradle) =>
-                    new ObservabilityService({ logger }),
-                ).singleton(),
-
-                githubClient: asFunction(({ env, observabilityService }: Cradle) => {
-                    const client = createGitHubClient({ env });
-                    attachTrackingHooks(client, observabilityService);
-                    return client;
+                githubClient: asFunction(({ env }: Cradle) => {
+                    return createGitHubClient({ env });
                 }).singleton(),
 
-                redisClient: asFunction(({ env, logger }: Cradle) =>
-                    createRedisClient({ redisUrl: env.redisUrl, logger }),
+                kvNamespace: asFunction(() => kvNamespace).singleton(),
+
+                cacheService: asFunction(({ kvNamespace, logger }: Cradle) =>
+                    new CacheService({ kvNamespace, logger }),
                 ).singleton(),
 
-                cacheService: asFunction(({ redisClient, logger }: Cradle) =>
-                    new CacheService({ redisClient, logger }),
-                ).singleton(),
-
-                rateLimitGuard: asFunction(({ logger, observabilityService, env }: Cradle) =>
+                rateLimitGuard: asFunction(({ logger, env }: Cradle) =>
                     new RateLimitGuard({
                         logger,
-                        observabilityService,
                         githubRateLimitThreshold: env.githubRateLimitThreshold,
                     }),
                 ).singleton(),
@@ -189,25 +181,6 @@ async function handleLeaderboard(cradle: Cradle, body: any): Promise<Response> {
     return json(result);
 }
 
-async function handleObservabilityStats(cradle: Cradle): Promise<Response> {
-    const stats = cradle.observabilityService.getStats();
-    const cacheStats = await cradle.cacheService.getStats();
-    return json({ ...stats, cacheStats });
-}
-
-async function handleObservabilityCalls(cradle: Cradle, url: URL): Promise<Response> {
-    const source = url.searchParams.get("source") as "internal" | "github" | "google" | "external" | "cache" | undefined || undefined;
-    const limit = parseInt(url.searchParams.get("limit") || "100", 10);
-    const offset = parseInt(url.searchParams.get("offset") || "0", 10);
-    const result = cradle.observabilityService.getRecentCalls(limit, offset, source);
-    return json({ total: result.total, count: result.calls.length, calls: result.calls });
-}
-
-async function handleClearCalls(cradle: Cradle): Promise<Response> {
-    cradle.observabilityService.clear();
-    return json({ status: "cleared" });
-}
-
 async function handleWebhook(cradle: Cradle, request: Request): Promise<Response> {
     const event = request.headers.get("x-github-event");
     const RELEVANT_EVENTS = new Set([
@@ -247,8 +220,6 @@ function matchRoute(pathname: string): { handler: string; params?: Record<string
     if (pathname === "/api/health") return { handler: "health" };
     if (pathname === "/api/repos") return { handler: "repos" };
     if (pathname === "/api/metrics/leaderboard") return { handler: "leaderboard" };
-    if (pathname === "/api/observability/stats") return { handler: "obs-stats" };
-    if (pathname === "/api/observability/calls") return { handler: "obs-calls" };
     if (pathname === "/api/webhooks/github") return { handler: "webhook" };
 
     // /api/metrics/:owner/:repo
@@ -279,7 +250,7 @@ export default {
         }
 
         try {
-            const container = await getContainer();
+            const container = await getContainer(workerEnv.CACHE || null);
             const cradle = container.cradle;
             const url = new URL(request.url);
             const route = matchRoute(url.pathname);
@@ -301,13 +272,6 @@ export default {
                     const body = await request.json();
                     return handleLeaderboard(cradle, body);
                 }
-
-                case "obs-stats":
-                    return handleObservabilityStats(cradle);
-
-                case "obs-calls":
-                    if (request.method === "DELETE") return handleClearCalls(cradle);
-                    return handleObservabilityCalls(cradle, url);
 
                 case "webhook":
                     if (request.method !== "POST") return errorResponse("Method Not Allowed", 405);

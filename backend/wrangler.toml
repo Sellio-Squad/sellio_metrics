@@ -15,3 +15,11 @@ compatibility_flags = ["nodejs_compat"]
 GITHUB_ORG = "Sellio-Squad"
 LOG_LEVEL = "info"
 NODE_ENV = "production"
+
+# Workers KV for caching (replaces Redis)
+# After first deploy, create the namespace via:
+#   npx wrangler kv namespace create CACHE
+# Then paste the generated id below.
+[[kv_namespaces]]
+binding = "CACHE"
+id = "4670f71d4e744e9f83da2e785aaba700"

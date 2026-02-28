@@ -4,18 +4,13 @@
  * Pre-flight checker for GitHub API rate limits.
  * Before issuing batch requests, checks remaining quota
  * and auto-delays if quota is running low.
- *
- * Integrates with ObservabilityService to record guard events.
  */
 
-import type { GitHubClient } from "./github.client";
 import type { Logger } from "../../core/logger";
-import type { ObservabilityService } from "../../modules/observability/observability.service";
 
 export class RateLimitGuard {
     private readonly logger: Logger;
     private readonly threshold: number;
-    private readonly observabilityService: ObservabilityService;
 
     // In-memory tracking of last known rate-limit state
     private remaining = 5000;
@@ -24,16 +19,13 @@ export class RateLimitGuard {
 
     constructor({
         logger,
-        observabilityService,
         githubRateLimitThreshold = 100,
     }: {
         logger: Logger;
-        observabilityService: ObservabilityService;
         githubRateLimitThreshold?: number;
     }) {
         this.logger = logger.child({ module: "rate-limit-guard" });
         this.threshold = githubRateLimitThreshold;
-        this.observabilityService = observabilityService;
     }
 
     /**
@@ -74,21 +66,6 @@ export class RateLimitGuard {
             "⚠️  GitHub rate limit approaching — delaying requests",
         );
 
-        // Record the guard event in observability
-        this.observabilityService.record({
-            source: "github",
-            method: "GUARD",
-            path: "rate-limit-guard/delay",
-            statusCode: 429,
-            durationMs: waitSeconds * 1000,
-            metadata: {
-                remaining: this.remaining,
-                limit: this.limit,
-                waitSeconds,
-                threshold: this.threshold,
-            },
-        });
-
         // If wait is too long (> 60 seconds), don't block the request
         if (waitSeconds > 60) {
             this.logger.error(
@@ -106,7 +83,7 @@ export class RateLimitGuard {
     }
 
     /**
-     * Get a quick status snapshot for observability.
+     * Get a quick status snapshot.
      */
     getStatus(): { remaining: number; limit: number; resetAt: string; isLow: boolean } {
         return {

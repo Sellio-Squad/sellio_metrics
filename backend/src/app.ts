@@ -16,13 +16,11 @@ import type { AwilixContainer } from "awilix";
 import type { Cradle } from "./core/container";
 import errorHandlerPlugin from "./plugins/error-handler";
 import rateLimitPlugin from "./plugins/rate-limit";
-import requestTrackerPlugin from "./plugins/request-tracker";
 
 // Module routes
 import healthRoute from "./modules/health/health.route";
 import reposRoute from "./modules/repos/repos.route";
 import metricsRoute from "./modules/metrics/metrics.route";
-import observabilityRoute from "./modules/observability/observability.route";
 import webhookRoute from "./modules/webhook/webhook.route";
 
 export interface BuildAppOptions {
@@ -57,14 +55,10 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     // Copy registrations from our built container into Fastify's DI
     diContainer.register(container.registrations);
 
-    // ─── Observability: auto-instrument after DI is ready ───
-    await app.register(requestTrackerPlugin);
-
     // ─── Routes ─────────────────────────────────────────────
     await app.register(healthRoute, { prefix: "/api/health" });
     await app.register(reposRoute, { prefix: "/api/repos" });
     await app.register(metricsRoute, { prefix: "/api/metrics" });
-    await app.register(observabilityRoute, { prefix: "/api/observability" });
     await app.register(webhookRoute, { prefix: "/api/webhooks" });
 
     return app;
