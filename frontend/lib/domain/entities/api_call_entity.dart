@@ -368,6 +368,53 @@ class RecentErrorEntity {
       );
 }
 
+// ─── Cache Stats ─────────────────────────────────────────────
+
+class CacheStatsEntity {
+  final bool connected;
+  final int hits;
+  final int misses;
+  final int sets;
+  final int errors;
+  final double hitRate;
+  final int keyCount;
+
+  const CacheStatsEntity({
+    required this.connected,
+    required this.hits,
+    required this.misses,
+    required this.sets,
+    required this.errors,
+    required this.hitRate,
+    required this.keyCount,
+  });
+
+  int get totalRequests => hits + misses;
+  double get hitPercent => hitRate * 100;
+  double get missRate => totalRequests > 0 ? (misses / totalRequests) : 0;
+
+  static const empty = CacheStatsEntity(
+    connected: false,
+    hits: 0,
+    misses: 0,
+    sets: 0,
+    errors: 0,
+    hitRate: 0,
+    keyCount: 0,
+  );
+
+  factory CacheStatsEntity.fromJson(Map<String, dynamic> json) =>
+      CacheStatsEntity(
+        connected: json['connected'] as bool? ?? false,
+        hits: json['hits'] as int? ?? 0,
+        misses: json['misses'] as int? ?? 0,
+        sets: json['sets'] as int? ?? 0,
+        errors: json['errors'] as int? ?? 0,
+        hitRate: (json['hitRate'] as num?)?.toDouble() ?? 0.0,
+        keyCount: json['keyCount'] as int? ?? 0,
+      );
+}
+
 // ─── Aggregated Stats (v2) ──────────────────────────────────
 
 class ObservabilityStatsEntity {
@@ -383,6 +430,7 @@ class ObservabilityStatsEntity {
   final List<SlowEndpointEntity> slowestEndpoints;
   final List<RecentErrorEntity> recentErrors;
   final DependencyGraphEntity dependencyGraph;
+  final CacheStatsEntity cacheStats;
 
   const ObservabilityStatsEntity({
     required this.totalCalls,
@@ -397,6 +445,7 @@ class ObservabilityStatsEntity {
     required this.slowestEndpoints,
     required this.recentErrors,
     required this.dependencyGraph,
+    required this.cacheStats,
   });
 
   String get formattedUptime {
@@ -444,6 +493,8 @@ class ObservabilityStatsEntity {
             [],
         dependencyGraph: DependencyGraphEntity.fromJson(
             json['dependencyGraph'] as Map<String, dynamic>? ?? {}),
+        cacheStats: CacheStatsEntity.fromJson(
+            json['cacheStats'] as Map<String, dynamic>? ?? {}),
       );
 
   static const empty = ObservabilityStatsEntity(
@@ -459,5 +510,6 @@ class ObservabilityStatsEntity {
     slowestEndpoints: [],
     recentErrors: [],
     dependencyGraph: DependencyGraphEntity.empty,
+    cacheStats: CacheStatsEntity.empty,
   );
 }
