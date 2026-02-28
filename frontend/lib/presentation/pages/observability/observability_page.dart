@@ -67,6 +67,10 @@ class _ObservabilityPageState extends State<ObservabilityPage> {
                 const SizedBox(height: AppSpacing.lg),
               ],
 
+              // Cache Status
+              _CacheStatsSection(cacheStats: provider.stats.cacheStats),
+              const SizedBox(height: AppSpacing.lg),
+
               // Abuse / Spike Detection
               _AbuseSection(abuse: provider.stats.abuse),
               const SizedBox(height: AppSpacing.lg),
@@ -388,6 +392,130 @@ class _RateLimitsSection extends StatelessWidget {
     } catch (_) {
       return iso;
     }
+  }
+}
+
+// ─── Cache Stats Section ────────────────────────────────────
+
+class _CacheStatsSection extends StatelessWidget {
+  final CacheStatsEntity cacheStats;
+  const _CacheStatsSection({required this.cacheStats});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final isConnected = cacheStats.connected;
+    final statusColor = isConnected ? SellioColors.green : SellioColors.amber;
+    final statusLabel = isConnected ? 'Connected' : 'Disconnected';
+    final statusIcon = isConnected ? LucideIcons.checkCircle : LucideIcons.alertCircle;
+
+    return SCard(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
+            Row(children: [
+              const Icon(LucideIcons.database, size: 18, color: SellioColors.blue),
+              const SizedBox(width: AppSpacing.sm),
+              Text('Redis Cache', style: AppTypography.subtitle.copyWith(color: scheme.title)),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                decoration: BoxDecoration(
+                  color: statusColor.withAlpha(25),
+                  borderRadius: BorderRadius.circular(AppRadius.full),
+                  border: Border.all(color: statusColor.withAlpha(60)),
+                ),
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(statusIcon, size: 12, color: statusColor),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(statusLabel, style: AppTypography.caption.copyWith(
+                      color: statusColor, fontWeight: FontWeight.w600, fontSize: 11)),
+                ]),
+              ),
+            ]),
+            const SizedBox(height: AppSpacing.lg),
+
+            // Stats grid
+            Row(children: [
+              Expanded(child: _CacheMiniStat(
+                label: 'Hits', value: '${cacheStats.hits}',
+                color: SellioColors.green, scheme: scheme)),
+              Expanded(child: _CacheMiniStat(
+                label: 'Misses', value: '${cacheStats.misses}',
+                color: SellioColors.amber, scheme: scheme)),
+              Expanded(child: _CacheMiniStat(
+                label: 'Writes', value: '${cacheStats.sets}',
+                color: SellioColors.blue, scheme: scheme)),
+              Expanded(child: _CacheMiniStat(
+                label: 'Keys', value: '${cacheStats.keyCount}',
+                color: SellioColors.purple, scheme: scheme)),
+            ]),
+            const SizedBox(height: AppSpacing.md),
+
+            // Hit Rate Bar
+            Row(children: [
+              Text('Hit Rate', style: AppTypography.caption.copyWith(
+                  color: scheme.hint, fontWeight: FontWeight.w600)),
+              const Spacer(),
+              Text('${cacheStats.hitPercent.toStringAsFixed(1)}%',
+                  style: AppTypography.caption.copyWith(
+                      color: cacheStats.hitPercent > 70 ? SellioColors.green
+                          : cacheStats.hitPercent > 40 ? SellioColors.amber
+                          : SellioColors.red,
+                      fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: AppSpacing.xs),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              child: LinearProgressIndicator(
+                value: (cacheStats.hitRate).clamp(0.0, 1.0),
+                backgroundColor: scheme.stroke,
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  cacheStats.hitPercent > 70 ? SellioColors.green
+                      : cacheStats.hitPercent > 40 ? SellioColors.amber
+                      : SellioColors.red,
+                ),
+                minHeight: 8,
+              ),
+            ),
+
+            // Errors
+            if (cacheStats.errors > 0) ...[
+              const SizedBox(height: AppSpacing.md),
+              Row(children: [
+                const Icon(LucideIcons.alertTriangle, size: 14, color: SellioColors.red),
+                const SizedBox(width: AppSpacing.xs),
+                Text('${cacheStats.errors} cache errors',
+                    style: AppTypography.caption.copyWith(color: SellioColors.red)),
+              ]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CacheMiniStat extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  final dynamic scheme;
+  const _CacheMiniStat({required this.label, required this.value,
+      required this.color, required this.scheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Text(value, style: AppTypography.heading.copyWith(
+          color: color, fontWeight: FontWeight.w700, fontSize: 18)),
+      const SizedBox(height: 2),
+      Text(label, style: AppTypography.caption.copyWith(
+          color: scheme.hint, fontSize: 10)),
+    ]);
   }
 }
 
@@ -713,6 +841,7 @@ class _SourceFilterBar extends StatelessWidget {
       case 'internal': return l10n.obsSourceInternal;
       case 'github': return l10n.obsSourceGithub;
       case 'google': return l10n.obsSourceGoogle;
+      case 'cache': return 'Cache';
       default: return l10n.obsSourceExternal;
     }
   }
