@@ -60,7 +60,8 @@ export default {
             process.env.APP_PRIVATE_KEY = workerEnv.APP_PRIVATE_KEY;
             if (workerEnv.GITHUB_ORG) process.env.GITHUB_ORG = workerEnv.GITHUB_ORG;
             if (workerEnv.LOG_LEVEL) process.env.LOG_LEVEL = workerEnv.LOG_LEVEL;
-            if (workerEnv.NODE_ENV) process.env.NODE_ENV = workerEnv.NODE_ENV;
+            // NODE_ENV is set via wrangler.toml [vars] — esbuild defines it at build time
+
         }
 
         // Step 2: Get or create the Fastify app
