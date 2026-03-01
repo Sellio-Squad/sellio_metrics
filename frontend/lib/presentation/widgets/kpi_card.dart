@@ -1,8 +1,6 @@
-/// Sellio Metrics — KPI Card Widget
 library;
 
 import 'package:flutter/material.dart';
-
 import '../../core/extensions/theme_extensions.dart';
 import '../../design_system/design_system.dart';
 
