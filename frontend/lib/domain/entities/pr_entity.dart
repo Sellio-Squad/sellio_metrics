@@ -1,5 +1,6 @@
 library;
 
+import 'PrTimelineEvent.dart';
 import 'approval_entity.dart';
 import 'comment_entity.dart';
 import 'diff_stats_entity.dart';
@@ -90,20 +91,6 @@ class PrEntity {
 /// Timeline event types for a PR.
 enum PrTimelineEventType { created, commented, approved, merged, closed }
 
-/// Single event in the PR timeline (used for "milestones").
-class PrTimelineEvent {
-  final PrTimelineEventType type;
-  final DateTime at;
-  final UserEntity actor;
-  final String? description;
-
-  const PrTimelineEvent({
-    required this.type,
-    required this.at,
-    required this.actor,
-    this.description,
-  });
-}
 
 extension PrTimelineExtension on PrEntity {
   /// Chronological list of important PR milestones:
