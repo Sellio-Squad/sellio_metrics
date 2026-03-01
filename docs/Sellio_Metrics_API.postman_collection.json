@@ -1,0 +1,345 @@
+{
+    "info": {
+        "name": "Sellio Metrics API",
+        "description": "GitHub PR analytics API for the Sellio Squad.\n\nDeployed on Cloudflare Workers.\n\nAuthentication: None required (GitHub App auth handled server-side).",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "variable": [
+        {
+            "key": "baseUrl",
+            "value": "https://sellio-metrics.abdoessam743.workers.dev",
+            "description": "Production Worker URL"
+        },
+        {
+            "key": "localUrl",
+            "value": "http://localhost:3001",
+            "description": "Local development URL"
+        },
+        {
+            "key": "org",
+            "value": "Sellio-Squad"
+        },
+        {
+            "key": "repo",
+            "value": "sellio_mobile"
+        }
+    ],
+    "item": [
+        {
+            "name": "Health",
+            "item": [
+                {
+                    "name": "Health Check",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/health",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "health"
+                            ]
+                        },
+                        "description": "Returns server health status, org name, and timestamp.\n\nUse this to verify the Worker is running and configured correctly."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"status\": \"ok\",\n  \"org\": \"Sellio-Squad\",\n  \"timestamp\": \"2026-02-28T15:21:48.926Z\"\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Repositories",
+            "item": [
+                {
+                    "name": "List Repositories",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/repos",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "repos"
+                            ],
+                            "query": [
+                                {
+                                    "key": "org",
+                                    "value": "{{org}}",
+                                    "description": "Override organization (optional, defaults to configured org)",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "Returns all repositories for the configured GitHub organization.\n\nResults are cached in Workers KV for 5 minutes."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"org\": \"Sellio-Squad\",\n  \"count\": 6,\n  \"repos\": [\n    {\n      \"name\": \"sellio_mobile\",\n      \"full_name\": \"Sellio-Squad/sellio_mobile\",\n      \"description\": \"Flutter mobile app\",\n      \"html_url\": \"https://github.com/Sellio-Squad/sellio_mobile\",\n      \"private\": false,\n      \"default_branch\": \"develop\"\n    }\n  ]\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Metrics",
+            "item": [
+                {
+                    "name": "Get PR Metrics",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/metrics/{{org}}/{{repo}}?state=all",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "metrics",
+                                "{{org}}",
+                                "{{repo}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "state",
+                                    "value": "all",
+                                    "description": "PR state filter: all | open | closed"
+                                },
+                                {
+                                    "key": "per_page",
+                                    "value": "100",
+                                    "description": "Results per GitHub API page (max 100)",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "Fetches detailed PR metrics for a specific repository.\n\nIncludes: PR details, reviews, comments, diff stats, approvals, time-to-merge, time-to-first-review, and more.\n\nResults are cached in Workers KV for 1 hour. Cache is invalidated by GitHub webhooks.\n\n⚠️ First call for a repo may take 15-30 seconds (fetches from GitHub API). Subsequent calls return instantly from cache."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"owner\": \"Sellio-Squad\",\n  \"repo\": \"sellio_mobile\",\n  \"count\": 127,\n  \"metrics\": [\n    {\n      \"prNumber\": 42,\n      \"title\": \"feat: add checkout flow\",\n      \"state\": \"merged\",\n      \"isMerged\": true,\n      \"repoName\": \"sellio_mobile\",\n      \"creator\": {\n        \"login\": \"dev-01\",\n        \"name\": \"Ahmed\",\n        \"avatarUrl\": \"https://avatars.githubusercontent.com/u/...\"\n      },\n      \"openedAt\": \"2026-02-15T10:00:00Z\",\n      \"mergedAt\": \"2026-02-16T14:30:00Z\",\n      \"closedAt\": null,\n      \"timeToMergeMinutes\": 1710,\n      \"timeToFirstReviewMinutes\": 240,\n      \"isoWeek\": \"2026-W07\",\n      \"diffStats\": {\n        \"additions\": 523,\n        \"deletions\": 102,\n        \"changedFiles\": 14\n      },\n      \"approvals\": [\n        {\n          \"reviewer\": {\n            \"login\": \"reviewer-01\",\n            \"avatarUrl\": \"https://avatars.githubusercontent.com/u/...\"\n          },\n          \"submittedAt\": \"2026-02-16T12:00:00Z\"\n        }\n      ],\n      \"comments\": [\n        {\n          \"author\": {\n            \"login\": \"dev-02\",\n            \"avatarUrl\": \"https://avatars.githubusercontent.com/u/...\"\n          },\n          \"body\": \"Looks good!\",\n          \"createdAt\": \"2026-02-15T14:30:00Z\",\n          \"isReviewComment\": false\n        }\n      ],\n      \"isApproved\": true,\n      \"hasRequiredApprovals\": true,\n      \"reviewCommentCount\": 3,\n      \"generalCommentCount\": 2\n    }\n  ]\n}"
+                        },
+                        {
+                            "name": "404 Not Found",
+                            "status": "Not Found",
+                            "code": 404,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"error\": \"Not Found\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Get PR Metrics (Open Only)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/metrics/{{org}}/{{repo}}?state=open",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "metrics",
+                                "{{org}}",
+                                "{{repo}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "state",
+                                    "value": "open"
+                                }
+                            ]
+                        },
+                        "description": "Fetch only open PRs for a repository."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get PR Metrics (Closed Only)",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/metrics/{{org}}/{{repo}}?state=closed",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "metrics",
+                                "{{org}}",
+                                "{{repo}}"
+                            ],
+                            "query": [
+                                {
+                                    "key": "state",
+                                    "value": "closed"
+                                }
+                            ]
+                        },
+                        "description": "Fetch only closed/merged PRs for a repository."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Leaderboard",
+            "item": [
+                {
+                    "name": "Calculate Leaderboard",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"prs\": [\n    {\n      \"status\": \"merged\",\n      \"creator\": {\n        \"login\": \"dev-01\",\n        \"avatar_url\": \"https://avatars.githubusercontent.com/u/1\"\n      },\n      \"approvals\": [\n        {\n          \"reviewer\": {\n            \"login\": \"dev-02\",\n            \"avatar_url\": \"https://avatars.githubusercontent.com/u/2\"\n          }\n        }\n      ],\n      \"comments\": [\n        {\n          \"author\": {\n            \"login\": \"dev-02\",\n            \"avatar_url\": \"https://avatars.githubusercontent.com/u/2\"\n          }\n        }\n      ],\n      \"diff_stats\": {\n        \"additions\": 150,\n        \"deletions\": 30\n      }\n    }\n  ]\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/metrics/leaderboard",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "metrics",
+                                "leaderboard"
+                            ]
+                        },
+                        "description": "Calculates leaderboard rankings from the provided PR data.\n\nThe frontend sends pre-filtered PR data (by date range, repos) and the backend computes weighted scores.\n\nScoring weights:\n- PRs Created: 3 points\n- PRs Merged: 2 points\n- Reviews Given: 0 points\n- Comments Given: 1 point\n- Code additions/deletions factored in"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "[\n  {\n    \"developer\": \"dev-01\",\n    \"avatarUrl\": \"https://avatars.githubusercontent.com/u/1\",\n    \"prsCreated\": 15,\n    \"prsMerged\": 12,\n    \"reviewsGiven\": 8,\n    \"commentsGiven\": 23,\n    \"additions\": 2400,\n    \"deletions\": 580,\n    \"totalScore\": 89.5\n  },\n  {\n    \"developer\": \"dev-02\",\n    \"avatarUrl\": \"https://avatars.githubusercontent.com/u/2\",\n    \"prsCreated\": 10,\n    \"prsMerged\": 9,\n    \"reviewsGiven\": 15,\n    \"commentsGiven\": 30,\n    \"additions\": 1800,\n    \"deletions\": 400,\n    \"totalScore\": 76.2\n  }\n]"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Webhooks",
+            "item": [
+                {
+                    "name": "GitHub Webhook",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            },
+                            {
+                                "key": "X-GitHub-Event",
+                                "value": "pull_request",
+                                "description": "GitHub event type: pull_request | pull_request_review | issue_comment | pull_request_review_comment"
+                            },
+                            {
+                                "key": "X-GitHub-Delivery",
+                                "value": "{{$guid}}",
+                                "description": "Unique delivery ID (auto-generated by GitHub)"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"action\": \"opened\",\n  \"pull_request\": {\n    \"number\": 42,\n    \"title\": \"feat: new feature\"\n  },\n  \"repository\": {\n    \"full_name\": \"Sellio-Squad/sellio_mobile\"\n  }\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/webhooks/github",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "webhooks",
+                                "github"
+                            ]
+                        },
+                        "description": "GitHub webhook endpoint for real-time cache invalidation.\n\nWhen GitHub sends a PR event (opened, closed, merged, reviewed), this endpoint invalidates the cached metrics for the affected repository.\n\nRelevant events handled:\n- pull_request (opened, closed, merged, reopened)\n- pull_request_review\n- issue_comment\n- pull_request_review_comment\n\nCache keys invalidated per repo:\n- result:metrics:{owner}/{repo}:all\n- result:metrics:{owner}/{repo}:open\n- result:metrics:{owner}/{repo}:closed"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK (invalidated)",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"ok\": true,\n  \"event\": \"pull_request\",\n  \"repo\": \"Sellio-Squad/sellio_mobile\",\n  \"cacheKeysInvalidated\": 3\n}"
+                        },
+                        {
+                            "name": "200 OK (ignored)",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"ignored\": true,\n  \"event\": \"push\"\n}"
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
