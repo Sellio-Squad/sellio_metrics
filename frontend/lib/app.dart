@@ -61,8 +61,6 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
-      // Defer until after the first frame is fully built to avoid
-      // "setState() called during build" when notifyListeners() fires.
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _initializeData();
       });
@@ -72,17 +70,13 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
   Future<void> _initializeData() async {
     final settings = context.read<AppSettingsProvider>();
     final dashboard = context.read<DashboardProvider>();
-
-    // Load available repos first, then load data for the selected repo
     await settings.loadRepositories();
 
-    // If no repos were loaded (e.g. network error), trigger error state
     if (settings.selectedRepos.isEmpty) {
       dashboard.setError('No repositories available. Check your network connection.');
       return;
     }
 
-    // Load dashboard data for the selected (or default) repos
     dashboard.loadData(repos: settings.selectedRepos);
   }
 

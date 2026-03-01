@@ -9,6 +9,7 @@ import 'settings_section.dart';
 import 'repository_selector.dart';
 import 'theme_toggle.dart';
 import 'language_toggle.dart';
+import 'github_rate_limit_banner.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
@@ -35,7 +36,11 @@ class SettingsPage extends StatelessWidget {
             SettingsSection(
               title: l10n.settingsRepository,
               icon: Icons.source_outlined,
-              children: const [RepositorySelector()],
+              children: const [
+                RepositorySelector(),
+                SizedBox(height: AppSpacing.lg),
+                GitHubRateLimitBanner(),
+              ],
             ),
             const SizedBox(height: AppSpacing.xl),
 

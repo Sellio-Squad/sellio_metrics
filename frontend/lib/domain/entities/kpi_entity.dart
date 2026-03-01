@@ -1,7 +1,5 @@
-/// Sellio Metrics — KPI Domain Entities
 library;
 
-/// Computed KPI metrics.
 class KpiEntity {
   final int totalPrs;
   final int mergedPrs;
@@ -30,7 +28,6 @@ class KpiEntity {
   double get mergeRate => totalPrs > 0 ? (mergedPrs / totalPrs) * 100 : 0;
 }
 
-/// Spotlight metric (hot streak, fastest reviewer, etc.)
 class SpotlightMetric {
   final String user;
   final String label;
@@ -43,7 +40,6 @@ class SpotlightMetric {
   });
 }
 
-/// Spotlight metrics collection.
 class SpotlightEntity {
   final SpotlightMetric? hotStreak;
   final SpotlightMetric? topCommenter;

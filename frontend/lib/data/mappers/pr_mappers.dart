@@ -1,9 +1,8 @@
-/// Sellio Metrics — Data Model → Domain Entity Mappers
-///
-/// Extension methods to convert data models to domain entities.
-/// This keeps the mapping logic in the data layer.
 library;
-
+import '../../domain/entities/approval_entity.dart';
+import '../../domain/entities/comment_entity.dart';
+import '../../domain/entities/diff_stats_entity.dart';
+import '../../domain/entities/user_entity.dart';
 import '../models/pr_model.dart';
 import '../../domain/entities/pr_entity.dart';
 

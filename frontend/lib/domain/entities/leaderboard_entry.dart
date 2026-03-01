@@ -1,5 +1,4 @@
 
-/// Leaderboard entry for an individual team member.
 class LeaderboardEntry {
   final String developer;
   final String? avatarUrl;
