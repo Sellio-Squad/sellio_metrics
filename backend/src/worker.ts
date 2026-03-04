@@ -158,6 +158,7 @@ async function handleHealth(cradle: Cradle): Promise<Response> {
         status: "ok",
         org: cradle.env.org,
         timestamp: new Date().toISOString(),
+        githubRateLimit: cradle.rateLimitGuard.getStatus(),
     });
 }
 
