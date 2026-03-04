@@ -28,8 +28,8 @@ flutter devices
 
 ```bash
 # Run Flutter web with fake data (no backend required)
-cd frontend
 flutter run -d chrome --dart-define=USE_FAKE_DATA=true
+cd frontend
 ```
 
 ### Backend (Node / Fastify)
