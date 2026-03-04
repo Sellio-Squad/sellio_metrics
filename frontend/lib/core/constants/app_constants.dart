@@ -17,6 +17,16 @@ class ApiConfig {
     defaultValue: 'http://localhost:3001',
   );
 
+  /// Whether to use a local fake data source instead of the backend.
+  ///
+  /// Enable via:
+  ///   flutter run --dart-define=USE_FAKE_DATA=true
+  ///   flutter build web --dart-define=USE_FAKE_DATA=true
+  static const bool useFakeData = bool.fromEnvironment(
+    'USE_FAKE_DATA',
+    defaultValue: false,
+  );
+
   static const String defaultOrg = 'Sellio-Squad';
   static const String defaultRepo = 'sellio_mobile';
 }
