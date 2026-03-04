@@ -6,11 +6,9 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../providers/dashboard_provider.dart';
+import 'empty_state.dart';
 import 'pr_list_tile.dart';
-import '../../../domain/entities/pr_entity.dart';
 import '../../widgets/kpi_card.dart';
-import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
 import '../../widgets/section_header.dart';
 import 'bottleneck_item.dart';
 import '../../providers/app_settings_provider.dart';
@@ -43,24 +41,12 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
         final prs = provider.openPrs;
         final scheme = context.colors;
         final kpis = provider.kpis;
-        final mergedPrs = provider.weekFilteredPrs
-            .where((pr) => pr.mergedAt != null)
-            .toList()
-          ..sort((a, b) => a.mergedAt!.compareTo(b.mergedAt!));
 
         return Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Search bar only — no status filter
-              SInput(
-                hint: l10n.searchPlaceholder,
-                onChanged: (value) => provider.setSearchTerm(value),
-                prefixIcon: const Icon(Icons.search),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-
               Expanded(
                 child: CustomScrollView(
                   slivers: [
@@ -75,65 +61,95 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                           ),
                           const SizedBox(height: AppSpacing.xxl),
 
-                          // KPI row
+                          // Responsive KPIs
                           LayoutBuilder(
                             builder: (context, constraints) {
-                              final isWide = constraints.maxWidth > 900;
-                              final children = [
-                                Expanded(
-                                  child: KpiCard(
-                                    label: l10n.kpiTotalPrs,
-                                    value: kpis.totalPrs.toString(),
-                                    icon: Icons.numbers,
-                                    accentColor: scheme.primary,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.lg),
-                                Expanded(
-                                  child: KpiCard(
-                                    label: l10n.kpiAvgApproval,
-                                    value: kpis.avgApprovalTime,
-                                    icon: Icons.access_time,
-                                    accentColor: scheme.secondary,
-                                  ),
-                                ),
-                                const SizedBox(width: AppSpacing.lg),
-                                Expanded(
-                                  child: KpiCard(
-                                    label: l10n.kpiAvgLifespan,
-                                    value: kpis.avgLifespan,
-                                    icon: Icons.timeline,
-                                    accentColor: scheme.green,
-                                  ),
-                                ),
-                              ];
+                              final isWide = constraints.maxWidth > 800;
+                              final isMedium = constraints.maxWidth > 500 && constraints.maxWidth <= 800;
+
+                              final k1 = KpiCard(
+                                label: l10n.kpiTotalPrs,
+                                value: kpis.totalPrs.toString(),
+                                icon: Icons.numbers,
+                                accentColor: scheme.primary,
+                              );
+                              final k2 = KpiCard(
+                                label: l10n.kpiAvgApproval,
+                                value: kpis.avgApprovalTime,
+                                icon: Icons.access_time,
+                                accentColor: scheme.secondary,
+                              );
+                              final k3 = KpiCard(
+                                label: l10n.kpiAvgLifespan,
+                                value: kpis.avgLifespan,
+                                icon: Icons.timeline,
+                                accentColor: scheme.green,
+                              );
+                              final k4 = KpiCard(
+                                label: l10n.kpiAvgPrSize,
+                                value: kpis.avgPrSize,
+                                icon: Icons.code,
+                                accentColor: SellioColors.purple,
+                              );
 
                               if (isWide) {
-                                return Row(children: children);
+                                return Row(
+                                  children: [
+                                    Expanded(child: k1),
+                                    const SizedBox(width: AppSpacing.lg),
+                                    Expanded(child: k2),
+                                    const SizedBox(width: AppSpacing.lg),
+                                    Expanded(child: k3),
+                                    const SizedBox(width: AppSpacing.lg),
+                                    Expanded(child: k4),
+                                  ],
+                                );
+                              } else if (isMedium) {
+                                return Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(child: k1),
+                                        const SizedBox(width: AppSpacing.lg),
+                                        Expanded(child: k2),
+                                      ],
+                                    ),
+                                    const SizedBox(height: AppSpacing.lg),
+                                    Row(
+                                      children: [
+                                        Expanded(child: k3),
+                                        const SizedBox(width: AppSpacing.lg),
+                                        Expanded(child: k4),
+                                      ],
+                                    ),
+                                  ],
+                                );
                               }
 
                               return Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  children[0],
+                                  k1,
                                   const SizedBox(height: AppSpacing.lg),
-                                  children[2],
+                                  k2,
                                   const SizedBox(height: AppSpacing.lg),
-                                  children[4],
+                                  k3,
+                                  const SizedBox(height: AppSpacing.lg),
+                                  k4,
                                 ],
                               );
                             },
                           ),
                           const SizedBox(height: AppSpacing.xxl),
+                          const SizedBox(height: AppSpacing.xl),
 
-                          // Merge time over time chart
-                          SectionHeader(
-                            icon: LucideIcons.activity,
-                            title: l10n.sectionPrActivity,
+                          // Search bar directly above Open PRs
+                          SInput(
+                            hint: l10n.searchPlaceholder,
+                            onChanged: (value) => provider.setSearchTerm(value),
+                            prefixIcon: const Icon(Icons.search),
                           ),
-                          const SizedBox(height: AppSpacing.lg),
-                          _MergeLifespanChart(mergedPrs: mergedPrs),
-                          const SizedBox(height: AppSpacing.xxl),
+                          const SizedBox(height: AppSpacing.xl),
 
                           // Count badge for Open PRs
                           Row(
@@ -156,7 +172,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                     prs.isEmpty
                         ? SliverFillRemaining(
                             hasScrollBody: false,
-                            child: _EmptyState(scheme: scheme, l10n: l10n),
+                            child: EmptyState(scheme: scheme, l10n: l10n),
                           )
                         : SliverList(
                             delegate: SliverChildBuilderDelegate(
@@ -199,140 +215,3 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  final SellioColorScheme scheme;
-  final AppLocalizations l10n;
-
-  const _EmptyState({required this.scheme, required this.l10n});
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            Icons.check_circle_outline,
-            size: 48,
-            color: scheme.hint,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            l10n.searchNoResults,
-            style: AppTypography.body.copyWith(color: scheme.hint),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Line chart: each merged PR plotted by merge date (x) vs lifespan in hours (y).
-class _MergeLifespanChart extends StatelessWidget {
-  final List<PrEntity> mergedPrs;
-
-  const _MergeLifespanChart({required this.mergedPrs});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = context.colors;
-
-    if (mergedPrs.isEmpty) {
-      return SCard(
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: Text(
-            AppLocalizations.of(context).emptyData,
-            style: AppTypography.body.copyWith(color: scheme.hint),
-          ),
-        ),
-      );
-    }
-
-    final spots = <FlSpot>[];
-    for (var i = 0; i < mergedPrs.length; i++) {
-      final pr = mergedPrs[i];
-      final minutes =
-      pr.mergedAt!.difference(pr.openedAt).inMinutes.toDouble();
-      final hours = minutes / 60;
-      spots.add(FlSpot(i.toDouble(), hours));
-    }
-
-    final dateFormat = DateFormat('MM/dd');
-
-    return SCard(
-      child: SizedBox(
-        height: 280,
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.lg),
-          child: LineChart(
-            LineChartData(
-              minX: 0,
-              maxX: (mergedPrs.length - 1).toDouble(),
-              gridData: FlGridData(show: true),
-              borderData: FlBorderData(
-                show: true,
-                border: Border.all(color: scheme.stroke),
-              ),
-              titlesData: FlTitlesData(
-                leftTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 36,
-                    getTitlesWidget: (value, meta) => Text(
-                      '${value.toStringAsFixed(1)}h',
-                      style: AppTypography.caption.copyWith(
-                        color: scheme.hint,
-                        fontSize: 10,
-                      ),
-                    ),
-                  ),
-                ),
-                bottomTitles: AxisTitles(
-                  sideTitles: SideTitles(
-                    showTitles: true,
-                    reservedSize: 32,
-                    interval: (mergedPrs.length / 6).clamp(1, 6).toDouble(),
-                    getTitlesWidget: (value, meta) {
-                      final index = value.round();
-                      if (index < 0 || index >= mergedPrs.length) {
-                        return const SizedBox.shrink();
-                      }
-                      final date = mergedPrs[index].mergedAt!;
-                      return Text(
-                        dateFormat.format(date),
-                        style: AppTypography.caption.copyWith(
-                          color: scheme.hint,
-                          fontSize: 10,
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                rightTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-                topTitles: const AxisTitles(
-                  sideTitles: SideTitles(showTitles: false),
-                ),
-              ),
-              lineBarsData: [
-                LineChartBarData(
-                  spots: spots,
-                  isCurved: true,
-                  barWidth: 3,
-                  color: scheme.primary,
-                  dotData: FlDotData(show: true),
-                  belowBarData: BarAreaData(
-                    show: true,
-                    color: scheme.primary.withValues(alpha: 0.12),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
