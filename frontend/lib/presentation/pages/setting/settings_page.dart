@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../core/l10n/app_localizations.dart';
-import '../analytics/date_filter/date_range_filter.dart';
+import '../../widgets/date_filter/date_range_filter.dart';
 import 'settings_section.dart';
 import 'repository_selector.dart';
 import 'theme_toggle.dart';
