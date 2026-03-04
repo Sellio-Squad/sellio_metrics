@@ -9,7 +9,7 @@ import '../../../../core/theme/app_spacing.dart';
 import '../../../../design_system/components/s_button.dart';
 import '../../../../design_system/components/s_date_picker.dart';
 import '../../../../core/l10n/app_localizations.dart';
-import '../../../providers/dashboard_provider.dart';
+import '../../providers/dashboard_provider.dart';
 import 'date_range_chip.dart';
 
 class DateRangeFilter extends StatelessWidget {
