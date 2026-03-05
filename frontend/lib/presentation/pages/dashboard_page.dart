@@ -7,7 +7,7 @@ import '../../core/navigation/app_navigation.dart';
 import '../../design_system/design_system.dart';
 import '../navigation/app_bottom_nav.dart';
 import '../navigation/app_sidebar.dart';
-import 'analytics/date_filter/date_range_filter.dart';
+import '../widgets/date_filter/date_range_filter.dart';
 
 class DashboardPage extends StatefulWidget {
   const DashboardPage({super.key});
@@ -81,7 +81,6 @@ class _DashboardPageState extends State<DashboardPage> {
     final currentRoute = AppNavigation.routes[_selectedIndex];
     final showDateFilter =
         currentRoute.id != 'about' && currentRoute.id != 'settings';
-
     return Column(
       children: [
         if (showDateFilter) ...[

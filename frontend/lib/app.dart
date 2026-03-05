@@ -2,8 +2,8 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
-import 'package:hux/hux.dart' show HuxTheme;
 import 'package:provider/provider.dart';
+import 'design_system/design_system.dart' show SellioThemes;
 import 'core/l10n/app_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'presentation/providers/dashboard_provider.dart';
@@ -27,8 +27,8 @@ class SellioMetricsApp extends StatelessWidget {
           return MaterialApp(
             title: 'Sellio Squad Dashboard',
             debugShowCheckedModeBanner: false,
-            theme: HuxTheme.lightTheme,
-            darkTheme: HuxTheme.darkTheme,
+            theme: SellioThemes.lightTheme,
+            darkTheme: SellioThemes.darkTheme,
             themeMode: settings.themeMode,
             locale: settings.locale,
             supportedLocales: AppLocalizations.supportedLocales,

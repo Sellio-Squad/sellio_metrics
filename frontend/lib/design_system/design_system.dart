@@ -9,6 +9,7 @@ export '../core/theme/sellio_colors.dart';
 export '../core/theme/app_spacing.dart';
 export '../core/theme/app_radius.dart';
 export '../core/theme/app_typography.dart';
+export '../core/theme/sellio_themes.dart';
 
 // ─── S* wrapper components ──────────────────────────────────
 export 'components/s_avatar.dart';

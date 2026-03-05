@@ -3,6 +3,7 @@ library;
 import '../../core/constants/app_constants.dart';
 import '../../data/datasources/local_data_source.dart';
 import '../../data/datasources/remote_data_source.dart';
+import '../../data/datasources/fake_metrics_data_source.dart';
 import '../../data/repositories/metrics_repository_impl.dart';
 import '../../domain/repositories/metrics_repository.dart';
 import '../../domain/services/kpi_service.dart';
@@ -55,10 +56,16 @@ class ServiceLocator {
 
 /// Initialize all dependencies.
 void setupDependencies() {
-  // Data sources — Remote (TypeScript backend)
-  sl.registerSingleton<MetricsDataSource>(
-    RemoteDataSource(baseUrl: ApiConfig.baseUrl),
-  );
+  // Data sources — switchable between remote backend and local fake data.
+  if (ApiConfig.useFakeData) {
+    sl.registerSingleton<MetricsDataSource>(
+      FakeMetricsDataSource(),
+    );
+  } else {
+    sl.registerSingleton<MetricsDataSource>(
+      RemoteDataSource(baseUrl: ApiConfig.baseUrl),
+    );
+  }
 
   // Repository
   sl.registerLazySingleton<MetricsRepository>(
