@@ -35,6 +35,7 @@ class AppLocalizations {
   String get navLeaderboard => _t('navLeaderboard');
   String get navCharts => _t('navCharts');
   String get navAbout => _t('navAbout');
+  String get navMeetings => _t('navMeetings');
   String get navSettings => _t('navSettings');
   String get navObservability => _t('navObservability');
 
@@ -272,6 +273,7 @@ class AppLocalizations {
     'navLeaderboard': 'Leaderboard',
     'navCharts': 'Charts',
     'navAbout': 'About',
+    'navMeetings': 'Meetings',
     'navSettings': 'Settings',
     'kpiTotalPrs': 'Total PRs',
     'kpiMergedPrs': 'Merged PRs',
@@ -498,6 +500,7 @@ class AppLocalizations {
     'navLeaderboard': 'المتصدرين',
     'navCharts': 'الرسوم',
     'navAbout': 'حول',
+    'navMeetings': 'الاجتماعات',
     'navSettings': 'الإعدادات',
     'kpiTotalPrs': 'إجمالي الطلبات',
     'kpiMergedPrs': 'الطلبات المدمجة',

@@ -5,6 +5,7 @@ import '../../presentation/pages/leaderboard/leaderboard_page.dart';
 import '../../presentation/pages/prs/open_prs_page.dart';
 
 import '../../presentation/pages/about/about_page.dart';
+import '../../presentation/pages/meetings/meetings_page.dart';
 import '../../presentation/pages/setting/settings_page.dart';
 
 class AppRoute {
@@ -41,6 +42,12 @@ class AppNavigation {
       icon: LucideIcons.info,
       labelBuilder: (l10n) => l10n.navAbout,
       page: const AboutPage(),
+    ),
+    AppRoute(
+      id: 'meetings',
+      icon: LucideIcons.calendar,
+      labelBuilder: (l10n) => l10n.navMeetings,
+      page: const MeetingsPage(),
     ),
     AppRoute(
       id: 'settings',
