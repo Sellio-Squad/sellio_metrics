@@ -23,6 +23,8 @@ import { ReposService } from "../modules/repos/repos.service";
 import { MetricsService } from "../modules/metrics/metrics.service";
 import { LeaderboardService } from "../modules/metrics/leaderboard.service";
 import { MembersService } from "../modules/members/members.service";
+import { GoogleMeetClient } from "../infra/google/google-meet.client";
+import { MeetingsService } from "../modules/meetings/meetings.service";
 import { env } from "../config/env";
 import { logger } from "./logger";
 
@@ -40,6 +42,8 @@ export interface Cradle {
     metricsService: MetricsService;
     leaderboardService: LeaderboardService;
     membersService: MembersService;
+    googleMeetClient: GoogleMeetClient;
+    meetingsService: MeetingsService;
 }
 
 // ─── Builder ────────────────────────────────────────────────
@@ -94,6 +98,17 @@ export function buildContainer(kvNamespace: KVNamespace | null = null): AwilixCo
         reposService: asClass(ReposService).singleton(),
         metricsService: asClass(MetricsService).singleton(),
         leaderboardService: asClass(LeaderboardService).singleton(),
+
+        // Google Meet integration
+        googleMeetClient: asFunction(({ logger, env }) => {
+            return new GoogleMeetClient({
+                logger,
+                clientId: env.googleClientId,
+                clientSecret: env.googleClientSecret,
+                redirectUri: env.googleRedirectUri,
+            });
+        }).singleton(),
+        meetingsService: asClass(MeetingsService).singleton(),
         membersService: asClass(MembersService).singleton(),
     });
 

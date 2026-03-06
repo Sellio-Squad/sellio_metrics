@@ -23,6 +23,7 @@ import reposRoute from "./modules/repos/repos.route";
 import metricsRoute from "./modules/metrics/metrics.route";
 import webhookRoute from "./modules/webhook/webhook.route";
 import membersRoute from "./modules/members/members.route";
+import meetingsRoute from "./modules/meetings/meetings.route";
 
 export interface BuildAppOptions {
     container: AwilixContainer<Cradle>;
@@ -62,6 +63,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     await app.register(metricsRoute, { prefix: "/api/metrics" });
     await app.register(webhookRoute, { prefix: "/api/webhooks" });
     await app.register(membersRoute, { prefix: "/api/members" });
+    await app.register(meetingsRoute, { prefix: "/api/meetings" });
 
     return app;
 }

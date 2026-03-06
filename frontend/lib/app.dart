@@ -12,6 +12,7 @@ import 'presentation/providers/filter_provider.dart';
 import 'presentation/providers/analytics_provider.dart';
 import 'presentation/providers/leaderboard_provider.dart';
 import 'presentation/providers/member_provider.dart';
+import 'presentation/providers/meetings_provider.dart';
 import 'presentation/pages/dashboard_page.dart';
 
 class SellioMetricsApp extends StatelessWidget {
@@ -27,6 +28,7 @@ class SellioMetricsApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => sl.get<AnalyticsProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<LeaderboardProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<MemberProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<MeetingsProvider>()),
       ],
       child: Consumer<AppSettingsProvider>(
         builder: (context, settings, _) {
