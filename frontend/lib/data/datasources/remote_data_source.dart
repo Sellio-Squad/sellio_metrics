@@ -74,4 +74,22 @@ class RemoteDataSource implements MetricsDataSource {
 
     return json.decode(response.body) as List<dynamic>;
   }
+
+  @override
+  Future<List<dynamic>> getMemberStatuses(List<Map<String, dynamic>> prData) async {
+    final url = Uri.parse('$baseUrl/api/members/status');
+    final response = await _client.post(
+      url,
+      headers: {'Content-Type': 'application/json'},
+      body: json.encode({'prs': prData}),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to get member statuses from backend: ${response.statusCode} ${response.body}',
+      );
+    }
+
+    return json.decode(response.body) as List<dynamic>;
+  }
 }

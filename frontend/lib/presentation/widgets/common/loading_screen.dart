@@ -41,23 +41,20 @@ class _LoadingScreenState extends State<LoadingScreen>
     final scheme = context.colors;
     final l10n = AppLocalizations.of(context);
 
-    return Scaffold(
-      backgroundColor: scheme.surface,
-      body: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            SLoading(size: SLoadingSize.extraLarge),
-            const SizedBox(height: AppSpacing.xl),
-            FadeTransition(
-              opacity: _fadeAnimation,
-              child: Text(
-                l10n.loadingData,
-                style: AppTypography.body.copyWith(color: scheme.body),
-              ),
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SLoading(size: SLoadingSize.extraLarge),
+          const SizedBox(height: AppSpacing.xl),
+          FadeTransition(
+            opacity: _fadeAnimation,
+            child: Text(
+              l10n.loadingData,
+              style: AppTypography.body.copyWith(color: scheme.body),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
