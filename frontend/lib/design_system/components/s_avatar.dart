@@ -10,10 +10,10 @@ import 'package:hux/hux.dart';
 enum SAvatarSize { small, medium, large }
 
 HuxAvatarSize _toHux(SAvatarSize s) => switch (s) {
-      SAvatarSize.small => HuxAvatarSize.small,
-      SAvatarSize.medium => HuxAvatarSize.medium,
-      SAvatarSize.large => HuxAvatarSize.large,
-    };
+  SAvatarSize.small => HuxAvatarSize.small,
+  SAvatarSize.medium => HuxAvatarSize.medium,
+  SAvatarSize.large => HuxAvatarSize.large,
+};
 
 /// Sellio avatar component.
 class SAvatar extends HuxAvatar {

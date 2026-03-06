@@ -35,8 +35,7 @@ class AboutFeaturesSection extends StatelessWidget {
         Wrap(
           spacing: AppSpacing.md,
           runSpacing: AppSpacing.md,
-          children:
-              features.map((f) => _FeatureChip(text: f)).toList(),
+          children: features.map((f) => _FeatureChip(text: f)).toList(),
         ),
       ],
     );
@@ -60,19 +59,14 @@ class _FeatureChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.primaryVariant,
         borderRadius: AppRadius.smAll,
-        border: Border.all(
-          color: scheme.primary.withValues(alpha: 0.15),
-        ),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.15)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(LucideIcons.check, color: scheme.green, size: 16),
           const SizedBox(width: AppSpacing.sm),
-          Text(
-            text,
-            style: AppTypography.body.copyWith(color: scheme.title),
-          ),
+          Text(text, style: AppTypography.body.copyWith(color: scheme.title)),
         ],
       ),
     );

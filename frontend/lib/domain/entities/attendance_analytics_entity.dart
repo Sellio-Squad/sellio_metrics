@@ -25,8 +25,9 @@ class AttendanceAnalyticsEntity {
         averageDurationMinutes: json['averageDurationMinutes'] as int? ?? 0,
         averageScore: json['averageScore'] as int? ?? 0,
         mostActiveParticipants: (json['mostActiveParticipants'] as List? ?? [])
-            .map((e) =>
-                MostActiveParticipant.fromJson(e as Map<String, dynamic>))
+            .map(
+              (e) => MostActiveParticipant.fromJson(e as Map<String, dynamic>),
+            )
             .toList(),
         attendanceTrends: (json['attendanceTrends'] as List? ?? [])
             .map((e) => AttendanceTrend.fromJson(e as Map<String, dynamic>))

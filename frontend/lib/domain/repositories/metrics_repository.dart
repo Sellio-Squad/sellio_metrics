@@ -39,4 +39,3 @@ abstract class MetricsRepository {
   /// Get active and inactive member statuses from the backend.
   Future<List<MemberStatusEntity>> getMemberStatuses(List<PrEntity> prs);
 }
-

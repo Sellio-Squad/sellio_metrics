@@ -76,7 +76,9 @@ class PrEntity {
     try {
       final uri = Uri.parse(url);
       final parts = uri.pathSegments;
-      if (uri.host == 'api.github.com' && parts.length >= 4 && parts[0] == 'repos') {
+      if (uri.host == 'api.github.com' &&
+          parts.length >= 4 &&
+          parts[0] == 'repos') {
         return '${parts[1]}/${parts[2]}';
       } else if (uri.host == 'github.com' && parts.length >= 2) {
         return '${parts[0]}/${parts[1]}';
@@ -90,7 +92,6 @@ class PrEntity {
 
 /// Timeline event types for a PR.
 enum PrTimelineEventType { created, commented, approved, merged, closed }
-
 
 extension PrTimelineExtension on PrEntity {
   /// Chronological list of important PR milestones:

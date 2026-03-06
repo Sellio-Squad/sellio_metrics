@@ -44,8 +44,5 @@ class SpotlightEntity {
   final SpotlightMetric? hotStreak;
   final SpotlightMetric? topCommenter;
 
-  const SpotlightEntity({
-    this.hotStreak,
-    this.topCommenter,
-  });
+  const SpotlightEntity({this.hotStreak, this.topCommenter});
 }

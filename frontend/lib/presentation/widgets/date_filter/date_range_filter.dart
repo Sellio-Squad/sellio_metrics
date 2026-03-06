@@ -65,10 +65,7 @@ class DateRangeFilter extends StatelessWidget {
 
           // Selected date display
           if (provider.startDate != null || provider.endDate != null)
-            DateRangeChip(
-              start: provider.startDate,
-              end: provider.endDate,
-            ),
+            DateRangeChip(start: provider.startDate, end: provider.endDate),
 
           // Current Sprint shortcut
           SButton(

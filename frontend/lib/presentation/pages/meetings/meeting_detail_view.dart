@@ -54,10 +54,11 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
             final meeting = provider.selectedMeeting;
             final isLiveLoading = provider.isLoading && meeting == null;
             final attendance = provider.attendance;
-            
+
             // Note: In a real app we might combine live participants with historical attendance.
             // For now we'll prefer the detailed attendance records if they are loaded.
-            final participants = attendance?.participants ?? provider.participants;
+            final participants =
+                attendance?.participants ?? provider.participants;
 
             if (isLiveLoading) {
               return const LoadingScreen();
@@ -81,22 +82,54 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
                         children: [
                           Text(
                             meeting.title,
-                            style: AppTypography.title.copyWith(fontSize: 24, color: scheme.title),
+                            style: AppTypography.title.copyWith(
+                              fontSize: 24,
+                              color: scheme.title,
+                            ),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             '${formatter.format(meeting.createdAt)} • ${meeting.meetingCode}',
-                            style: AppTypography.body.copyWith(color: scheme.hint),
+                            style: AppTypography.body.copyWith(
+                              color: scheme.hint,
+                            ),
                           ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(LucideIcons.x, color: scheme.hint),
-                      onPressed: () {
-                        provider.clearSelection();
-                        Navigator.of(context).pop();
-                      },
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SButton(
+                          variant: SButtonVariant.ghost,
+                          onPressed: () async {
+                            final success = await provider.endMeeting(
+                              widget.meetingId,
+                            );
+                            if (success && context.mounted) {
+                              Navigator.of(context).pop();
+                            }
+                          },
+                          child: provider.isLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Text('End Meeting'),
+                        ),
+                        const SizedBox(width: AppSpacing.md),
+                        IconButton(
+                          icon: Icon(LucideIcons.x, color: scheme.hint),
+                          onPressed: () {
+                            provider.clearSelection();
+                            Navigator.of(context).pop();
+                          },
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -112,34 +145,46 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
                     ),
                     const SizedBox(width: AppSpacing.lg),
                     _KpiCard(
-                      label: attendance != null ? 'Total Duration' : 'Live Status',
-                      value: attendance != null ? '${attendance.totalDurationMinutes} min' : 'Ongoing',
+                      label: attendance != null
+                          ? 'Total Duration'
+                          : 'Live Status',
+                      value: attendance != null
+                          ? '${attendance.totalDurationMinutes} min'
+                          : 'Ongoing',
                       icon: LucideIcons.clock,
                     ),
                   ],
                 ),
-                
+
                 const SizedBox(height: AppSpacing.xxl),
-                
+
                 Text(
                   l10n.participantsCount,
-                  style: AppTypography.title.copyWith(fontSize: 20, color: scheme.title),
+                  style: AppTypography.title.copyWith(
+                    fontSize: 20,
+                    color: scheme.title,
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.md),
-                
+
                 Expanded(
                   child: participants.isEmpty
                       ? Center(
                           child: Text(
                             'No participants yet.',
-                            style: AppTypography.body.copyWith(color: scheme.hint),
+                            style: AppTypography.body.copyWith(
+                              color: scheme.hint,
+                            ),
                           ),
                         )
                       : ListView.separated(
                           itemCount: participants.length,
-                          separatorBuilder: (_, __) => Divider(color: scheme.stroke),
+                          separatorBuilder: (_, __) =>
+                              Divider(color: scheme.stroke),
                           itemBuilder: (context, index) {
-                            return _ParticipantRow(participant: participants[index]);
+                            return _ParticipantRow(
+                              participant: participants[index],
+                            );
                           },
                         ),
                 ),
@@ -188,11 +233,17 @@ class _KpiCard extends StatelessWidget {
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: AppTypography.caption.copyWith(color: scheme.hint)),
+                Text(
+                  label,
+                  style: AppTypography.caption.copyWith(color: scheme.hint),
+                ),
                 const SizedBox(height: 4),
                 Text(
                   value,
-                  style: AppTypography.title.copyWith(fontSize: 24, color: scheme.title),
+                  style: AppTypography.title.copyWith(
+                    fontSize: 24,
+                    color: scheme.title,
+                  ),
                 ),
               ],
             ),
@@ -220,10 +271,7 @@ class _ParticipantRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Row(
         children: [
-          SAvatar(
-            name: participant.displayName,
-            size: SAvatarSize.medium,
-          ),
+          SAvatar(name: participant.displayName, size: SAvatarSize.medium),
           const SizedBox(width: AppSpacing.lg),
           Expanded(
             child: Column(
@@ -246,7 +294,7 @@ class _ParticipantRow extends StatelessWidget {
               ],
             ),
           ),
-          
+
           // Times
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
@@ -269,11 +317,11 @@ class _ParticipantRow extends StatelessWidget {
           SizedBox(
             width: 80,
             child: isLive
-              ? SBadge(label: l10n.live, variant: SBadgeVariant.success)
-              : SBadge(
-                  label: '${participant.attendanceScore}%',
-                  variant: _getScoreVariant(participant.attendanceScore),
-                ),
+                ? SBadge(label: l10n.live, variant: SBadgeVariant.success)
+                : SBadge(
+                    label: '${participant.attendanceScore}%',
+                    variant: _getScoreVariant(participant.attendanceScore),
+                  ),
           ),
         ],
       ),

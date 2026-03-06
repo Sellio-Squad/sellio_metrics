@@ -8,8 +8,5 @@ import 'package:hux/hux.dart';
 
 /// Sellio card component.
 class SCard extends HuxCard {
-  const SCard({
-    super.key,
-    required super.child,
-  });
+  const SCard({super.key, required super.child});
 }

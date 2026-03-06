@@ -57,7 +57,10 @@ class _CreateMeetingDialogState extends State<CreateMeetingDialog> {
             children: [
               Text(
                 l10n.createMeeting,
-                style: AppTypography.title.copyWith(fontSize: 22, color: scheme.title),
+                style: AppTypography.title.copyWith(
+                  fontSize: 22,
+                  color: scheme.title,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               Text(
@@ -86,7 +89,9 @@ class _CreateMeetingDialogState extends State<CreateMeetingDialog> {
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   error,
-                  style: AppTypography.caption.copyWith(color: SellioColors.red),
+                  style: AppTypography.caption.copyWith(
+                    color: SellioColors.red,
+                  ),
                 ),
                 if (authUrl != null) ...[
                   const SizedBox(height: AppSpacing.md),
@@ -101,8 +106,8 @@ class _CreateMeetingDialogState extends State<CreateMeetingDialog> {
                         const Text('Sign in with Google'),
                       ],
                     ),
-                  )
-                ]
+                  ),
+                ],
               ],
               const SizedBox(height: AppSpacing.xxl),
               Row(
@@ -119,9 +124,12 @@ class _CreateMeetingDialogState extends State<CreateMeetingDialog> {
                     onPressed: isCreating ? null : _submit,
                     child: isCreating
                         ? const SizedBox(
-                            width: 16, 
-                            height: 16, 
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
                           )
                         : Text(l10n.createMeeting),
                   ),

@@ -19,7 +19,7 @@ class MetricsRepositoryImpl implements MetricsRepository {
   final Map<String, List<PrEntity>> _cache = {};
 
   MetricsRepositoryImpl({required MetricsDataSource dataSource})
-      : _dataSource = dataSource;
+    : _dataSource = dataSource;
 
   @override
   Future<List<PrEntity>> getPullRequests(String owner, String repo) async {
@@ -39,88 +39,126 @@ class MetricsRepositoryImpl implements MetricsRepository {
   Future<List<RepoInfo>> getRepositories() async {
     final repos = await _dataSource.fetchRepositories();
     return repos
-        .map((r) => RepoInfo(
-              name: r.name,
-              fullName: r.fullName,
-              description: r.description,
-            ))
+        .map(
+          (r) => RepoInfo(
+            name: r.name,
+            fullName: r.fullName,
+            description: r.description,
+          ),
+        )
         .toList();
   }
 
   @override
-  Future<List<LeaderboardEntry>> calculateLeaderboard(List<PrEntity> prs) async {
-    final prData = prs.map((pr) => {
-      'status': pr.status,
-      'creator': {
-        'login': pr.creator.login,
-        'avatar_url': pr.creator.avatarUrl,
-      },
-      'approvals': pr.approvals.map((a) => {
-        'reviewer': {
-          'login': a.reviewer.login,
-          'avatar_url': a.reviewer.avatarUrl,
-        }
-      }).toList(),
-      'comments': pr.comments.map((c) => {
-        'author': {
-          'login': c.author.login,
-          'avatar_url': c.author.avatarUrl,
-        }
-      }).toList(),
-      'diff_stats': {
-        'additions': pr.diffStats.additions,
-        'deletions': pr.diffStats.deletions,
-      },
-    }).toList();
+  Future<List<LeaderboardEntry>> calculateLeaderboard(
+    List<PrEntity> prs,
+  ) async {
+    final prData = prs
+        .map(
+          (pr) => {
+            'status': pr.status,
+            'creator': {
+              'login': pr.creator.login,
+              'avatar_url': pr.creator.avatarUrl,
+            },
+            'approvals': pr.approvals
+                .map(
+                  (a) => {
+                    'reviewer': {
+                      'login': a.reviewer.login,
+                      'avatar_url': a.reviewer.avatarUrl,
+                    },
+                  },
+                )
+                .toList(),
+            'comments': pr.comments
+                .map(
+                  (c) => {
+                    'author': {
+                      'login': c.author.login,
+                      'avatar_url': c.author.avatarUrl,
+                    },
+                  },
+                )
+                .toList(),
+            'diff_stats': {
+              'additions': pr.diffStats.additions,
+              'deletions': pr.diffStats.deletions,
+            },
+          },
+        )
+        .toList();
 
     final result = await _dataSource.calculateLeaderboard(prData);
-    
-    return result.map((json) => LeaderboardEntry(
-      developer: json['developer'] as String? ?? 'Unknown',
-      avatarUrl: json['avatarUrl'] as String?,
-      prsCreated: json['prsCreated'] as int? ?? 0,
-      prsMerged: json['prsMerged'] as int? ?? 0,
-      reviewsGiven: json['reviewsGiven'] as int? ?? 0,
-      commentsGiven: json['commentsGiven'] as int? ?? 0,
-      additions: json['additions'] as int? ?? 0,
-      deletions: json['deletions'] as int? ?? 0,
-      totalScore: (json['totalScore'] as num?)?.toDouble() ?? 0.0,
-    )).toList();
+
+    return result
+        .map(
+          (json) => LeaderboardEntry(
+            developer: json['developer'] as String? ?? 'Unknown',
+            avatarUrl: json['avatarUrl'] as String?,
+            prsCreated: json['prsCreated'] as int? ?? 0,
+            prsMerged: json['prsMerged'] as int? ?? 0,
+            reviewsGiven: json['reviewsGiven'] as int? ?? 0,
+            commentsGiven: json['commentsGiven'] as int? ?? 0,
+            additions: json['additions'] as int? ?? 0,
+            deletions: json['deletions'] as int? ?? 0,
+            totalScore: (json['totalScore'] as num?)?.toDouble() ?? 0.0,
+          ),
+        )
+        .toList();
   }
 
   @override
   Future<List<MemberStatusEntity>> getMemberStatuses(List<PrEntity> prs) async {
-    final prData = prs.map((pr) => {
-      'opened_at': pr.openedAt.toIso8601String(),
-      'creator': {
-        'login': pr.creator.login,
-        'avatar_url': pr.creator.avatarUrl,
-      },
-      'approvals': pr.approvals.map((a) => {
-        'submitted_at': a.submittedAt.toIso8601String(),
-        'reviewer': {
-          'login': a.reviewer.login,
-          'avatar_url': a.reviewer.avatarUrl,
-        }
-      }).toList(),
-      'comments': pr.comments.map((c) => {
-        'first_comment_at': c.firstCommentAt?.toIso8601String(),
-        'last_comment_at': c.lastCommentAt?.toIso8601String(),
-        'author': {
-          'login': c.author.login,
-          'avatar_url': c.author.avatarUrl,
-        }
-      }).toList(),
-    }).toList();
+    final prData = prs
+        .map(
+          (pr) => {
+            'opened_at': pr.openedAt.toIso8601String(),
+            'creator': {
+              'login': pr.creator.login,
+              'avatar_url': pr.creator.avatarUrl,
+            },
+            'approvals': pr.approvals
+                .map(
+                  (a) => {
+                    'submitted_at': a.submittedAt.toIso8601String(),
+                    'reviewer': {
+                      'login': a.reviewer.login,
+                      'avatar_url': a.reviewer.avatarUrl,
+                    },
+                  },
+                )
+                .toList(),
+            'comments': pr.comments
+                .map(
+                  (c) => {
+                    'first_comment_at': c.firstCommentAt?.toIso8601String(),
+                    'last_comment_at': c.lastCommentAt?.toIso8601String(),
+                    'author': {
+                      'login': c.author.login,
+                      'avatar_url': c.author.avatarUrl,
+                    },
+                  },
+                )
+                .toList(),
+          },
+        )
+        .toList();
 
     final result = await _dataSource.getMemberStatuses(prData);
 
-    return result.map((json) => MemberStatusEntity(
-      developer: json['developer'] as String? ?? 'Unknown',
-      avatarUrl: json['avatarUrl'] as String?,
-      isActive: json['isActive'] as bool? ?? false,
-      lastActiveDate: json['lastActiveDate'] != null ? DateTime.parse(json['lastActiveDate'] as String) : null,
-    )).toList();
+    return result
+        .map(
+          (json) => MemberStatusEntity(
+            developer: json['developer'] as String? ?? 'Unknown',
+            avatarUrl: json['avatarUrl'] as String?,
+            isActive: json['isActive'] as bool? ?? false,
+            lastActiveDate: json['lastActiveDate'] != null
+                ? DateTime.parse(json['lastActiveDate'] as String)
+                : null,
+          ),
+        )
+        .toList();
   }
 
   Future<List<PrEntity>> _fetchAndMap(String owner, String repo) async {
@@ -131,4 +169,3 @@ class MetricsRepositoryImpl implements MetricsRepository {
     return entities;
   }
 }
-

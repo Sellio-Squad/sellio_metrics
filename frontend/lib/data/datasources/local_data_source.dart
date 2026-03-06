@@ -25,10 +25,10 @@ class RepoModel {
   });
 
   factory RepoModel.fromJson(Map<String, dynamic> json) => RepoModel(
-        name: json['name'] as String? ?? '',
-        fullName: json['full_name'] as String? ?? '',
-        description: json['description'] as String?,
-        htmlUrl: json['html_url'] as String? ?? '',
-        isPrivate: json['private'] as bool? ?? false,
-      );
+    name: json['name'] as String? ?? '',
+    fullName: json['full_name'] as String? ?? '',
+    description: json['description'] as String?,
+    htmlUrl: json['html_url'] as String? ?? '',
+    isPrivate: json['private'] as bool? ?? false,
+  );
 }

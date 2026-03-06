@@ -26,6 +26,18 @@ abstract class MeetingsRepository {
 
   /// Get Google Meet API rate limit status.
   Future<RateLimitEntity> getRateLimitStatus();
+
+  /// Check if the backend holds a valid Google Meet OAuth token.
+  Future<bool> getAuthStatus();
+
+  /// Gets the OAuth sign-in URL.
+  Future<String?> getAuthUrl();
+
+  /// Clears the backend's Google Meet OAuth token.
+  Future<void> logout();
+
+  /// Ends an active Google Meeting
+  Future<void> endMeeting(String id);
 }
 
 /// Combines meeting info + participants.

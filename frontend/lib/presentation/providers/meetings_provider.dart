@@ -14,7 +14,7 @@ class MeetingsProvider extends ChangeNotifier {
   final MeetingsRepository _repository;
 
   MeetingsProvider({required MeetingsRepository repository})
-      : _repository = repository;
+    : _repository = repository;
 
   // ─── State ──────────────────────────────────────────────
 
@@ -48,6 +48,9 @@ class MeetingsProvider extends ChangeNotifier {
   String? _authUrl;
   String? get authUrl => _authUrl;
 
+  bool _isAuthenticated = false;
+  bool get isAuthenticated => _isAuthenticated;
+
   // ─── Tab Index ────────────────────────────────────────────
 
   int _tabIndex = 0;
@@ -67,8 +70,11 @@ class MeetingsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _meetings = await _repository.getMeetings();
-      _loadRateLimit();
+      await checkAuthStatus();
+      if (_isAuthenticated) {
+        _meetings = await _repository.getMeetings();
+        _loadRateLimit();
+      }
     } catch (e) {
       _error = 'Failed to load meetings: $e';
     } finally {
@@ -92,12 +98,13 @@ class MeetingsProvider extends ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      if (e.toString().contains('AuthRequiredException') || e.toString().contains('authUrl')) {
+      if (e.toString().contains('AuthRequiredException') ||
+          e.toString().contains('authUrl')) {
         // Poor man's type check since AuthRequiredException is deep in data layer
         // Better: Export AuthRequiredException from core/error or check type properly
       }
       _error = 'Failed to create meeting: $e';
-      
+
       // If the error object literally contains the URL, we parse it,
       // But actually, we should just import it. Let's make it clean:
       if (e.runtimeType.toString() == 'AuthRequiredException') {
@@ -181,6 +188,74 @@ class MeetingsProvider extends ChangeNotifier {
       notifyListeners();
     } catch (_) {
       // Silently fail — rate limit is informational
+    }
+  }
+
+  // ─── Auth ───────────────────────────────────────────
+
+  Future<void> checkAuthStatus() async {
+    try {
+      _isAuthenticated = await _repository.getAuthStatus();
+      notifyListeners();
+    } catch (_) {
+      _isAuthenticated = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> login() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final url = await _repository.getAuthUrl();
+      if (url != null) {
+        _authUrl = url;
+      } else {
+        _error = 'Failed to get sign-in URL from backend.';
+      }
+    } catch (e) {
+      _error = 'Failed to prepare login: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> logout() async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _repository.logout();
+      _isAuthenticated = false;
+      _meetings = [];
+    } catch (e) {
+      _error = 'Failed to sign out: $e';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // ─── End Meeting ────────────────────────────────────
+
+  Future<bool> endMeeting(String meetingId) async {
+    _isLoading = true;
+    notifyListeners();
+    try {
+      await _repository.endMeeting(meetingId);
+      // Remove the meeting locally or refresh
+      _meetings.removeWhere((m) => m.id == meetingId);
+      if (_selectedMeeting?.id == meetingId) {
+        clearSelection();
+      }
+      return true;
+    } catch (e) {
+      _error = 'Failed to end meeting: $e';
+      return false;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 }

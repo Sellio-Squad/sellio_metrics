@@ -8,10 +8,5 @@ import 'package:hux/hux.dart';
 
 /// Sellio text input component.
 class SInput extends HuxInput {
-  const SInput({
-    super.key,
-    super.hint,
-    super.onChanged,
-    super.prefixIcon,
-  });
+  const SInput({super.key, super.hint, super.onChanged, super.prefixIcon});
 }

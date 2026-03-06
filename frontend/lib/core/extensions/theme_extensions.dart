@@ -12,7 +12,6 @@ extension ThemeX on BuildContext {
 
   ColorScheme get colorScheme => Theme.of(this).colorScheme;
 
-
   SellioColorScheme get colors =>
       isDark ? SellioColors.dark : SellioColors.light;
 }

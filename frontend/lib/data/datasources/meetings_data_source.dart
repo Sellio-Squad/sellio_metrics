@@ -22,6 +22,14 @@ abstract class MeetingsDataSource {
   Future<Map<String, dynamic>> fetchAnalytics();
 
   Future<Map<String, dynamic>> fetchRateLimitStatus();
+
+  Future<bool> fetchAuthStatus();
+
+  Future<String?> fetchAuthUrl();
+
+  Future<void> logout();
+
+  Future<void> endMeeting(String id);
 }
 
 class AuthRequiredException implements Exception {
@@ -41,7 +49,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   final http.Client _client;
 
   RemoteMeetingsDataSource({required this.baseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+    : _client = client ?? http.Client();
 
   @override
   Future<Map<String, dynamic>> createMeeting(String title) async {
@@ -57,7 +65,10 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
     if (response.statusCode == 401) {
       final body = json.decode(response.body);
       if (body['authUrl'] != null) {
-        throw AuthRequiredException(body['authUrl'], body['message'] ?? 'Authentication required');
+        throw AuthRequiredException(
+          body['authUrl'],
+          body['message'] ?? 'Authentication required',
+        );
       }
     }
 
@@ -149,5 +160,55 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
     }
 
     return json.decode(response.body) as Map<String, dynamic>;
+  }
+
+  @override
+  Future<bool> fetchAuthStatus() async {
+    try {
+      final url = Uri.parse('$baseUrl/api/meetings/auth-status');
+      final response = await _client.get(url);
+      if (response.statusCode == 200) {
+        final body = json.decode(response.body);
+        return body['isReady'] == true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  @override
+  Future<String?> fetchAuthUrl() async {
+    try {
+      final url = Uri.parse('$baseUrl/api/meetings/auth-url');
+      final response = await _client.get(url);
+      if (response.statusCode == 200) {
+        final body = json.decode(response.body);
+        return body['authUrl'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  @override
+  Future<void> logout() async {
+    final url = Uri.parse('$baseUrl/api/meetings/auth-logout');
+    debugPrint('[MeetingsDataSource] POST $url');
+    final response = await _client.post(url);
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to logout: ${response.statusCode} ${response.body}',
+      );
+    }
+  }
+
+  @override
+  Future<void> endMeeting(String id) async {
+    final url = Uri.parse('$baseUrl/api/meetings/$id/end');
+    debugPrint('[MeetingsDataSource] POST $url');
+    final response = await _client.post(url);
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Failed to end meeting: ${response.statusCode} ${response.body}',
+      );
+    }
   }
 }

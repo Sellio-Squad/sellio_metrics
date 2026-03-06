@@ -7,7 +7,7 @@ class MemberProvider extends ChangeNotifier {
   final MetricsRepository _repository;
 
   MemberProvider({required MetricsRepository repository})
-      : _repository = repository;
+    : _repository = repository;
 
   List<MemberStatusEntity> _memberStatuses = [];
   bool _isLoading = false;

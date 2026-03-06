@@ -1,4 +1,3 @@
-
 class LeaderboardEntry {
   final String developer;
   final String? avatarUrl;

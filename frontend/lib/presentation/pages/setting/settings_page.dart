@@ -64,9 +64,7 @@ class SettingsPage extends StatelessWidget {
             SettingsSection(
               title: l10n.filterAllTime,
               icon: Icons.calendar_today_outlined,
-              children: const [
-                DateRangeFilter(),
-              ],
+              children: const [DateRangeFilter()],
             ),
           ],
         ),

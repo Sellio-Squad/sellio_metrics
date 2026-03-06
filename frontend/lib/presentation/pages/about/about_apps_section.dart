@@ -88,10 +88,7 @@ class _AppCard extends StatelessWidget {
             children: [
               Icon(app.icon, color: scheme.primary, size: 24),
               const Spacer(),
-              SBadge(
-                label: app.status,
-                variant: SBadgeVariant.secondary,
-              ),
+              SBadge(label: app.status, variant: SBadgeVariant.secondary),
             ],
           ),
           const Spacer(),
@@ -135,7 +132,9 @@ class _AppCard extends StatelessWidget {
                   ),
                   const SizedBox(width: AppSpacing.xs),
                   Text(
-                    app.liveUrl != null ? l10n.aboutTryLive : l10n.aboutComingSoon,
+                    app.liveUrl != null
+                        ? l10n.aboutTryLive
+                        : l10n.aboutComingSoon,
                   ),
                 ],
               ),

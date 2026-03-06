@@ -111,11 +111,7 @@ class FakeMetricsDataSource implements MetricsDataSource {
       mergedBy: null,
       week: '2026-09',
       status: 'pending',
-      diffStats: const DiffStats(
-        additions: 80,
-        deletions: 10,
-        changedFiles: 5,
-      ),
+      diffStats: const DiffStats(additions: 80, deletions: 10, changedFiles: 5),
       labels: const ['fix', 'bottleneck'],
       milestone: 'v1.0',
       draft: false,
@@ -166,20 +162,23 @@ class FakeMetricsDataSource implements MetricsDataSource {
         name: ApiConfig.defaultRepo,
         fullName: '${ApiConfig.defaultOrg}/${ApiConfig.defaultRepo}',
         description: 'Fake repo for local metrics preview',
-        htmlUrl: 'https://github.com/${ApiConfig.defaultOrg}/${ApiConfig.defaultRepo}',
+        htmlUrl:
+            'https://github.com/${ApiConfig.defaultOrg}/${ApiConfig.defaultRepo}',
         isPrivate: false,
       ),
     ];
   }
 
   @override
-  Future<List<dynamic>> calculateLeaderboard(List<Map<String, dynamic>> prData) async {
+  Future<List<dynamic>> calculateLeaderboard(
+    List<Map<String, dynamic>> prData,
+  ) async {
     final Map<String, _LeaderboardAccumulator> byDeveloper = {};
 
     _LeaderboardAccumulator _getOrCreate(String login, String avatarUrl) {
       return byDeveloper.putIfAbsent(
         login,
-            () => _LeaderboardAccumulator(login: login, avatarUrl: avatarUrl),
+        () => _LeaderboardAccumulator(login: login, avatarUrl: avatarUrl),
       );
     }
 
@@ -226,31 +225,35 @@ class FakeMetricsDataSource implements MetricsDataSource {
     for (final acc in byDeveloper.values) {
       acc.totalScore =
           (acc.prsCreated * LeaderboardWeights.prsCreated) +
-              (acc.prsMerged * LeaderboardWeights.prsMerged) +
-              (acc.reviewsGiven * LeaderboardWeights.reviewsGiven) +
-              (acc.commentsGiven * LeaderboardWeights.commentsGiven);
+          (acc.prsMerged * LeaderboardWeights.prsMerged) +
+          (acc.reviewsGiven * LeaderboardWeights.reviewsGiven) +
+          (acc.commentsGiven * LeaderboardWeights.commentsGiven);
     }
 
     final entries = byDeveloper.values.toList()
       ..sort((a, b) => b.totalScore.compareTo(a.totalScore));
 
     return entries
-        .map((e) => {
-      'developer': e.login,
-      'avatarUrl': e.avatarUrl,
-      'prsCreated': e.prsCreated,
-      'prsMerged': e.prsMerged,
-      'reviewsGiven': e.reviewsGiven,
-      'commentsGiven': e.commentsGiven,
-      'additions': e.additions,
-      'deletions': e.deletions,
-      'totalScore': e.totalScore,
-    })
+        .map(
+          (e) => {
+            'developer': e.login,
+            'avatarUrl': e.avatarUrl,
+            'prsCreated': e.prsCreated,
+            'prsMerged': e.prsMerged,
+            'reviewsGiven': e.reviewsGiven,
+            'commentsGiven': e.commentsGiven,
+            'additions': e.additions,
+            'deletions': e.deletions,
+            'totalScore': e.totalScore,
+          },
+        )
         .toList();
   }
 
   @override
-  Future<List<dynamic>> getMemberStatuses(List<Map<String, dynamic>> prData) async {
+  Future<List<dynamic>> getMemberStatuses(
+    List<Map<String, dynamic>> prData,
+  ) async {
     final Map<String, Map<String, dynamic>> statuses = {
       _alice.login: {'avatarUrl': _alice.avatarUrl, 'lastActiveDate': null},
       _bob.login: {'avatarUrl': _bob.avatarUrl, 'lastActiveDate': null},
@@ -259,9 +262,13 @@ class FakeMetricsDataSource implements MetricsDataSource {
 
     void updateActivity(String login, String avatarUrl, String? dateStr) {
       if (dateStr == null) return;
-      final entry = statuses.putIfAbsent(login, () => {'avatarUrl': avatarUrl, 'lastActiveDate': null});
+      final entry = statuses.putIfAbsent(
+        login,
+        () => {'avatarUrl': avatarUrl, 'lastActiveDate': null},
+      );
       final current = entry['lastActiveDate'] as String?;
-      if (current == null || DateTime.parse(dateStr).isAfter(DateTime.parse(current))) {
+      if (current == null ||
+          DateTime.parse(dateStr).isAfter(DateTime.parse(current))) {
         entry['lastActiveDate'] = dateStr;
       }
     }
@@ -269,20 +276,37 @@ class FakeMetricsDataSource implements MetricsDataSource {
     for (final pr in prData) {
       final creator = pr['creator'] as Map<String, dynamic>? ?? {};
       final openedAt = pr['opened_at'] as String?;
-      updateActivity(creator['login'] ?? '', creator['avatar_url'] ?? '', openedAt);
+      updateActivity(
+        creator['login'] ?? '',
+        creator['avatar_url'] ?? '',
+        openedAt,
+      );
 
-      final approvals = (pr['approvals'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+      final approvals = (pr['approvals'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
       for (final a in approvals) {
         final rev = a['reviewer'] as Map<String, dynamic>? ?? {};
-        updateActivity(rev['login'] ?? '', rev['avatar_url'] ?? '', a['submitted_at'] as String?);
+        updateActivity(
+          rev['login'] ?? '',
+          rev['avatar_url'] ?? '',
+          a['submitted_at'] as String?,
+        );
       }
 
-      final comments = (pr['comments'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+      final comments = (pr['comments'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
       for (final c in comments) {
         final author = c['author'] as Map<String, dynamic>? ?? {};
-        final dates = [c['first_comment_at'], c['last_comment_at']].whereType<String>().toList();
+        final dates = [
+          c['first_comment_at'],
+          c['last_comment_at'],
+        ].whereType<String>().toList();
         dates.sort((a, b) => DateTime.parse(b).compareTo(DateTime.parse(a)));
-        updateActivity(author['login'] ?? '', author['avatar_url'] ?? '', dates.isNotEmpty ? dates.first : null);
+        updateActivity(
+          author['login'] ?? '',
+          author['avatar_url'] ?? '',
+          dates.isNotEmpty ? dates.first : null,
+        );
       }
     }
 
@@ -293,27 +317,23 @@ class FakeMetricsDataSource implements MetricsDataSource {
         'isActive': e.value['lastActiveDate'] != null,
         'lastActiveDate': e.value['lastActiveDate'],
       };
-    }).toList()
-      ..sort((a, b) {
-        final aActive = a['isActive'] as bool;
-        final bActive = b['isActive'] as bool;
-        if (aActive && !bActive) return -1;
-        if (!aActive && bActive) return 1;
-        if (aActive && bActive) {
-          final da = DateTime.parse(a['lastActiveDate'] as String);
-          final db = DateTime.parse(b['lastActiveDate'] as String);
-          return db.compareTo(da);
-        }
-        return (a['developer'] as String).compareTo(b['developer'] as String);
-      });
+    }).toList()..sort((a, b) {
+      final aActive = a['isActive'] as bool;
+      final bActive = b['isActive'] as bool;
+      if (aActive && !bActive) return -1;
+      if (!aActive && bActive) return 1;
+      if (aActive && bActive) {
+        final da = DateTime.parse(a['lastActiveDate'] as String);
+        final db = DateTime.parse(b['lastActiveDate'] as String);
+        return db.compareTo(da);
+      }
+      return (a['developer'] as String).compareTo(b['developer'] as String);
+    });
   }
 }
 
 class _LeaderboardAccumulator {
-  _LeaderboardAccumulator({
-    required this.login,
-    required this.avatarUrl,
-  });
+  _LeaderboardAccumulator({required this.login, required this.avatarUrl});
 
   final String login;
   final String avatarUrl;
@@ -325,4 +345,3 @@ class _LeaderboardAccumulator {
   double deletions = 0;
   double totalScore = 0;
 }
-

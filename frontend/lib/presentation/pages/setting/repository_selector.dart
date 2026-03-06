@@ -7,7 +7,6 @@ import '../../../design_system/design_system.dart';
 import '../../../core/l10n/app_localizations.dart';
 import '../../providers/app_settings_provider.dart';
 
-
 class RepositorySelector extends StatelessWidget {
   const RepositorySelector({super.key});
 
@@ -64,10 +63,8 @@ class RepositorySelector extends StatelessWidget {
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
                 itemCount: repos.length,
-                separatorBuilder: (context, index) => Divider(
-                  color: scheme.stroke,
-                  height: 1,
-                ),
+                separatorBuilder: (context, index) =>
+                    Divider(color: scheme.stroke, height: 1),
                 itemBuilder: (context, index) {
                   final repo = repos[index];
                   final isSelected = settings.selectedRepos.any(

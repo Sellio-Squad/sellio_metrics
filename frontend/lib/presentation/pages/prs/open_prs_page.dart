@@ -45,10 +45,14 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
     return Consumer3<PrDataProvider, FilterProvider, AnalyticsProvider>(
       builder: (context, prData, filter, analytics, _) {
         final filterService = sl.get<FilterService>();
-        
+
         // Data pipeline
         final weekFiltered = filterService.filterByWeek(
-          filterService.filterByDateRange(prData.allPrs, filter.startDate, filter.endDate),
+          filterService.filterByDateRange(
+            prData.allPrs,
+            filter.startDate,
+            filter.endDate,
+          ),
           filter.weekFilter,
         );
         final filteredPrs = filterService.filterPrs(
@@ -72,8 +76,14 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
 
         final prs = openPrs;
         final scheme = context.colors;
-        final kpis = analytics.calculateKpis(weekFiltered, developerFilter: filter.developerFilter);
-        final bottlenecks = analytics.identifyBottlenecks(weekFiltered, thresholdHours: filter.bottleneckThreshold);
+        final kpis = analytics.calculateKpis(
+          weekFiltered,
+          developerFilter: filter.developerFilter,
+        );
+        final bottlenecks = analytics.identifyBottlenecks(
+          weekFiltered,
+          thresholdHours: filter.bottleneckThreshold,
+        );
 
         return Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -90,7 +100,8 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                           // Analytics Section
                           SectionHeader(
                             icon: LucideIcons.barChart3,
-                            title: l10n.navAnalytics, // Or maybe a more specific title
+                            title: l10n
+                                .navAnalytics, // Or maybe a more specific title
                           ),
                           const SizedBox(height: AppSpacing.xxl),
 
@@ -98,7 +109,9 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                           LayoutBuilder(
                             builder: (context, constraints) {
                               final isWide = constraints.maxWidth > 800;
-                              final isMedium = constraints.maxWidth > 500 && constraints.maxWidth <= 800;
+                              final isMedium =
+                                  constraints.maxWidth > 500 &&
+                                  constraints.maxWidth <= 800;
 
                               final k1 = KpiCard(
                                 label: l10n.kpiTotalPrs,
@@ -189,7 +202,9 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                             children: [
                               Text(
                                 l10n.sectionOpenPrs,
-                                style: AppTypography.title.copyWith(color: scheme.title),
+                                style: AppTypography.title.copyWith(
+                                  color: scheme.title,
+                                ),
                               ),
                               const SizedBox(width: AppSpacing.sm),
                               SBadge(
@@ -227,7 +242,9 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                           if (bottlenecks.isEmpty)
                             Text(
                               l10n.emptyData,
-                              style: AppTypography.body.copyWith(color: scheme.hint),
+                              style: AppTypography.body.copyWith(
+                                color: scheme.hint,
+                              ),
                             )
                           else
                             ...bottlenecks.map(
@@ -247,4 +264,3 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
     );
   }
 }
-

@@ -19,7 +19,9 @@ class AppBottomNav extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
-    final safeIndex = currentIndex < AppNavigation.routes.length ? currentIndex : 0;
+    final safeIndex = currentIndex < AppNavigation.routes.length
+        ? currentIndex
+        : 0;
 
     return NavigationBar(
       selectedIndex: safeIndex,

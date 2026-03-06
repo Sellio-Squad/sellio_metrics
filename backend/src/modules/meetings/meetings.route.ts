@@ -104,6 +104,25 @@ const meetingsRoute: FastifyPluginAsync = async (fastify) => {
     );
 
     /**
+     * GET /api/meetings/auth-status
+     * Returns true if the server holds a valid OAuth2 session.
+     */
+    fastify.get("/auth-status", async (request) => {
+        const { meetingsService } = request.diScope.cradle as Cradle;
+        return { isReady: meetingsService.isReady() };
+    });
+
+    /**
+     * POST /api/meetings/auth-logout
+     * Clears the current OAuth2 session.
+     */
+    fastify.post("/auth-logout", async (request) => {
+        const { meetingsService } = request.diScope.cradle as Cradle;
+        meetingsService.clearCredentials();
+        return { success: true };
+    });
+
+    /**
      * GET /api/meetings
      * List all tracked meetings.
      */
@@ -174,6 +193,35 @@ const meetingsRoute: FastifyPluginAsync = async (fastify) => {
         async (request) => {
             const { meetingsService } = request.diScope.cradle as Cradle;
             return meetingsService.getAttendance(request.params.id);
+        },
+    );
+
+    /**
+     * POST /api/meetings/:id/end
+     * Ends an active Google Meet.
+     */
+    fastify.post<{ Params: { id: string } }>(
+        "/:id/end",
+        {
+            schema: {
+                params: {
+                    type: "object",
+                    required: ["id"],
+                    properties: {
+                        id: { type: "string" },
+                    },
+                },
+            },
+        },
+        async (request) => {
+            const { meetingsService } = request.diScope.cradle as Cradle;
+
+            if (!meetingsService.isReady()) {
+                throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
+            }
+
+            await meetingsService.endMeeting(request.params.id);
+            return { success: true };
         },
     );
 };
