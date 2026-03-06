@@ -26,10 +26,7 @@ class ErrorScreen extends StatelessWidget {
             style: AppTypography.body.copyWith(color: scheme.body),
           ),
           const SizedBox(height: AppSpacing.lg),
-          SButton(
-            onPressed: onRetry,
-            child: Text(l10n.retry),
-          ),
+          SButton(onPressed: onRetry, child: Text(l10n.retry)),
         ],
       ),
     );

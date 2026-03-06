@@ -19,11 +19,8 @@ class SSidebarItemData {
     required this.label,
   });
 
-  HuxSidebarItemData toHux() => HuxSidebarItemData(
-        id: id,
-        icon: icon,
-        label: label,
-      );
+  HuxSidebarItemData toHux() =>
+      HuxSidebarItemData(id: id, icon: icon, label: label);
 }
 
 /// Sellio sidebar component.

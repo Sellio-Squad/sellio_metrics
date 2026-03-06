@@ -8,9 +8,5 @@ import 'package:hux/hux.dart';
 
 /// Sellio switch (toggle) component.
 class SSwitch extends HuxSwitch {
-  const SSwitch({
-    super.key,
-    required super.value,
-    required super.onChanged,
-  });
+  const SSwitch({super.key, required super.value, required super.onChanged});
 }

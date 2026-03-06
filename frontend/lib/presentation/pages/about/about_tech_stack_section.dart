@@ -18,7 +18,11 @@ class AboutTechStackSection extends StatelessWidget {
     final techItems = [
       _TechItem(l10n.techFlutter, l10n.techFlutterRole, LucideIcons.smartphone),
       _TechItem(l10n.techKotlin, l10n.techKotlinRole, LucideIcons.server),
-      _TechItem(l10n.techGithubActions, l10n.techGithubActionsRole, LucideIcons.gitBranch),
+      _TechItem(
+        l10n.techGithubActions,
+        l10n.techGithubActionsRole,
+        LucideIcons.gitBranch,
+      ),
       _TechItem(l10n.techFirebase, l10n.techFirebaseRole, LucideIcons.database),
     ];
 

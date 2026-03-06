@@ -69,12 +69,8 @@ class ServiceLocator {
 void setupDependencies() {
   // Data sources — switchable between remote backend and local fake data.
   if (ApiConfig.useFakeData) {
-    sl.registerSingleton<MetricsDataSource>(
-      FakeMetricsDataSource(),
-    );
-    sl.registerSingleton<MeetingsDataSource>(
-      FakeMeetingsDataSource(),
-    );
+    sl.registerSingleton<MetricsDataSource>(FakeMetricsDataSource());
+    sl.registerSingleton<MeetingsDataSource>(FakeMeetingsDataSource());
   } else {
     sl.registerSingleton<MetricsDataSource>(
       RemoteDataSource(baseUrl: ApiConfig.baseUrl),
@@ -104,9 +100,7 @@ void setupDependencies() {
   sl.registerFactory<PrDataProvider>(
     () => PrDataProvider(repository: sl.get<MetricsRepository>()),
   );
-  sl.registerFactory<FilterProvider>(
-    () => FilterProvider(),
-  );
+  sl.registerFactory<FilterProvider>(() => FilterProvider());
   sl.registerFactory<AnalyticsProvider>(
     () => AnalyticsProvider(
       kpiService: sl.get<KpiService>(),
@@ -123,4 +117,3 @@ void setupDependencies() {
     () => MeetingsProvider(repository: sl.get<MeetingsRepository>()),
   );
 }
-

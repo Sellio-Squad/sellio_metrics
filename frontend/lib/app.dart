@@ -81,7 +81,9 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
     await settings.loadRepositories();
 
     if (settings.selectedRepos.isEmpty) {
-      prData.setError('No repositories available. Check your network connection.');
+      prData.setError(
+        'No repositories available. Check your network connection.',
+      );
       return;
     }
 

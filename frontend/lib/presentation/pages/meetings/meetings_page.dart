@@ -88,22 +88,85 @@ class _MeetingsPageState extends State<MeetingsPage> {
             fontSize: 28,
           ),
         ),
-        SButton(
-          onPressed: () => _showCreateMeetingDialog(context),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(LucideIcons.plus, size: 16),
-              const SizedBox(width: AppSpacing.sm),
-              Text(l10n.newMeeting),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (provider.isAuthenticated) ...[
+              SButton(
+                variant: SButtonVariant.ghost,
+                onPressed: () => provider.logout(),
+                child: const Text('Sign Out'),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              SButton(
+                onPressed: () => _showCreateMeetingDialog(context),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(LucideIcons.plus, size: 16),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(l10n.newMeeting),
+                  ],
+                ),
+              ),
+            ] else ...[
+              SButton(
+                variant: SButtonVariant.primary,
+                onPressed: provider.isLoading
+                    ? null
+                    : () => _handleLogin(provider),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (provider.isLoading) ...[
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                    ] else ...[
+                      const Icon(LucideIcons.chrome, size: 16),
+                      const SizedBox(width: AppSpacing.sm),
+                    ],
+                    const Text('Sign In with Google'),
+                  ],
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ],
     );
   }
 
-  Widget _buildRateLimitBanner(BuildContext context, MeetingsProvider provider) {
+  Future<void> _handleLogin(MeetingsProvider provider) async {
+    await provider.login();
+    if (provider.authUrl != null && provider.authUrl!.isNotEmpty) {
+      final uri = Uri.parse(provider.authUrl!);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Could not open sign in page')),
+          );
+        }
+      }
+    } else if (provider.error != null && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(provider.error!)));
+    }
+  }
+
+  Widget _buildRateLimitBanner(
+    BuildContext context,
+    MeetingsProvider provider,
+  ) {
     final l10n = AppLocalizations.of(context);
     final limit = provider.rateLimit;
     return Container(
@@ -232,7 +295,7 @@ class _MeetingCard extends StatelessWidget {
               color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 10,
               offset: const Offset(0, 4),
-            )
+            ),
           ],
         ),
         child: Column(
@@ -255,18 +318,15 @@ class _MeetingCard extends StatelessWidget {
                   ),
                 ),
                 if (isRecent)
-                  SBadge(
-                    label: l10n.live,
-                    variant: SBadgeVariant.success,
-                  ),
+                  SBadge(label: l10n.live, variant: SBadgeVariant.success),
               ],
             ),
-            
+
             Text(
               formatter.format(meeting.createdAt),
               style: AppTypography.caption.copyWith(color: scheme.hint),
             ),
-            
+
             Row(
               children: [
                 Icon(LucideIcons.users, size: 16, color: scheme.primary),

@@ -59,7 +59,11 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
     final filterService = sl.get<FilterService>();
 
     final weekFiltered = filterService.filterByWeek(
-      filterService.filterByDateRange(_prData.allPrs, _filter.startDate, _filter.endDate),
+      filterService.filterByDateRange(
+        _prData.allPrs,
+        _filter.startDate,
+        _filter.endDate,
+      ),
       _filter.weekFilter,
     );
 
@@ -70,7 +74,8 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   Widget build(BuildContext context) {
     return Consumer3<PrDataProvider, FilterProvider, LeaderboardProvider>(
       builder: (context, prData, filter, leaderboardProvider, _) {
-        if (prData.status == DataLoadingStatus.loading || leaderboardProvider.isLoading) {
+        if (prData.status == DataLoadingStatus.loading ||
+            leaderboardProvider.isLoading) {
           return const LoadingScreen();
         }
         if (prData.status == DataLoadingStatus.error) {
@@ -87,7 +92,8 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.xl),
             child: LeaderboardSection(entries: leaderboardProvider.leaderboard),
-          ),);
+          ),
+        );
       },
     );
   }

@@ -25,7 +25,8 @@ class ParticipantEntity {
       ParticipantEntity(
         displayName: json['displayName'] as String? ?? 'Unknown',
         email: json['email'] as String?,
-        joinTime: DateTime.tryParse(json['joinTime'] as String? ?? '') ??
+        joinTime:
+            DateTime.tryParse(json['joinTime'] as String? ?? '') ??
             DateTime.now(),
         leaveTime: json['leaveTime'] != null
             ? DateTime.tryParse(json['leaveTime'] as String)

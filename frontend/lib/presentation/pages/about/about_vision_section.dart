@@ -26,18 +26,12 @@ class AboutVisionSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         Text(
           l10n.aboutVisionP1,
-          style: AppTypography.body.copyWith(
-            height: 1.8,
-            color: scheme.body,
-          ),
+          style: AppTypography.body.copyWith(height: 1.8, color: scheme.body),
         ),
         const SizedBox(height: AppSpacing.md),
         Text(
           l10n.aboutVisionP2,
-          style: AppTypography.body.copyWith(
-            height: 1.8,
-            color: scheme.body,
-          ),
+          style: AppTypography.body.copyWith(height: 1.8, color: scheme.body),
         ),
         const SizedBox(height: AppSpacing.lg),
         Wrap(
@@ -45,7 +39,10 @@ class AboutVisionSection extends StatelessWidget {
           runSpacing: AppSpacing.md,
           children: [
             _AdvantageChip(emoji: '🎯', text: l10n.aboutVisionChipMena),
-            _AdvantageChip(emoji: '♻️', text: l10n.aboutVisionChipSustainability),
+            _AdvantageChip(
+              emoji: '♻️',
+              text: l10n.aboutVisionChipSustainability,
+            ),
             _AdvantageChip(emoji: '🤖', text: l10n.aboutVisionChipAi),
             _AdvantageChip(emoji: '📱', text: l10n.aboutVisionChipMobile),
           ],
@@ -60,10 +57,7 @@ class AboutVisionSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         Text(
           l10n.aboutSummaryBody,
-          style: AppTypography.body.copyWith(
-            height: 1.7,
-            color: scheme.body,
-          ),
+          style: AppTypography.body.copyWith(height: 1.7, color: scheme.body),
         ),
       ],
     );
@@ -88,9 +82,7 @@ class _AdvantageChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.primaryVariant,
         borderRadius: AppRadius.smAll,
-        border: Border.all(
-          color: scheme.primary.withValues(alpha: 0.15),
-        ),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.15)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

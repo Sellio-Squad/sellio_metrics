@@ -23,19 +23,38 @@ class AboutMeetingsSection extends StatelessWidget {
     final standupTime = DateTime(now.year, now.month, now.day, 10, 0);
     // Sprint Planning: Sunday, 11:00 AM
     final nextSunday = _getNextDayOfWeek(now, DateTime.sunday);
-    final planningTime = DateTime(nextSunday.year, nextSunday.month, nextSunday.day, 11, 0);
+    final planningTime = DateTime(
+      nextSunday.year,
+      nextSunday.month,
+      nextSunday.day,
+      11,
+      0,
+    );
     // Sprint Retrospective: Thursday, 3:00 PM
     final nextThursday = _getNextDayOfWeek(now, DateTime.thursday);
-    final retroTime = DateTime(nextThursday.year, nextThursday.month, nextThursday.day, 15, 0);
+    final retroTime = DateTime(
+      nextThursday.year,
+      nextThursday.month,
+      nextThursday.day,
+      15,
+      0,
+    );
     // Code Review Session: Tuesday, 2:00 PM
     final nextTuesday = _getNextDayOfWeek(now, DateTime.tuesday);
-    final reviewTime = DateTime(nextTuesday.year, nextTuesday.month, nextTuesday.day, 14, 0);
+    final reviewTime = DateTime(
+      nextTuesday.year,
+      nextTuesday.month,
+      nextTuesday.day,
+      14,
+      0,
+    );
 
     final meetings = [
       _MeetingInfo(
         title: l10n.meetingDailyStandup,
         description: l10n.meetingDailyStandupDesc,
-        dayTime: 'Mon–Fri, 10:00 AM', // Custom string since it spans multiple days
+        dayTime:
+            'Mon–Fri, 10:00 AM', // Custom string since it spans multiple days
         durationLabel: l10n.duration15Min,
         recurrenceLabel: l10n.meetingWeekly,
         icon: Icons.sync_alt,
@@ -81,10 +100,7 @@ class AboutMeetingsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AboutSectionHeader(
-          title: l10n.aboutMeetings,
-          icon: Icons.event_note,
-        ),
+        AboutSectionHeader(title: l10n.aboutMeetings, icon: Icons.event_note),
         const SizedBox(height: AppSpacing.lg),
         _MeetingTimeline(meetings: meetings),
       ],
@@ -125,22 +141,17 @@ class _MeetingTimeline extends StatelessWidget {
                 bottom: -AppSpacing.sm, // Connect down to the next dot
                 left: 15, // Centered in the 32px wide column
                 width: 2,
-                child: Container(
-                  color: context.colors.stroke,
-                ),
+                child: Container(color: context.colors.stroke),
               ),
-            
+
             // Content Row
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Timeline dot
-                SizedBox(
-                  width: 32,
-                  child: _TimelineDot(icon: meeting.icon),
-                ),
+                SizedBox(width: 32, child: _TimelineDot(icon: meeting.icon)),
                 const SizedBox(width: AppSpacing.md),
-                
+
                 // Meeting Details Card
                 Expanded(
                   child: Padding(
@@ -173,13 +184,7 @@ class _TimelineDot extends StatelessWidget {
         color: scheme.primaryVariant,
         shape: BoxShape.circle,
       ),
-      child: Center(
-        child: Icon(
-          icon,
-          size: 16,
-          color: scheme.primary,
-        ),
-      ),
+      child: Center(child: Icon(icon, size: 16, color: scheme.primary)),
     );
   }
 }
@@ -196,7 +201,8 @@ class _MeetingCard extends StatelessWidget {
       description: meeting.description,
       startTime: meeting.startTime,
       duration: meeting.duration,
-      location: '${l10n.locationGoogleMeet} - https://meet.google.com/naa-qwff-pbi',
+      location:
+          '${l10n.locationGoogleMeet} - https://meet.google.com/naa-qwff-pbi',
       recurrenceRule: meeting.recurrenceRule,
     );
 
@@ -231,7 +237,9 @@ class _MeetingCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       meeting.title,
-                      style: AppTypography.subtitle.copyWith(color: scheme.title),
+                      style: AppTypography.subtitle.copyWith(
+                        color: scheme.title,
+                      ),
                     ),
                   ),
                   if (!isCompact)
@@ -253,7 +261,10 @@ class _MeetingCard extends StatelessWidget {
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   _InfoChip(icon: Icons.schedule, text: meeting.dayTime),
-                  _InfoChip(icon: Icons.timer_outlined, text: meeting.durationLabel),
+                  _InfoChip(
+                    icon: Icons.timer_outlined,
+                    text: meeting.durationLabel,
+                  ),
                   _InfoChip(icon: Icons.link, text: l10n.locationGoogleMeet),
                   if (isCompact)
                     SBadge(
@@ -330,10 +341,7 @@ class _InfoChip extends StatelessWidget {
       children: [
         Icon(icon, size: 14, color: scheme.hint),
         const SizedBox(width: 4),
-        Text(
-          text,
-          style: AppTypography.caption.copyWith(color: scheme.hint),
-        ),
+        Text(text, style: AppTypography.caption.copyWith(color: scheme.hint)),
       ],
     );
   }

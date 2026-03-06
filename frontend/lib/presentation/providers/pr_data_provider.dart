@@ -8,7 +8,7 @@ class PrDataProvider extends ChangeNotifier {
   final MetricsRepository _repository;
 
   PrDataProvider({required MetricsRepository repository})
-      : _repository = repository;
+    : _repository = repository;
 
   DataLoadingStatus _status = DataLoadingStatus.loading;
   List<PrEntity> _allPrs = [];
@@ -28,8 +28,10 @@ class PrDataProvider extends ChangeNotifier {
     if (repos.isEmpty) return;
 
     if (_currentRepos.length == repos.length &&
-        _currentRepos.every((r1) => repos.any((r2) => r1.fullName == r2.fullName))) {
-      return; 
+        _currentRepos.every(
+          (r1) => repos.any((r2) => r1.fullName == r2.fullName),
+        )) {
+      return;
     }
 
     await loadData(repos: repos);

@@ -135,11 +135,7 @@ class _GitHubRateLimitBannerState extends State<GitHubRateLimitBanner> {
           children: [
             Row(
               children: [
-                Icon(
-                  Icons.speed_outlined,
-                  size: 18,
-                  color: barColor,
-                ),
+                Icon(Icons.speed_outlined, size: 18, color: barColor),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   'GitHub API rate limit',
@@ -177,4 +173,3 @@ class _GitHubRateLimitBannerState extends State<GitHubRateLimitBanner> {
     );
   }
 }
-

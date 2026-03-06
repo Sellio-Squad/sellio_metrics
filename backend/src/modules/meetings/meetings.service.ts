@@ -57,6 +57,10 @@ export class MeetingsService {
         return this.meetClient.isReady();
     }
 
+    clearCredentials(): void {
+        this.meetClient.clearCredentials();
+    }
+
     // ─── Create ─────────────────────────────────────────────
 
     async createMeeting(title: string): Promise<MeetingSpace> {
@@ -140,6 +144,16 @@ export class MeetingsService {
             participantCount: participants.length,
             participants,
         };
+    }
+
+    async endMeeting(id: string): Promise<void> {
+        const meeting = this.meetings.get(id);
+        if (!meeting) {
+            throw new Error(`Meeting not found: ${id}`);
+        }
+
+        await this.meetClient.endSpace(meeting.spaceName);
+        this.logger.info({ id, spaceName: meeting.spaceName }, "Ended meeting");
     }
 
     // ─── Attendance ─────────────────────────────────────────

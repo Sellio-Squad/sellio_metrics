@@ -23,6 +23,8 @@
 | **TypeScript 5.7** | Type-safe throughout |
 | **@octokit/rest** | GitHub REST API client |
 | **@octokit/auth-app** | GitHub App JWT → access token auth |
+| **@google-apps/meet**| Google Meet REST API client |
+| **google-auth-library**| Google OAuth2 user consent flow |
 | **Awilix** | Dependency injection (PROXY mode) |
 | **Pino** | Structured JSON logging |
 | **@fastify/rate-limit** | Request rate limiting |
@@ -118,6 +120,11 @@ APP_ID=123456
 INSTALLATION_ID=12345678
 GITHUB_ORG=Sellio-Squad
 PORT=3001
+
+# Google OAuth2 Credentials for Google Meet Integration
+GOOGLE_CLIENT_ID=your_oauth2_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_oauth2_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3001/api/meetings/oauth2callback
 ```
 
 > You do **not** need to set `APP_PRIVATE_KEY` — the server reads `private-key.pem` automatically.
@@ -178,6 +185,20 @@ curl http://localhost:3001/api/repos
 }
 ```
 > **Cached** for 5 minutes per organization.
+
+---
+
+### `GET /api/meetings/auth-url`
+Retrieves the Google OAuth2 consent screen URL for authenticating Google Meet access.
+
+### `POST /api/meetings/auth-logout`
+Clears the active Google Meet OAuth2 session context.
+
+### `POST /api/meetings`
+Creates a new Google Meet space. Requires prior authentication via `/auth-url` and `/oauth2callback`.
+
+### `POST /api/meetings/:id/end`
+Ends the active Google Meet session and kicks out all participants.
 
 ---
 
@@ -304,6 +325,9 @@ If `keyHasNewlines` is `false` or `keyLineCount` is `1`, the key was not read co
 | `PRIVATE_KEY_PATH` | ❌ | `./private-key.pem` | Custom path to private key |
 | `GITHUB_ORG` | ❌ | `Sellio-Squad` | Organization slug |
 | `PORT` | ❌ | `3001` | HTTP server port |
+| `GOOGLE_CLIENT_ID` | ✅ | — | Google OAuth2 Client ID |
+| `GOOGLE_CLIENT_SECRET`| ✅ | — | Google OAuth2 Client Secret |
+| `GOOGLE_REDIRECT_URI` | ✅ | — | Google OAuth2 Redirect URI (`/api/meetings/oauth2callback`) |
 | `LOG_LEVEL` | ❌ | `info` | `trace` `debug` `info` `warn` `error` |
 | `REQUIRED_APPROVALS` | ❌ | `2` | Approvals needed for "approved" status |
 | `RATE_LIMIT_MAX` | ❌ | `100` | Max requests per window |

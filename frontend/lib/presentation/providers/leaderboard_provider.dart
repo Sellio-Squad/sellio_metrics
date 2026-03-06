@@ -7,7 +7,7 @@ class LeaderboardProvider extends ChangeNotifier {
   final MetricsRepository _repository;
 
   LeaderboardProvider({required MetricsRepository repository})
-      : _repository = repository;
+    : _repository = repository;
 
   List<LeaderboardEntry> _leaderboard = [];
   bool _isLoading = false;
