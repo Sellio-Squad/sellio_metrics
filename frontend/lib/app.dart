@@ -6,8 +6,12 @@ import 'package:provider/provider.dart';
 import 'design_system/design_system.dart' show SellioThemes;
 import 'core/l10n/app_localizations.dart';
 import 'core/di/service_locator.dart';
-import 'presentation/providers/dashboard_provider.dart';
 import 'presentation/providers/app_settings_provider.dart';
+import 'presentation/providers/pr_data_provider.dart';
+import 'presentation/providers/filter_provider.dart';
+import 'presentation/providers/analytics_provider.dart';
+import 'presentation/providers/leaderboard_provider.dart';
+import 'presentation/providers/member_provider.dart';
 import 'presentation/pages/dashboard_page.dart';
 
 class SellioMetricsApp extends StatelessWidget {
@@ -18,7 +22,11 @@ class SellioMetricsApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => sl.get<AppSettingsProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<DashboardProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<PrDataProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<FilterProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<AnalyticsProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<LeaderboardProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<MemberProvider>()),
       ],
       child: Consumer<AppSettingsProvider>(
         builder: (context, settings, _) {
@@ -67,26 +75,22 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
 
   Future<void> _initializeData() async {
     final settings = context.read<AppSettingsProvider>();
-    final dashboard = context.read<DashboardProvider>();
+    final prData = context.read<PrDataProvider>();
     await settings.loadRepositories();
 
     if (settings.selectedRepos.isEmpty) {
-      dashboard.setError('No repositories available. Check your network connection.');
+      prData.setError('No repositories available. Check your network connection.');
       return;
     }
 
-    dashboard.loadData(repos: settings.selectedRepos);
+    prData.loadData(repos: settings.selectedRepos);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Consumer<DashboardProvider>(
-      builder: (context, provider, _) {
-        return const AnimatedSwitcher(
-          duration: Duration(milliseconds: 300),
-          child: DashboardPage(),
-        );
-      },
+    return const AnimatedSwitcher(
+      duration: Duration(milliseconds: 300),
+      child: DashboardPage(),
     );
   }
 }

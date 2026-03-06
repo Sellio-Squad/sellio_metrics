@@ -5,7 +5,11 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../design_system/components/s_avatar.dart';
 import '../../providers/app_settings_provider.dart';
-import '../../providers/dashboard_provider.dart';
+import '../../providers/pr_data_provider.dart';
+import '../../providers/filter_provider.dart';
+import '../../providers/member_provider.dart';
+import '../../../domain/services/filter_service.dart';
+import '../../../core/di/service_locator.dart';
 import '../../../domain/entities/member_status_entity.dart';
 import 'package:intl/intl.dart';
 import '../../widgets/common/loading_screen.dart';
@@ -19,36 +23,68 @@ class MembersPage extends StatefulWidget {
 }
 
 class _MembersPageState extends State<MembersPage> {
+  late PrDataProvider _prData;
+  late FilterProvider _filter;
+
   @override
   void initState() {
     super.initState();
+    _prData = context.read<PrDataProvider>();
+    _filter = context.read<FilterProvider>();
+
+    _prData.addListener(_onDataChanged);
+    _filter.addListener(_onDataChanged);
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final settings = context.read<AppSettingsProvider>();
-      final dashboard = context.read<DashboardProvider>();
-      dashboard.ensureDataLoaded(settings.selectedRepos);
+      if (_prData.allPrs.isEmpty) {
+        _prData.ensureDataLoaded(settings.selectedRepos);
+      } else {
+        _onDataChanged();
+      }
     });
   }
 
   @override
+  void dispose() {
+    _prData.removeListener(_onDataChanged);
+    _filter.removeListener(_onDataChanged);
+    super.dispose();
+  }
+
+  void _onDataChanged() {
+    if (!mounted) return;
+    if (_prData.status != DataLoadingStatus.loaded) return;
+
+    final memberProvider = context.read<MemberProvider>();
+    final filterService = sl.get<FilterService>();
+
+    final weekFiltered = filterService.filterByWeek(
+      filterService.filterByDateRange(_prData.allPrs, _filter.startDate, _filter.endDate),
+      _filter.weekFilter,
+    );
+
+    memberProvider.fetchStatuses(weekFiltered);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Consumer<DashboardProvider>(
-      builder: (context, provider, _) {
-        final members = provider.memberStatuses;
-        
-        if (provider.status == DashboardStatus.loading && members.isEmpty) {
+    return Consumer3<PrDataProvider, FilterProvider, MemberProvider>(
+      builder: (context, prData, filter, memberProvider, _) {
+        if (prData.status == DataLoadingStatus.loading || memberProvider.isLoading) {
           return const LoadingScreen();
         }
-        if (provider.status == DashboardStatus.error && members.isEmpty) {
+        if (prData.status == DataLoadingStatus.error && memberProvider.memberStatuses.isEmpty) {
           return ErrorScreen(
             onRetry: () {
               final settings = context.read<AppSettingsProvider>();
-              provider.loadData(repos: settings.selectedRepos);
+              prData.loadData(repos: settings.selectedRepos);
             },
           );
         }
 
-        if (members.isEmpty) {
+        if (memberProvider.memberStatuses.isEmpty) {
           final l10n = AppLocalizations.of(context);
           return Center(
             child: Text(
@@ -78,7 +114,7 @@ class _MembersPageState extends State<MembersPage> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  ...members.map((m) => _MemberRow(member: m)),
+                  ...memberProvider.memberStatuses.map((m) => _MemberRow(member: m)),
                 ],
               ),
             ),
