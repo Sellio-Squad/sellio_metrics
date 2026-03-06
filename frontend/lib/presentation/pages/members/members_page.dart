@@ -61,7 +61,11 @@ class _MembersPageState extends State<MembersPage> {
     final filterService = sl.get<FilterService>();
 
     final weekFiltered = filterService.filterByWeek(
-      filterService.filterByDateRange(_prData.allPrs, _filter.startDate, _filter.endDate),
+      filterService.filterByDateRange(
+        _prData.allPrs,
+        _filter.startDate,
+        _filter.endDate,
+      ),
       _filter.weekFilter,
     );
 
@@ -72,10 +76,12 @@ class _MembersPageState extends State<MembersPage> {
   Widget build(BuildContext context) {
     return Consumer3<PrDataProvider, FilterProvider, MemberProvider>(
       builder: (context, prData, filter, memberProvider, _) {
-        if (prData.status == DataLoadingStatus.loading || memberProvider.isLoading) {
+        if (prData.status == DataLoadingStatus.loading ||
+            memberProvider.isLoading) {
           return const LoadingScreen();
         }
-        if (prData.status == DataLoadingStatus.error && memberProvider.memberStatuses.isEmpty) {
+        if (prData.status == DataLoadingStatus.error &&
+            memberProvider.memberStatuses.isEmpty) {
           return ErrorScreen(
             onRetry: () {
               final settings = context.read<AppSettingsProvider>();
@@ -114,7 +120,9 @@ class _MembersPageState extends State<MembersPage> {
                     ),
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  ...memberProvider.memberStatuses.map((m) => _MemberRow(member: m)),
+                  ...memberProvider.memberStatuses.map(
+                    (m) => _MemberRow(member: m),
+                  ),
                 ],
               ),
             ),
@@ -133,7 +141,7 @@ class _MemberRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    
+
     // Format date if present
     String dateStr = '';
     if (member.lastActiveDate != null) {
@@ -157,7 +165,9 @@ class _MemberRow extends StatelessWidget {
             children: [
               SAvatar(
                 name: member.developer,
-                imageUrl: member.avatarUrl?.isNotEmpty == true ? member.avatarUrl : null,
+                imageUrl: member.avatarUrl?.isNotEmpty == true
+                    ? member.avatarUrl
+                    : null,
                 size: SAvatarSize.medium,
               ),
               const SizedBox(width: AppSpacing.md),
@@ -175,9 +185,7 @@ class _MemberRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       dateStr,
-                      style: AppTypography.caption.copyWith(
-                        color: scheme.hint,
-                      ),
+                      style: AppTypography.caption.copyWith(color: scheme.hint),
                     ),
                   ],
                 ),
@@ -188,7 +196,9 @@ class _MemberRow extends StatelessWidget {
                   vertical: AppSpacing.xs,
                 ),
                 decoration: BoxDecoration(
-                  color: member.isActive ? scheme.primaryVariant : Colors.grey.withValues(alpha: 0.2),
+                  color: member.isActive
+                      ? scheme.primaryVariant
+                      : Colors.grey.withValues(alpha: 0.2),
                   borderRadius: AppRadius.smAll,
                 ),
                 child: Text(

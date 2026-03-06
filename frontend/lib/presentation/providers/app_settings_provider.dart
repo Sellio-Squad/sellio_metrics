@@ -15,7 +15,7 @@ class AppSettingsProvider extends ChangeNotifier {
   bool _isLoadingRepos = false;
 
   AppSettingsProvider({required MetricsRepository repository})
-      : _repository = repository;
+    : _repository = repository;
 
   // ─── Getters ─────────────────────────────────────────────
   ThemeMode get themeMode => _themeMode;
@@ -28,8 +28,9 @@ class AppSettingsProvider extends ChangeNotifier {
 
   // ─── Theme ───────────────────────────────────────────────
   void toggleTheme() {
-    _themeMode =
-        _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    _themeMode = _themeMode == ThemeMode.dark
+        ? ThemeMode.light
+        : ThemeMode.dark;
     notifyListeners();
   }
 
@@ -60,7 +61,7 @@ class AppSettingsProvider extends ChangeNotifier {
       _availableRepos = await _repository.getRepositories();
 
       if (_selectedRepos.isEmpty && _availableRepos.isNotEmpty) {
-        _selectedRepos =_availableRepos ;
+        _selectedRepos = _availableRepos;
       }
     } catch (e) {
       debugPrint('Error loading repositories: $e');
@@ -72,7 +73,9 @@ class AppSettingsProvider extends ChangeNotifier {
 
   void toggleRepoSelection(RepoInfo repo) {
     if (_selectedRepos.any((r) => r.fullName == repo.fullName)) {
-      _selectedRepos = _selectedRepos.where((r) => r.fullName != repo.fullName).toList();
+      _selectedRepos = _selectedRepos
+          .where((r) => r.fullName != repo.fullName)
+          .toList();
     } else {
       _selectedRepos = [..._selectedRepos, repo];
     }

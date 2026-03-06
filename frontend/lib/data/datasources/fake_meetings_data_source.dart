@@ -14,7 +14,9 @@ class FakeMeetingsDataSource implements MeetingsDataSource {
       'spaceName': 'spaces/abc',
       'meetingUri': 'https://meet.google.com/abc-defg-hij',
       'meetingCode': 'abc-defg-hij',
-      'createdAt': DateTime.now().subtract(const Duration(hours: 24)).toIso8601String(),
+      'createdAt': DateTime.now()
+          .subtract(const Duration(hours: 24))
+          .toIso8601String(),
       'participantCount': 5,
     },
     {
@@ -64,7 +66,9 @@ class FakeMeetingsDataSource implements MeetingsDataSource {
         {
           'displayName': 'Alice Smith',
           'email': 'alice@example.com',
-          'joinTime': DateTime.now().subtract(const Duration(minutes: 45)).toIso8601String(),
+          'joinTime': DateTime.now()
+              .subtract(const Duration(minutes: 45))
+              .toIso8601String(),
           'leaveTime': null,
           'durationMinutes': 45,
           'attendanceScore': 100,
@@ -72,8 +76,12 @@ class FakeMeetingsDataSource implements MeetingsDataSource {
         {
           'displayName': 'Bob Jones',
           'email': 'bob@example.com',
-          'joinTime': DateTime.now().subtract(const Duration(minutes: 50)).toIso8601String(),
-          'leaveTime': DateTime.now().subtract(const Duration(minutes: 10)).toIso8601String(),
+          'joinTime': DateTime.now()
+              .subtract(const Duration(minutes: 50))
+              .toIso8601String(),
+          'leaveTime': DateTime.now()
+              .subtract(const Duration(minutes: 10))
+              .toIso8601String(),
           'durationMinutes': 40,
           'attendanceScore': 85,
         },
@@ -87,14 +95,20 @@ class FakeMeetingsDataSource implements MeetingsDataSource {
     return {
       'meetingId': meetingId,
       'meetingTitle': 'Daily Standup',
-      'meetingDate': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+      'meetingDate': DateTime.now()
+          .subtract(const Duration(days: 1))
+          .toIso8601String(),
       'totalDurationMinutes': 60,
       'participants': [
         {
           'displayName': 'Alice Smith',
           'email': 'alice@example.com',
-          'joinTime': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
-          'leaveTime': DateTime.now().subtract(const Duration(minutes: 15)).toIso8601String(),
+          'joinTime': DateTime.now()
+              .subtract(const Duration(hours: 1))
+              .toIso8601String(),
+          'leaveTime': DateTime.now()
+              .subtract(const Duration(minutes: 15))
+              .toIso8601String(),
           'durationMinutes': 45,
           'attendanceScore': 95,
         },
@@ -139,8 +153,32 @@ class FakeMeetingsDataSource implements MeetingsDataSource {
     return {
       'remaining': 58,
       'limit': 60,
-      'resetAt': DateTime.now().add(const Duration(seconds: 45)).toIso8601String(),
+      'resetAt': DateTime.now()
+          .add(const Duration(seconds: 45))
+          .toIso8601String(),
       'isLow': false,
     };
+  }
+
+  @override
+  Future<bool> fetchAuthStatus() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return true; // Fake data always authorized
+  }
+
+  @override
+  Future<String?> fetchAuthUrl() async {
+    return 'https://fake-auth-url.com';
+  }
+
+  @override
+  Future<void> logout() async {
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
+
+  @override
+  Future<void> endMeeting(String id) async {
+    await Future.delayed(const Duration(milliseconds: 800));
+    _meetings.removeWhere((m) => m['id'] == id);
   }
 }

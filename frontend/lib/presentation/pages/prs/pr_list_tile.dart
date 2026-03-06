@@ -47,7 +47,12 @@ class _PrListTileState extends State<PrListTile> {
           margin: const EdgeInsets.only(bottom: AppSpacing.sm),
           padding: const EdgeInsets.all(AppSpacing.lg),
           transform: _isHovered
-              ? (Matrix4.identity()..scaleByDouble(AnimationConstants.hoverScale, AnimationConstants.hoverScale, 1.0, 1.0))
+              ? (Matrix4.identity()..scaleByDouble(
+                  AnimationConstants.hoverScale,
+                  AnimationConstants.hoverScale,
+                  1.0,
+                  1.0,
+                ))
               : Matrix4.identity(),
           decoration: BoxDecoration(
             color: scheme.surfaceLow,
@@ -59,12 +64,12 @@ class _PrListTileState extends State<PrListTile> {
             ),
             boxShadow: _isHovered
                 ? [
-              BoxShadow(
-                color: scheme.primary.withValues(alpha: 0.08),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ]
+                    BoxShadow(
+                      color: scheme.primary.withValues(alpha: 0.08),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ]
                 : [],
           ),
           child: Column(
@@ -75,7 +80,9 @@ class _PrListTileState extends State<PrListTile> {
                 children: [
                   SAvatar(
                     name: pr.creator.login,
-                    imageUrl: pr.creator.avatarUrl.isNotEmpty ? pr.creator.avatarUrl : null,
+                    imageUrl: pr.creator.avatarUrl.isNotEmpty
+                        ? pr.creator.avatarUrl
+                        : null,
                     size: SAvatarSize.small,
                   ),
                   const SizedBox(width: AppSpacing.md),
@@ -100,29 +107,37 @@ class _PrListTileState extends State<PrListTile> {
                             _InfoChip(text: '#${pr.prNumber}'),
                             if (pr.repoName.isNotEmpty)
                               _InfoChip(
-                                  text: pr.repoName, icon: Icons.source_outlined),
+                                text: pr.repoName,
+                                icon: Icons.source_outlined,
+                              ),
                             _InfoChip(
-                                text: pr.creator.login, icon: Icons.person_outline),
+                              text: pr.creator.login,
+                              icon: Icons.person_outline,
+                            ),
                             _InfoChip(
-                                text: formatRelativeTime(pr.openedAt),
-                                icon: Icons.schedule),
+                              text: formatRelativeTime(pr.openedAt),
+                              icon: Icons.schedule,
+                            ),
                             _DiffStatsChip(
                               additions: pr.diffStats.additions,
                               deletions: pr.diffStats.deletions,
                               changedFiles: pr.diffStats.changedFiles,
                             ),
                             _InfoChip(
-                              text: '${pr.approvals.length} / ${pr.requiredApprovals} approvals',
+                              text:
+                                  '${pr.approvals.length} / ${pr.requiredApprovals} approvals',
                               icon: Icons.check_circle_outline,
                             ),
                             if (pr.firstApprovedAt != null)
                               _InfoChip(
-                                text: '1st approval ${formatRelativeTime(pr.firstApprovedAt!)}',
+                                text:
+                                    '1st approval ${formatRelativeTime(pr.firstApprovedAt!)}',
                                 icon: Icons.thumb_up_alt_outlined,
                               ),
                             if (pr.requiredApprovalsMetAt != null)
                               _InfoChip(
-                                text: 'All approvals ${formatRelativeTime(pr.requiredApprovalsMetAt!)}',
+                                text:
+                                    'All approvals ${formatRelativeTime(pr.requiredApprovalsMetAt!)}',
                                 icon: Icons.done_all_outlined,
                               ),
                           ],
@@ -302,10 +317,7 @@ class _PrExpandedDetails extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _ParticipantsRow(
-                    label: 'Assignees',
-                    users: pr.assignees,
-                  ),
+                  _ParticipantsRow(label: 'Assignees', users: pr.assignees),
                   const SizedBox(height: AppSpacing.sm),
                   _ParticipantsRow(
                     label: 'Approvers',
@@ -333,13 +345,16 @@ class _PrExpandedDetails extends StatelessWidget {
                   _MetricRow(
                     icon: Icons.access_time,
                     label: 'Time to 1st Approval',
-                    value: formatDetailedDuration(pr.timeToFirstApprovalMinutes),
+                    value: formatDetailedDuration(
+                      pr.timeToFirstApprovalMinutes,
+                    ),
                   ),
                   _MetricRow(
                     icon: Icons.timelapse_outlined,
                     label: '1st → 2nd Approval',
-                    value:
-                        formatDetailedDuration(_timeFirstToSecondApprovalMinutes(pr)),
+                    value: formatDetailedDuration(
+                      _timeFirstToSecondApprovalMinutes(pr),
+                    ),
                   ),
                   _MetricRow(
                     icon: Icons.merge_type_outlined,
@@ -362,9 +377,8 @@ class _PrExpandedDetails extends StatelessWidget {
 
   double? _timeFirstToSecondApprovalMinutes(PrEntity pr) {
     if (pr.approvals.length < 2) return null;
-    final approvals = [...pr.approvals]..sort(
-          (a, b) => a.submittedAt.compareTo(b.submittedAt),
-    );
+    final approvals = [...pr.approvals]
+      ..sort((a, b) => a.submittedAt.compareTo(b.submittedAt));
     final first = approvals.first.submittedAt;
     final second = approvals[1].submittedAt;
     return second.difference(first).inMinutes.toDouble();
@@ -397,11 +411,7 @@ class _DetailsGroup extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
-              icon,
-              size: 16,
-              color: scheme.hint,
-            ),
+            Icon(icon, size: 16, color: scheme.hint),
             const SizedBox(width: AppSpacing.xs),
             Text(
               title,
@@ -433,10 +443,7 @@ class _ParticipantsRow extends StatelessWidget {
     if (users.isEmpty) {
       return Text(
         '$label: No entries yet.',
-        style: AppTypography.caption.copyWith(
-          color: scheme.hint,
-          fontSize: 11,
-        ),
+        style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 11),
       );
     }
 
@@ -457,24 +464,24 @@ class _ParticipantsRow extends StatelessWidget {
           children: users
               .map(
                 (u) => Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SAvatar(
-                  name: u.login,
-                  imageUrl: u.avatarUrl.isNotEmpty ? u.avatarUrl : null,
-                  size: SAvatarSize.small,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SAvatar(
+                      name: u.login,
+                      imageUrl: u.avatarUrl.isNotEmpty ? u.avatarUrl : null,
+                      size: SAvatarSize.small,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      u.login,
+                      style: AppTypography.caption.copyWith(
+                        color: scheme.body,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 4),
-                Text(
-                  u.login,
-                  style: AppTypography.caption.copyWith(
-                    color: scheme.body,
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          )
+              )
               .toList(),
         ),
       ],
@@ -501,11 +508,7 @@ class _MetricRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Row(
         children: [
-          Icon(
-            icon,
-            size: 14,
-            color: scheme.hint,
-          ),
+          Icon(icon, size: 14, color: scheme.hint),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
             child: Text(
@@ -549,7 +552,9 @@ class _PrTimelineSummary extends StatelessWidget {
     }
 
     if (pr.requiredApprovalsMetAt != null) {
-      parts.add('All approvals ${formatRelativeTime(pr.requiredApprovalsMetAt!)}');
+      parts.add(
+        'All approvals ${formatRelativeTime(pr.requiredApprovalsMetAt!)}',
+      );
     }
 
     if (pr.mergedAt != null) {
@@ -562,10 +567,7 @@ class _PrTimelineSummary extends StatelessWidget {
 
     return Text(
       text,
-      style: AppTypography.caption.copyWith(
-        color: scheme.hint,
-        fontSize: 11,
-      ),
+      style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 11),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
     );

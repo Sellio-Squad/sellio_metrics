@@ -24,7 +24,8 @@ class IcsGenerator {
     final dtStamp = '${format.format(now)}Z';
 
     // Unique ID for the event based on timestamp and name
-    final uid = '${now.millisecondsSinceEpoch}-${title.replaceAll(' ', '')}@sellio.sqaud';
+    final uid =
+        '${now.millisecondsSinceEpoch}-${title.replaceAll(' ', '')}@sellio.sqaud';
 
     final buffer = StringBuffer();
     buffer.writeln('BEGIN:VCALENDAR');
@@ -44,7 +45,7 @@ class IcsGenerator {
     if (location != null) {
       buffer.writeln('LOCATION:${_escapeText(location)}');
     }
-    
+
     if (recurrenceRule != null) {
       buffer.writeln('RRULE:$recurrenceRule');
     }

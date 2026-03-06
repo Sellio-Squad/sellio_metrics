@@ -13,16 +13,16 @@ enum SButtonVariant { primary, ghost, outline }
 enum SButtonSize { small, medium, large }
 
 HuxButtonVariant _toHuxVariant(SButtonVariant v) => switch (v) {
-      SButtonVariant.primary => HuxButtonVariant.primary,
-      SButtonVariant.ghost => HuxButtonVariant.ghost,
-      SButtonVariant.outline => HuxButtonVariant.outline,
-    };
+  SButtonVariant.primary => HuxButtonVariant.primary,
+  SButtonVariant.ghost => HuxButtonVariant.ghost,
+  SButtonVariant.outline => HuxButtonVariant.outline,
+};
 
 HuxButtonSize _toHuxSize(SButtonSize s) => switch (s) {
-      SButtonSize.small => HuxButtonSize.small,
-      SButtonSize.medium => HuxButtonSize.medium,
-      SButtonSize.large => HuxButtonSize.large,
-    };
+  SButtonSize.small => HuxButtonSize.small,
+  SButtonSize.medium => HuxButtonSize.medium,
+  SButtonSize.large => HuxButtonSize.large,
+};
 
 /// Sellio button component.
 class SButton extends HuxButton {
@@ -32,8 +32,5 @@ class SButton extends HuxButton {
     super.onPressed,
     SButtonVariant variant = SButtonVariant.primary,
     SButtonSize size = SButtonSize.medium,
-  }) : super(
-          variant: _toHuxVariant(variant),
-          size: _toHuxSize(size),
-        );
+  }) : super(variant: _toHuxVariant(variant), size: _toHuxSize(size));
 }

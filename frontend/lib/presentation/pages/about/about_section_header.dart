@@ -24,10 +24,7 @@ class AboutSectionHeader extends StatelessWidget {
       children: [
         Icon(icon, size: 20, color: scheme.primary),
         const SizedBox(width: AppSpacing.sm),
-        Text(
-          title,
-          style: AppTypography.title.copyWith(color: scheme.title),
-        ),
+        Text(title, style: AppTypography.title.copyWith(color: scheme.title)),
       ],
     );
   }

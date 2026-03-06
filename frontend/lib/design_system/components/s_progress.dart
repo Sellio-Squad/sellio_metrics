@@ -10,10 +10,10 @@ import 'package:hux/hux.dart';
 enum SProgressSize { small, medium, large }
 
 HuxProgressSize _toHux(SProgressSize s) => switch (s) {
-      SProgressSize.small => HuxProgressSize.small,
-      SProgressSize.medium => HuxProgressSize.medium,
-      SProgressSize.large => HuxProgressSize.large,
-    };
+  SProgressSize.small => HuxProgressSize.small,
+  SProgressSize.medium => HuxProgressSize.medium,
+  SProgressSize.large => HuxProgressSize.large,
+};
 
 /// Sellio progress bar component.
 class SProgress extends HuxProgress {

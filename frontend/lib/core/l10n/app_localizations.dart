@@ -17,10 +17,7 @@ class AppLocalizations {
   static const LocalizationsDelegate<AppLocalizations> delegate =
       _AppLocalizationsDelegate();
 
-  static const List<Locale> supportedLocales = [
-    Locale('en'),
-    Locale('ar'),
-  ];
+  static const List<Locale> supportedLocales = [Locale('en'), Locale('ar')];
 
   String get languageCode => locale.languageCode;
   bool get isArabic => locale.languageCode == 'ar';
@@ -182,7 +179,8 @@ class AppLocalizations {
   String get aboutVisionP1 => _t('aboutVisionP1');
   String get aboutVisionP2 => _t('aboutVisionP2');
   String get aboutVisionChipMena => _t('aboutVisionChipMena');
-  String get aboutVisionChipSustainability => _t('aboutVisionChipSustainability');
+  String get aboutVisionChipSustainability =>
+      _t('aboutVisionChipSustainability');
   String get aboutVisionChipAi => _t('aboutVisionChipAi');
   String get aboutVisionChipMobile => _t('aboutVisionChipMobile');
   String get aboutSummaryBody => _t('aboutSummaryBody');
@@ -368,7 +366,8 @@ class AppLocalizations {
     'aboutTechStack': 'Tech Stack',
     'tooltipKpi': 'Key performance indicators computed from your PR data',
     'tooltipBottleneck': 'PRs stuck in review longer than the threshold',
-    'tooltipLeaderboard': 'Scored by: PRs created ×3, merged ×2, reviews ×2, comments ×1',
+    'tooltipLeaderboard':
+        'Scored by: PRs created ×3, merged ×2, reviews ×2, comments ×1',
     'tooltipChart': 'Click on a segment for details',
     'filterCurrentSprint': 'Current Sprint',
     'aboutHowToJoin': 'How to Join Us',
@@ -475,9 +474,11 @@ class AppLocalizations {
     'meetingDailyStandup': 'Daily Standup',
     'meetingDailyStandupDesc': 'Quick sync on blockers and progress.',
     'meetingSprintPlanning': 'Sprint Planning',
-    'meetingSprintPlanningDesc': 'Plan out the tasks and goals for the next sprint.',
+    'meetingSprintPlanningDesc':
+        'Plan out the tasks and goals for the next sprint.',
     'meetingRetrospective': 'Sprint Retrospective',
-    'meetingRetrospectiveDesc': 'Review what went well and what we can improve.',
+    'meetingRetrospectiveDesc':
+        'Review what went well and what we can improve.',
     'meetingCodeReview': 'Code Review Session',
     'meetingCodeReviewDesc': 'Pair programming and deep-dive code reviews.',
     'duration15Min': '15 min',
@@ -760,7 +761,8 @@ class AppLocalizations {
     'obsRecentErrors': 'أخطاء حديثة',
     'obsLiveFeed': 'بث الواجهات المباشر',
     'obsRecords': 'سجلات',
-    'obsNoData': 'لم يتم تسجيل أي استدعاءات حتى الآن. قم ببعض الطلبات لرؤية البيانات.',
+    'obsNoData':
+        'لم يتم تسجيل أي استدعاءات حتى الآن. قم ببعض الطلبات لرؤية البيانات.',
     'obsLoadMore': 'تحميل المزيد',
     'obsRateLimits': 'حدود الاستخدام',
     'obsCallsPerMin': 'استدعاء/دقيقة',
@@ -809,8 +811,7 @@ class _AppLocalizationsDelegate
   const _AppLocalizationsDelegate();
 
   @override
-  bool isSupported(Locale locale) =>
-      ['en', 'ar'].contains(locale.languageCode);
+  bool isSupported(Locale locale) => ['en', 'ar'].contains(locale.languageCode);
 
   @override
   Future<AppLocalizations> load(Locale locale) async =>

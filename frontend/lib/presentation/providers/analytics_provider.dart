@@ -13,8 +13,8 @@ class AnalyticsProvider extends ChangeNotifier {
   AnalyticsProvider({
     required KpiService kpiService,
     required BottleneckService bottleneckService,
-  })  : _kpiService = kpiService,
-        _bottleneckService = bottleneckService;
+  }) : _kpiService = kpiService,
+       _bottleneckService = bottleneckService;
 
   KpiEntity calculateKpis(List<PrEntity> sourcePrs, {String? developerFilter}) {
     return _kpiService.calculateKpis(
@@ -23,14 +23,20 @@ class AnalyticsProvider extends ChangeNotifier {
     );
   }
 
-  SpotlightEntity calculateSpotlightMetrics(List<PrEntity> sourcePrs, {String? developerFilter}) {
+  SpotlightEntity calculateSpotlightMetrics(
+    List<PrEntity> sourcePrs, {
+    String? developerFilter,
+  }) {
     return _kpiService.calculateSpotlightMetrics(
       sourcePrs,
       developerFilter: developerFilter ?? FilterOptions.all,
     );
   }
 
-  List<BottleneckEntity> identifyBottlenecks(List<PrEntity> sourcePrs, {required double thresholdHours}) {
+  List<BottleneckEntity> identifyBottlenecks(
+    List<PrEntity> sourcePrs, {
+    required double thresholdHours,
+  }) {
     return _bottleneckService.identifyBottlenecks(
       sourcePrs,
       thresholdHours: thresholdHours,

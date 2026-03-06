@@ -14,7 +14,7 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
   final MeetingsDataSource _dataSource;
 
   MeetingsRepositoryImpl({required MeetingsDataSource dataSource})
-      : _dataSource = dataSource;
+    : _dataSource = dataSource;
 
   @override
   Future<MeetingEntity> createMeeting(String title) async {
@@ -67,5 +67,25 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
   Future<RateLimitEntity> getRateLimitStatus() async {
     final json = await _dataSource.fetchRateLimitStatus();
     return RateLimitEntity.fromJson(json);
+  }
+
+  @override
+  Future<bool> getAuthStatus() async {
+    return _dataSource.fetchAuthStatus();
+  }
+
+  @override
+  Future<String?> getAuthUrl() async {
+    return _dataSource.fetchAuthUrl();
+  }
+
+  @override
+  Future<void> logout() async {
+    return _dataSource.logout();
+  }
+
+  @override
+  Future<void> endMeeting(String id) async {
+    return _dataSource.endMeeting(id);
   }
 }

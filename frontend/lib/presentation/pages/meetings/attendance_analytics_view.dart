@@ -21,10 +21,13 @@ class AttendanceAnalyticsView extends StatelessWidget {
       children: [
         Text(
           l10n.meetingAnalytics,
-          style: AppTypography.title.copyWith(fontSize: 20, color: scheme.title),
+          style: AppTypography.title.copyWith(
+            fontSize: 20,
+            color: scheme.title,
+          ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        
+
         // Key Metrics
         Row(
           children: [
@@ -57,22 +60,16 @@ class AttendanceAnalyticsView extends StatelessWidget {
             ),
           ],
         ),
-        
+
         const SizedBox(height: AppSpacing.xl),
 
         // Layout: Trend Chart + Most Active list
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              flex: 2,
-              child: _buildTrendChart(context, analytics),
-            ),
+            Expanded(flex: 2, child: _buildTrendChart(context, analytics)),
             const SizedBox(width: AppSpacing.xl),
-            Expanded(
-              flex: 1,
-              child: _buildMostActiveCard(context, analytics),
-            ),
+            Expanded(flex: 1, child: _buildMostActiveCard(context, analytics)),
           ],
         ),
       ],
@@ -118,7 +115,10 @@ class AttendanceAnalyticsView extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Text(
                 l10n.attendanceTrends,
-                style: AppTypography.title.copyWith(fontSize: 16, color: scheme.title),
+                style: AppTypography.title.copyWith(
+                  fontSize: 16,
+                  color: scheme.title,
+                ),
               ),
             ],
           ),
@@ -138,8 +138,12 @@ class AttendanceAnalyticsView extends StatelessWidget {
                 ),
                 titlesData: FlTitlesData(
                   show: true,
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -156,7 +160,10 @@ class AttendanceAnalyticsView extends StatelessWidget {
                               padding: const EdgeInsets.only(top: 8.0),
                               child: Text(
                                 '${parts[1]}/${parts[2]}',
-                                style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 10),
+                                style: AppTypography.caption.copyWith(
+                                  color: scheme.hint,
+                                  fontSize: 10,
+                                ),
                               ),
                             );
                           }
@@ -172,7 +179,9 @@ class AttendanceAnalyticsView extends StatelessWidget {
                       getTitlesWidget: (value, meta) {
                         return Text(
                           value.toInt().toString(),
-                          style: AppTypography.caption.copyWith(color: scheme.hint),
+                          style: AppTypography.caption.copyWith(
+                            color: scheme.hint,
+                          ),
                         );
                       },
                     ),
@@ -180,7 +189,9 @@ class AttendanceAnalyticsView extends StatelessWidget {
                 ),
                 borderData: FlBorderData(show: false),
                 minX: 0,
-                maxX: (trends.length - 1).toDouble() < 0 ? 0 : (trends.length - 1).toDouble(),
+                maxX: (trends.length - 1).toDouble() < 0
+                    ? 0
+                    : (trends.length - 1).toDouble(),
                 minY: 0,
                 maxY: maxY,
                 lineBarsData: [
@@ -227,7 +238,10 @@ class AttendanceAnalyticsView extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Text(
                 l10n.mostActiveParticipants,
-                style: AppTypography.title.copyWith(fontSize: 16, color: scheme.title),
+                style: AppTypography.title.copyWith(
+                  fontSize: 16,
+                  color: scheme.title,
+                ),
               ),
             ],
           ),
@@ -246,10 +260,15 @@ class AttendanceAnalyticsView extends StatelessWidget {
                     itemBuilder: (context, index) {
                       final p = topList[index];
                       return Padding(
-                        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: AppSpacing.sm,
+                        ),
                         child: Row(
                           children: [
-                            SAvatar(name: p.displayName, size: SAvatarSize.small),
+                            SAvatar(
+                              name: p.displayName,
+                              size: SAvatarSize.small,
+                            ),
                             const SizedBox(width: AppSpacing.md),
                             Expanded(
                               child: Column(
@@ -266,13 +285,18 @@ class AttendanceAnalyticsView extends StatelessWidget {
                                   ),
                                   Text(
                                     '${p.meetingsAttended} meets, ${p.totalMinutes}m',
-                                    style: AppTypography.caption.copyWith(color: scheme.hint),
+                                    style: AppTypography.caption.copyWith(
+                                      color: scheme.hint,
+                                    ),
                                   ),
                                 ],
                               ),
                             ),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
                               decoration: BoxDecoration(
                                 color: scheme.green.withValues(alpha: 0.1),
                                 borderRadius: AppRadius.smAll,
@@ -346,7 +370,10 @@ class _MetricCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             Text(
               value,
-              style: AppTypography.title.copyWith(fontSize: 28, color: scheme.title),
+              style: AppTypography.title.copyWith(
+                fontSize: 28,
+                color: scheme.title,
+              ),
             ),
           ],
         ),

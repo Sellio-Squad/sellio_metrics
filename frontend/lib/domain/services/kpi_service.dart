@@ -28,8 +28,9 @@ class KpiService {
 
     final totalPrs = filtered.length;
     final mergedPrs = filtered.where((pr) => pr.isMerged).length;
-    final closedPrs =
-        filtered.where((pr) => pr.status == PrStatus.closed).length;
+    final closedPrs = filtered
+        .where((pr) => pr.status == PrStatus.closed)
+        .length;
 
     final totalAdd = filtered.fold(0, (s, pr) => s + pr.diffStats.additions);
     final totalDel = filtered.fold(0, (s, pr) => s + pr.diffStats.deletions);
@@ -79,8 +80,9 @@ class KpiService {
     String developerFilter = FilterOptions.all,
   }) {
     if (developerFilter != FilterOptions.all) {
-      final devPrs =
-          prData.where((pr) => pr.creator.login == developerFilter).length;
+      final devPrs = prData
+          .where((pr) => pr.creator.login == developerFilter)
+          .length;
       final commentedOn = prData
           .where((pr) => pr.commenterLogins.contains(developerFilter))
           .length;

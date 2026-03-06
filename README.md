@@ -34,6 +34,7 @@
 | 🐢 **Bottleneck Detection** | Slow PRs ranked by wait time with severity coloring |
 | 🧩 **PR Type Distribution** | Feature / Fix / Refactor / Chore breakdown via title conventions |
 | 📊 **Code Volume** | Additions vs deletions per week with stacked bar charts |
+| 📹 **Google Meet Integration**| Create and end meetings directly, track attendees and analytics |
 | 🔄 **Real-Time Webhooks** | GitHub webhooks invalidate cache — new PRs appear immediately |
 | 🌍 **Bilingual (EN/AR)** | Full localization with RTL support |
 | 🎨 **Dark/Light Theme** | Custom design system with smooth theme transitions |
@@ -79,6 +80,8 @@
 | **Awilix** | Dependency injection (PROXY mode, scoped lifetimes) |
 | **Octokit** | GitHub REST API client with App authentication |
 | **GitHub App Auth** | JWT → Installation token (5,000 req/hr, auto-refresh) |
+| **Google Meet API**| Using `@google-apps/meet` for creating workspaces and conferences |
+| **Google Auth Library**| Managing OAuth2 user consent flow and handling permissions |
 
 ### Frontend
 | Technology | Purpose |
@@ -137,6 +140,11 @@ GITHUB_ORG=Sellio-Squad
 
 # Paste your private key with literal \n for line breaks:
 APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIB...\n-----END RSA PRIVATE KEY-----"
+
+# Google Meet Credentials
+GOOGLE_CLIENT_ID=your_oauth2_client_id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your_oauth2_client_secret
+GOOGLE_REDIRECT_URI=http://localhost:3001/api/meetings/oauth2callback
 ```
 
 > **💡 Private Key Tip (PowerShell):**
@@ -206,6 +214,8 @@ cd backend
 npx wrangler secret put APP_ID
 npx wrangler secret put INSTALLATION_ID
 npx wrangler secret put APP_PRIVATE_KEY
+npx wrangler secret put GOOGLE_CLIENT_ID
+npx wrangler secret put GOOGLE_CLIENT_SECRET
 ```
 
 #### 4. GitHub Repository Settings
@@ -281,6 +291,15 @@ Fetch PR metrics for a repository.
 ### `POST /api/metrics/leaderboard`
 Calculate leaderboard from PR data (sent in body).
 
+### `GET /api/meetings/auth-url`
+Retrieves the target Google OAuth2 login link for Google Meet consent page.
+
+### `POST /api/meetings`
+Creates a brand new Google workspace, returning the direct link to jump into the call. Only works if authenticated via callback flow.
+
+### `POST /api/meetings/:id/end`
+Removes all users and terminates an ongoing meeting via the Google Meet infrastructure.
+
 ### `POST /api/webhooks/github`
 GitHub webhook endpoint — invalidates cached metrics on PR events.
 
@@ -331,12 +350,15 @@ sellio_metrics/
 | `APP_ID` | ✅ | GitHub App ID |
 | `APP_PRIVATE_KEY` | ✅ | RSA private key (PKCS#8 PEM) |
 | `INSTALLATION_ID` | ✅ | GitHub App installation ID |
+| `GOOGLE_CLIENT_ID`| ✅ | Google OAuth2 Client ID |
+| `GOOGLE_CLIENT_SECRET`| ✅ | Google OAuth2 Client Secret |
 
 ### Backend (wrangler.toml vars)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `GITHUB_ORG` | `Sellio-Squad` | Organization name |
+| `GOOGLE_REDIRECT_URI`| `/api/meetings/oauth2callback` | URI Google uses after user consent |
 | `LOG_LEVEL` | `info` | `trace`, `debug`, `info`, `warn`, `error` |
 | `NODE_ENV` | `production` | Environment |
 

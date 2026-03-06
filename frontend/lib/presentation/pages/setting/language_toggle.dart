@@ -28,10 +28,7 @@ class LanguageToggle extends StatelessWidget {
               isArabic ? l10n.languageArabic : l10n.languageEnglish,
               style: AppTypography.body.copyWith(color: scheme.body),
             ),
-            SSwitch(
-              value: isArabic,
-              onChanged: (_) => settings.toggleLocale(),
-            ),
+            SSwitch(value: isArabic, onChanged: (_) => settings.toggleLocale()),
           ],
         );
       },

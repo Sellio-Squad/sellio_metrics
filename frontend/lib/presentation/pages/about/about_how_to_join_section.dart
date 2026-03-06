@@ -100,8 +100,9 @@ class _JoinStepCard extends StatelessWidget {
                       const SizedBox(width: AppSpacing.sm),
                       Text(
                         step.title,
-                        style: AppTypography.subtitle
-                            .copyWith(color: scheme.title),
+                        style: AppTypography.subtitle.copyWith(
+                          color: scheme.title,
+                        ),
                       ),
                     ],
                   ),

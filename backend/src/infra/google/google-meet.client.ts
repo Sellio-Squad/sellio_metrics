@@ -91,6 +91,15 @@ export class GoogleMeetClient {
         return this.spacesClient !== null && this.conferenceClient !== null;
     }
 
+    /**
+     * Clear the credentials to sign out.
+     */
+    clearCredentials(): void {
+        this.oauth2Client.setCredentials({});
+        this.spacesClient = null;
+        this.conferenceClient = null;
+    }
+
     // ─── Rate Limit Tracking ────────────────────────────────
 
     private trackCall(): void {
@@ -206,6 +215,19 @@ export class GoogleMeetClient {
                 meetingCode: space.meetingCode ?? "",
             };
         }, "getSpace");
+    }
+
+    /**
+     * Ends an active conference (kicks everyone out and ends the meeting).
+     */
+    async endSpace(spaceName: string): Promise<void> {
+        if (!this.spacesClient) {
+            throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
+        }
+
+        return this.withRetry(async () => {
+            await this.spacesClient!.endActiveConference({ name: spaceName });
+        }, "endSpace");
     }
 
     /**

@@ -1,4 +1,3 @@
-
 class UserEntity {
   final String login;
   final int id;

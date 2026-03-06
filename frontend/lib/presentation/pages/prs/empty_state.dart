@@ -17,11 +17,7 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(
-            Icons.check_circle_outline,
-            size: 48,
-            color: scheme.hint,
-          ),
+          Icon(Icons.check_circle_outline, size: 48, color: scheme.hint),
           const SizedBox(height: AppSpacing.md),
           Text(
             l10n.searchNoResults,
