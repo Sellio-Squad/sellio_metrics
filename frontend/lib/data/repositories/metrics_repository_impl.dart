@@ -9,6 +9,7 @@ import '../mappers/pr_mappers.dart';
 
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/entities/leaderboard_entry.dart';
+import '../../domain/entities/member_status_entity.dart';
 import '../../domain/repositories/metrics_repository.dart';
 
 class MetricsRepositoryImpl implements MetricsRepository {
@@ -81,9 +82,44 @@ class MetricsRepositoryImpl implements MetricsRepository {
       prsMerged: json['prsMerged'] as int? ?? 0,
       reviewsGiven: json['reviewsGiven'] as int? ?? 0,
       commentsGiven: json['commentsGiven'] as int? ?? 0,
-       additions: json['additions'] as int? ?? 0,
+      additions: json['additions'] as int? ?? 0,
       deletions: json['deletions'] as int? ?? 0,
       totalScore: (json['totalScore'] as num?)?.toDouble() ?? 0.0,
+    )).toList();
+  }
+
+  @override
+  Future<List<MemberStatusEntity>> getMemberStatuses(List<PrEntity> prs) async {
+    final prData = prs.map((pr) => {
+      'opened_at': pr.openedAt.toIso8601String(),
+      'creator': {
+        'login': pr.creator.login,
+        'avatar_url': pr.creator.avatarUrl,
+      },
+      'approvals': pr.approvals.map((a) => {
+        'submitted_at': a.submittedAt.toIso8601String(),
+        'reviewer': {
+          'login': a.reviewer.login,
+          'avatar_url': a.reviewer.avatarUrl,
+        }
+      }).toList(),
+      'comments': pr.comments.map((c) => {
+        'first_comment_at': c.firstCommentAt?.toIso8601String(),
+        'last_comment_at': c.lastCommentAt?.toIso8601String(),
+        'author': {
+          'login': c.author.login,
+          'avatar_url': c.author.avatarUrl,
+        }
+      }).toList(),
+    }).toList();
+
+    final result = await _dataSource.getMemberStatuses(prData);
+
+    return result.map((json) => MemberStatusEntity(
+      developer: json['developer'] as String? ?? 'Unknown',
+      avatarUrl: json['avatarUrl'] as String?,
+      isActive: json['isActive'] as bool? ?? false,
+      lastActiveDate: json['lastActiveDate'] != null ? DateTime.parse(json['lastActiveDate'] as String) : null,
     )).toList();
   }
 

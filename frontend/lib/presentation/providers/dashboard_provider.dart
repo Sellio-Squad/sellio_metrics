@@ -6,6 +6,7 @@ import '../../domain/entities/leaderboard_entry.dart';
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/entities/kpi_entity.dart';
 import '../../domain/entities/bottleneck_entity.dart';
+import '../../domain/entities/member_status_entity.dart';
 import '../../domain/repositories/metrics_repository.dart';
 import '../../domain/services/kpi_service.dart';
 import '../../domain/services/bottleneck_service.dart';
@@ -45,6 +46,7 @@ class DashboardProvider extends ChangeNotifier {
   List<RepoInfo> _currentRepos = [];
 
   List<LeaderboardEntry> _leaderboard = [];
+  List<MemberStatusEntity> _memberStatuses = [];
 
   // ─── Getters ─────────────────────────────────────────────
   DashboardStatus get status => _status;
@@ -104,6 +106,8 @@ class DashboardProvider extends ChangeNotifier {
 
   List<LeaderboardEntry> get leaderboard => _leaderboard;
 
+  List<MemberStatusEntity> get memberStatuses => _memberStatuses;
+
   /// Allows external callers to set the error state (e.g. when repo loading fails).
   void setError(String message) {
     _status = DashboardStatus.error;
@@ -119,6 +123,15 @@ class DashboardProvider extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error updating leaderboard remotely: $e');
+    }
+  }
+
+  Future<void> _updateMemberStatuses() async {
+    try {
+      _memberStatuses = await _repository.getMemberStatuses(weekFilteredPrs);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error updating member statuses: $e');
     }
   }
 
@@ -165,6 +178,7 @@ class DashboardProvider extends ChangeNotifier {
     }
     notifyListeners();
     await _updateLeaderboard();
+    await _updateMemberStatuses();
   }
 
   Future<void> refresh() async {
@@ -190,6 +204,7 @@ class DashboardProvider extends ChangeNotifier {
     }
     notifyListeners();
     await _updateLeaderboard();
+    await _updateMemberStatuses();
   }
 
 
@@ -204,5 +219,6 @@ class DashboardProvider extends ChangeNotifier {
     _endDate = end;
     notifyListeners();
     _updateLeaderboard();
+    _updateMemberStatuses();
   }
 }

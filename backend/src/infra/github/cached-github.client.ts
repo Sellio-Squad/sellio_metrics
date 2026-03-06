@@ -36,6 +36,8 @@ const TTL = {
     REPO_LIST: 24 * 60 * 60,       // 24 hours
     /** PR list (paginated) — moderate freshness. */
     PR_LIST: 3 * 60,               // 3 minutes
+    /** Organization members — rarely changes. */
+    ORG_MEMBERS: 24 * 60 * 60,     // 24 hours
 } as const;
 
 // ─── Service ────────────────────────────────────────────────
@@ -82,6 +84,26 @@ export class CachedGitHubClient {
 
         await this.cache.set(cacheKey, repos, TTL.REPO_LIST);
         return repos;
+    }
+
+    /**
+     * List all members of an organization — cached for 24 hours.
+     */
+    async listOrgMembers(org: string): Promise<any[]> {
+        const cacheKey = `github:org-members:${org}`;
+        const cached = await this.cache.get<any[]>(cacheKey);
+        if (cached) return cached.data;
+
+        await this.guard.checkAndWait();
+
+        // Fetches members paginated
+        const members = await this.github.paginate(
+            this.github.rest.orgs.listMembers,
+            { org, per_page: 100 }
+        );
+
+        await this.cache.set(cacheKey, members, TTL.ORG_MEMBERS);
+        return members;
     }
 
     /**

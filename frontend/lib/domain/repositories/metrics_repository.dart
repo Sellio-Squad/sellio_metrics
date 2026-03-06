@@ -7,6 +7,7 @@ library;
 
 import '../entities/pr_entity.dart';
 import '../entities/leaderboard_entry.dart';
+import '../entities/member_status_entity.dart';
 
 /// Lightweight repository info for the settings UI.
 class RepoInfo {
@@ -34,5 +35,8 @@ abstract class MetricsRepository {
 
   /// Calculate leaderboard remotely on the backend based on selected PRs.
   Future<List<LeaderboardEntry>> calculateLeaderboard(List<PrEntity> prs);
+
+  /// Get active and inactive member statuses from the backend.
+  Future<List<MemberStatusEntity>> getMemberStatuses(List<PrEntity> prs);
 }
 

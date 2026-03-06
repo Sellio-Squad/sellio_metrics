@@ -22,6 +22,7 @@ import { CachedGitHubClient } from "../infra/github/cached-github.client";
 import { ReposService } from "../modules/repos/repos.service";
 import { MetricsService } from "../modules/metrics/metrics.service";
 import { LeaderboardService } from "../modules/metrics/leaderboard.service";
+import { MembersService } from "../modules/members/members.service";
 import { env } from "../config/env";
 import { logger } from "./logger";
 
@@ -38,6 +39,7 @@ export interface Cradle {
     reposService: ReposService;
     metricsService: MetricsService;
     leaderboardService: LeaderboardService;
+    membersService: MembersService;
 }
 
 // ─── Builder ────────────────────────────────────────────────
@@ -92,6 +94,7 @@ export function buildContainer(kvNamespace: KVNamespace | null = null): AwilixCo
         reposService: asClass(ReposService).singleton(),
         metricsService: asClass(MetricsService).singleton(),
         leaderboardService: asClass(LeaderboardService).singleton(),
+        membersService: asClass(MembersService).singleton(),
     });
 
     return container;

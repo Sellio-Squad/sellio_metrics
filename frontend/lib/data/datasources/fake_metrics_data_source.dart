@@ -248,6 +248,65 @@ class FakeMetricsDataSource implements MetricsDataSource {
     })
         .toList();
   }
+
+  @override
+  Future<List<dynamic>> getMemberStatuses(List<Map<String, dynamic>> prData) async {
+    final Map<String, Map<String, dynamic>> statuses = {
+      _alice.login: {'avatarUrl': _alice.avatarUrl, 'lastActiveDate': null},
+      _bob.login: {'avatarUrl': _bob.avatarUrl, 'lastActiveDate': null},
+      _carol.login: {'avatarUrl': _carol.avatarUrl, 'lastActiveDate': null},
+    };
+
+    void updateActivity(String login, String avatarUrl, String? dateStr) {
+      if (dateStr == null) return;
+      final entry = statuses.putIfAbsent(login, () => {'avatarUrl': avatarUrl, 'lastActiveDate': null});
+      final current = entry['lastActiveDate'] as String?;
+      if (current == null || DateTime.parse(dateStr).isAfter(DateTime.parse(current))) {
+        entry['lastActiveDate'] = dateStr;
+      }
+    }
+
+    for (final pr in prData) {
+      final creator = pr['creator'] as Map<String, dynamic>? ?? {};
+      final openedAt = pr['opened_at'] as String?;
+      updateActivity(creator['login'] ?? '', creator['avatar_url'] ?? '', openedAt);
+
+      final approvals = (pr['approvals'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+      for (final a in approvals) {
+        final rev = a['reviewer'] as Map<String, dynamic>? ?? {};
+        updateActivity(rev['login'] ?? '', rev['avatar_url'] ?? '', a['submitted_at'] as String?);
+      }
+
+      final comments = (pr['comments'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+      for (final c in comments) {
+        final author = c['author'] as Map<String, dynamic>? ?? {};
+        final dates = [c['first_comment_at'], c['last_comment_at']].whereType<String>().toList();
+        dates.sort((a, b) => DateTime.parse(b).compareTo(DateTime.parse(a)));
+        updateActivity(author['login'] ?? '', author['avatar_url'] ?? '', dates.isNotEmpty ? dates.first : null);
+      }
+    }
+
+    return statuses.entries.map((e) {
+      return {
+        'developer': e.key,
+        'avatarUrl': e.value['avatarUrl'],
+        'isActive': e.value['lastActiveDate'] != null,
+        'lastActiveDate': e.value['lastActiveDate'],
+      };
+    }).toList()
+      ..sort((a, b) {
+        final aActive = a['isActive'] as bool;
+        final bActive = b['isActive'] as bool;
+        if (aActive && !bActive) return -1;
+        if (!aActive && bActive) return 1;
+        if (aActive && bActive) {
+          final da = DateTime.parse(a['lastActiveDate'] as String);
+          final db = DateTime.parse(b['lastActiveDate'] as String);
+          return db.compareTo(da);
+        }
+        return (a['developer'] as String).compareTo(b['developer'] as String);
+      });
+  }
 }
 
 class _LeaderboardAccumulator {

@@ -6,6 +6,7 @@ abstract class MetricsDataSource {
   Future<List<PrModel>> fetchPullRequests(String owner, String repo);
   Future<List<RepoModel>> fetchRepositories();
   Future<List<dynamic>> calculateLeaderboard(List<Map<String, dynamic>> prData);
+  Future<List<dynamic>> getMemberStatuses(List<Map<String, dynamic>> prData);
 }
 
 class RepoModel {

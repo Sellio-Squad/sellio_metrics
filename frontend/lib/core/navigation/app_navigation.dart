@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../design_system/design_system.dart';
 import '../l10n/app_localizations.dart';
 import '../../presentation/pages/leaderboard/leaderboard_page.dart';
+import '../../presentation/pages/members/members_page.dart';
 import '../../presentation/pages/prs/open_prs_page.dart';
 
 import '../../presentation/pages/about/about_page.dart';
@@ -29,6 +30,12 @@ class AppNavigation {
       icon: LucideIcons.users,
       labelBuilder: (l10n) => l10n.navLeaderboard,
       page: const LeaderboardPage(),
+    ),
+    AppRoute(
+      id: 'members',
+      icon: LucideIcons.users,
+      labelBuilder: (l10n) => l10n.navMembers,
+      page: const MembersPage(),
     ),
     AppRoute(
       id: 'open_prs',
