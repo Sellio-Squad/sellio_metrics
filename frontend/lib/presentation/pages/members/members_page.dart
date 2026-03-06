@@ -8,6 +8,8 @@ import '../../providers/app_settings_provider.dart';
 import '../../providers/dashboard_provider.dart';
 import '../../../domain/entities/member_status_entity.dart';
 import 'package:intl/intl.dart';
+import '../../widgets/common/loading_screen.dart';
+import '../../widgets/common/error_screen.dart';
 
 class MembersPage extends StatefulWidget {
   const MembersPage({super.key});
@@ -35,7 +37,15 @@ class _MembersPageState extends State<MembersPage> {
         final members = provider.memberStatuses;
         
         if (provider.status == DashboardStatus.loading && members.isEmpty) {
-          return const Center(child: CircularProgressIndicator());
+          return const LoadingScreen();
+        }
+        if (provider.status == DashboardStatus.error && members.isEmpty) {
+          return ErrorScreen(
+            onRetry: () {
+              final settings = context.read<AppSettingsProvider>();
+              provider.loadData(repos: settings.selectedRepos);
+            },
+          );
         }
 
         if (members.isEmpty) {

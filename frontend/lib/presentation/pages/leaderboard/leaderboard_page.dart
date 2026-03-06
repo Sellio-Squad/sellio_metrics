@@ -6,6 +6,8 @@ import '../../../design_system/design_system.dart';
 import '../../providers/dashboard_provider.dart';
 import 'leaderboard_section.dart';
 import '../../providers/app_settings_provider.dart';
+import '../../widgets/common/loading_screen.dart';
+import '../../widgets/common/error_screen.dart';
 
 class LeaderboardPage extends StatefulWidget {
   const LeaderboardPage({super.key});
@@ -30,11 +32,23 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   Widget build(BuildContext context) {
     return Consumer<DashboardProvider>(
       builder: (context, provider, _) {
+        if (provider.status == DashboardStatus.loading) {
+          return const LoadingScreen();
+        }
+        if (provider.status == DashboardStatus.error) {
+          return ErrorScreen(
+            onRetry: () {
+              final settings = context.read<AppSettingsProvider>();
+              provider.loadData(repos: settings.selectedRepos);
+            },
+          );
+        }
+
         return Align(
           alignment: Alignment.topLeft,
           child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppSpacing.xl),
-              child: LeaderboardSection(entries: provider.leaderboard),
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: LeaderboardSection(entries: provider.leaderboard),
           ),);
       },
     );

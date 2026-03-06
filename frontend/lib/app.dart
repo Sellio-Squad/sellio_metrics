@@ -8,8 +8,6 @@ import 'core/l10n/app_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'presentation/providers/dashboard_provider.dart';
 import 'presentation/providers/app_settings_provider.dart';
-import 'presentation/widgets/common/loading_screen.dart';
-import 'presentation/widgets/common/error_screen.dart';
 import 'presentation/pages/dashboard_page.dart';
 
 class SellioMetricsApp extends StatelessWidget {
@@ -84,15 +82,9 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
   Widget build(BuildContext context) {
     return Consumer<DashboardProvider>(
       builder: (context, provider, _) {
-        return AnimatedSwitcher(
-          duration: const Duration(milliseconds: 300),
-          child: switch (provider.status) {
-            DashboardStatus.loading => const LoadingScreen(),
-            DashboardStatus.error => ErrorScreen(
-              onRetry: () => _initializeData(),
-            ),
-            DashboardStatus.loaded => const DashboardPage(),
-          },
+        return const AnimatedSwitcher(
+          duration: Duration(milliseconds: 300),
+          child: DashboardPage(),
         );
       },
     );

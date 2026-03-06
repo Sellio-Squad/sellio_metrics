@@ -12,6 +12,8 @@ import '../../widgets/kpi_card.dart';
 import '../../widgets/section_header.dart';
 import 'bottleneck_item.dart';
 import '../../providers/app_settings_provider.dart';
+import '../../widgets/common/loading_screen.dart';
+import '../../widgets/common/error_screen.dart';
 
 class OpenPrsPage extends StatefulWidget {
   const OpenPrsPage({super.key});
@@ -38,6 +40,18 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
 
     return Consumer<DashboardProvider>(
       builder: (context, provider, _) {
+        if (provider.status == DashboardStatus.loading && provider.openPrs.isEmpty) {
+          return const LoadingScreen();
+        }
+        if (provider.status == DashboardStatus.error && provider.openPrs.isEmpty) {
+          return ErrorScreen(
+            onRetry: () {
+              final settings = context.read<AppSettingsProvider>();
+              provider.loadData(repos: settings.selectedRepos);
+            },
+          );
+        }
+
         final prs = provider.openPrs;
         final scheme = context.colors;
         final kpis = provider.kpis;
