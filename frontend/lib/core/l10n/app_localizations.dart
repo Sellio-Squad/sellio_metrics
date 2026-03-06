@@ -259,6 +259,33 @@ class AppLocalizations {
   String get unitPrs => _t('unitPrs');
   String get unitComments => _t('unitComments');
 
+  // ─── Meetings ──────────────────────────────────────────────
+  String get meetingsTitle => _t('meetingsTitle');
+  String get newMeeting => _t('newMeeting');
+  String get createMeeting => _t('createMeeting');
+  String get meetingName => _t('meetingName');
+  String get meetingNameHint => _t('meetingNameHint');
+  String get cancel => _t('cancel');
+  String get activeMeetings => _t('activeMeetings');
+  String get noActiveMeetings => _t('noActiveMeetings');
+  String get joinMeeting => _t('joinMeeting');
+  String get participantsCount => _t('participantsCount');
+  String get duration => _t('duration');
+  String get attendanceScore => _t('attendanceScore');
+  String get meetingAnalytics => _t('meetingAnalytics');
+  String get totalMeetings => _t('totalMeetings');
+  String get totalAttendees => _t('totalAttendees');
+  String get avgDuration => _t('avgDuration');
+  String get avgScore => _t('avgScore');
+  String get mostActiveParticipants => _t('mostActiveParticipants');
+  String get attendanceTrends => _t('attendanceTrends');
+  String get rateLimit => _t('rateLimit');
+  String get resetsIn => _t('resetsIn');
+  String get meetingEnded => _t('meetingEnded');
+  String get live => _t('live');
+  String get joinTime => _t('joinTime');
+  String get leaveTime => _t('leaveTime');
+
   String _t(String key) => _localizedValues[locale.languageCode]?[key] ?? key;
 
   static const Map<String, Map<String, String>> _localizedValues = {
@@ -492,6 +519,33 @@ class AppLocalizations {
     'obsLatencyDistribution': 'Latency Distribution',
     'obsLatencyBySource': 'Latency by Source',
     'obsDependencyGraph': 'Service Dependency Graph',
+
+    // Meetings
+    'meetingsTitle': 'Meetings Dashboard',
+    'newMeeting': 'New Meeting',
+    'createMeeting': 'Create Meeting',
+    'meetingName': 'Meeting Name',
+    'meetingNameHint': 'e.g., Weekly Sync',
+    'cancel': 'Cancel',
+    'activeMeetings': 'Active Meetings',
+    'noActiveMeetings': 'No active meetings found.',
+    'joinMeeting': 'Join Meeting',
+    'participantsCount': 'Participants',
+    'duration': 'Duration',
+    'attendanceScore': 'Attendance Score',
+    'meetingAnalytics': 'Meeting Analytics',
+    'totalMeetings': 'Total Meetings',
+    'totalAttendees': 'Total Attendees',
+    'avgDuration': 'Avg Duration',
+    'avgScore': 'Avg Score',
+    'mostActiveParticipants': 'Most Active Participants',
+    'attendanceTrends': 'Attendance Trends',
+    'rateLimit': 'Google API Rate Limit',
+    'resetsIn': 'resets in',
+    'meetingEnded': 'Meeting Ended',
+    'live': 'Live',
+    'joinTime': 'Joined',
+    'leaveTime': 'Left',
   };
 
   static const Map<String, String> _ar = {
@@ -720,6 +774,33 @@ class AppLocalizations {
     'obsLatencyDistribution': 'توزيع التأخير',
     'obsLatencyBySource': 'التأخير حسب المصدر',
     'obsDependencyGraph': 'رسم الاعتمادية البياني',
+
+    // Meetings
+    'meetingsTitle': 'لوحة الاجتماعات',
+    'newMeeting': 'اجتماع جديد',
+    'createMeeting': 'إنشاء اجتماع',
+    'meetingName': 'اسم الاجتماع',
+    'meetingNameHint': 'مثال: المزامنة الأسبوعية',
+    'cancel': 'إلغاء',
+    'activeMeetings': 'الاجتماعات النشطة',
+    'noActiveMeetings': 'لا توجد اجتماعات نشطة.',
+    'joinMeeting': 'انضمام للاجتماع',
+    'participantsCount': 'المشاركون',
+    'duration': 'المدة',
+    'attendanceScore': 'نقاط الحضور',
+    'meetingAnalytics': 'تحليلات الاجتماعات',
+    'totalMeetings': 'إجمالي الاجتماعات',
+    'totalAttendees': 'إجمالي الحضور',
+    'avgDuration': 'متوسط المدة',
+    'avgScore': 'متوسط النقاط',
+    'mostActiveParticipants': 'المشاركون الأكثر نشاطاً',
+    'attendanceTrends': 'اتجاهات الحضور',
+    'rateLimit': 'حد واجهة برمجة تطبيقات جوجل',
+    'resetsIn': 'يُعاد تعيينه خلال',
+    'meetingEnded': 'انتهى الاجتماع',
+    'live': 'مباشر',
+    'joinTime': 'انضم',
+    'leaveTime': 'غادر',
   };
 }
 

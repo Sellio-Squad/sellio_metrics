@@ -108,6 +108,7 @@ function loadPrivateKey(): string {
     );
 }
 
+// removed loadGoogleServiceAccountKey
 
 // ─── Validation ─────────────────────────────────────────────
 
@@ -124,6 +125,9 @@ interface EnvSchema {
     RATE_LIMIT_WINDOW_MS?: string;
     GITHUB_RATE_LIMIT_THRESHOLD?: string;
     GITHUB_WEBHOOK_SECRET?: string;
+    GOOGLE_CLIENT_ID?: string;
+    GOOGLE_CLIENT_SECRET?: string;
+    GOOGLE_REDIRECT_URI?: string;
 }
 
 function requireEnv(name: keyof EnvSchema): string {
@@ -194,6 +198,15 @@ function _createEnv() {
 
         /** GitHub webhook secret for verifying webhook payloads (optional). */
         githubWebhookSecret: optionalEnv("GITHUB_WEBHOOK_SECRET", ""),
+
+        /** Google OAuth2 Client ID for Meet API */
+        googleClientId: optionalEnv("GOOGLE_CLIENT_ID", ""),
+
+        /** Google OAuth2 Client Secret */
+        googleClientSecret: optionalEnv("GOOGLE_CLIENT_SECRET", ""),
+
+        /** Google OAuth2 Redirect URI */
+        googleRedirectUri: optionalEnv("GOOGLE_REDIRECT_URI", "http://localhost:3001/api/meetings/oauth2callback"),
     });
 }
 
