@@ -5,13 +5,19 @@ import 'package:provider/provider.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../core/l10n/app_localizations.dart';
-import '../../providers/dashboard_provider.dart';
-import 'empty_state.dart';
-import 'pr_list_tile.dart';
-import '../../widgets/kpi_card.dart';
 import '../../widgets/section_header.dart';
+import '../../widgets/kpi_card.dart';
 import 'bottleneck_item.dart';
 import '../../providers/app_settings_provider.dart';
+import '../../providers/pr_data_provider.dart';
+import '../../providers/filter_provider.dart';
+import '../../providers/analytics_provider.dart';
+import '../../../domain/services/filter_service.dart';
+import '../../../core/di/service_locator.dart';
+import '../../widgets/common/loading_screen.dart';
+import '../../widgets/common/error_screen.dart';
+import 'empty_state.dart';
+import 'pr_list_tile.dart';
 
 class OpenPrsPage extends StatefulWidget {
   const OpenPrsPage({super.key});
@@ -27,8 +33,8 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final settings = context.read<AppSettingsProvider>();
-      final dashboard = context.read<DashboardProvider>();
-      dashboard.ensureDataLoaded(settings.selectedRepos);
+      final prData = context.read<PrDataProvider>();
+      prData.ensureDataLoaded(settings.selectedRepos);
     });
   }
 
@@ -36,11 +42,38 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
 
-    return Consumer<DashboardProvider>(
-      builder: (context, provider, _) {
-        final prs = provider.openPrs;
+    return Consumer3<PrDataProvider, FilterProvider, AnalyticsProvider>(
+      builder: (context, prData, filter, analytics, _) {
+        final filterService = sl.get<FilterService>();
+        
+        // Data pipeline
+        final weekFiltered = filterService.filterByWeek(
+          filterService.filterByDateRange(prData.allPrs, filter.startDate, filter.endDate),
+          filter.weekFilter,
+        );
+        final filteredPrs = filterService.filterPrs(
+          weekFiltered,
+          searchTerm: filter.searchTerm,
+          statusFilter: filter.statusFilter,
+        );
+        final openPrs = filteredPrs.where((pr) => pr.isOpen).toList();
+
+        if (prData.status == DataLoadingStatus.loading && openPrs.isEmpty) {
+          return const LoadingScreen();
+        }
+        if (prData.status == DataLoadingStatus.error && openPrs.isEmpty) {
+          return ErrorScreen(
+            onRetry: () {
+              final settings = context.read<AppSettingsProvider>();
+              prData.loadData(repos: settings.selectedRepos);
+            },
+          );
+        }
+
+        final prs = openPrs;
         final scheme = context.colors;
-        final kpis = provider.kpis;
+        final kpis = analytics.calculateKpis(weekFiltered, developerFilter: filter.developerFilter);
+        final bottlenecks = analytics.identifyBottlenecks(weekFiltered, thresholdHours: filter.bottleneckThreshold);
 
         return Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
@@ -146,7 +179,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                           // Search bar directly above Open PRs
                           SInput(
                             hint: l10n.searchPlaceholder,
-                            onChanged: (value) => provider.setSearchTerm(value),
+                            onChanged: (value) => filter.setSearchTerm(value),
                             prefixIcon: const Icon(Icons.search),
                           ),
                           const SizedBox(height: AppSpacing.xl),
@@ -191,13 +224,13 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                             title: l10n.sectionBottlenecks,
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          if (provider.bottlenecks.isEmpty)
+                          if (bottlenecks.isEmpty)
                             Text(
                               l10n.emptyData,
                               style: AppTypography.body.copyWith(color: scheme.hint),
                             )
                           else
-                            ...provider.bottlenecks.map(
+                            ...bottlenecks.map(
                               (b) => BottleneckItem(bottleneck: b),
                             ),
                           const SizedBox(height: AppSpacing.xxl),

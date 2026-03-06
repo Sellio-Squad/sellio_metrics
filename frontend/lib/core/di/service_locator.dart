@@ -9,8 +9,12 @@ import '../../domain/repositories/metrics_repository.dart';
 import '../../domain/services/kpi_service.dart';
 import '../../domain/services/bottleneck_service.dart';
 import '../../domain/services/filter_service.dart';
-import '../../presentation/providers/dashboard_provider.dart';
 import '../../presentation/providers/app_settings_provider.dart';
+import '../../presentation/providers/pr_data_provider.dart';
+import '../../presentation/providers/filter_provider.dart';
+import '../../presentation/providers/analytics_provider.dart';
+import '../../presentation/providers/leaderboard_provider.dart';
+import '../../presentation/providers/member_provider.dart';
 
 /// Global service locator instance.
 final sl = ServiceLocator();
@@ -81,13 +85,23 @@ void setupDependencies() {
   sl.registerFactory<AppSettingsProvider>(
     () => AppSettingsProvider(repository: sl.get<MetricsRepository>()),
   );
-  sl.registerFactory<DashboardProvider>(
-    () => DashboardProvider(
-      repository: sl.get<MetricsRepository>(),
+  sl.registerFactory<PrDataProvider>(
+    () => PrDataProvider(repository: sl.get<MetricsRepository>()),
+  );
+  sl.registerFactory<FilterProvider>(
+    () => FilterProvider(),
+  );
+  sl.registerFactory<AnalyticsProvider>(
+    () => AnalyticsProvider(
       kpiService: sl.get<KpiService>(),
       bottleneckService: sl.get<BottleneckService>(),
-      filterService: sl.get<FilterService>(),
     ),
+  );
+  sl.registerFactory<LeaderboardProvider>(
+    () => LeaderboardProvider(repository: sl.get<MetricsRepository>()),
+  );
+  sl.registerFactory<MemberProvider>(
+    () => MemberProvider(repository: sl.get<MetricsRepository>()),
   );
 }
 
