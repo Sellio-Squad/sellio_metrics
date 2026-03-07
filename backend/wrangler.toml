@@ -16,6 +16,7 @@ GITHUB_ORG = "Sellio-Squad"
 LOG_LEVEL = "info"
 NODE_ENV = "production"
 GOOGLE_REDIRECT_URI = "https://sellio-metrics.abdoessam743.workers.dev/api/meetings/oauth2callback"
+GOOGLE_PUBSUB_TOPIC = "projects/meet-test-488313/topics/meet-events-topic"
 
 # Workers KV for caching (replaces Redis)
 # After first deploy, create the namespace via:

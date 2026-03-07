@@ -284,6 +284,13 @@ class AppLocalizations {
   String get joinTime => _t('joinTime');
   String get leaveTime => _t('leaveTime');
 
+  // ─── Live Events ──────────────────────────────────────────
+  String get liveEventsTitle => _t('liveEventsTitle');
+  String get liveEventsEmpty => _t('liveEventsEmpty');
+  String get liveEventsSubscribe => _t('liveEventsSubscribe');
+  String get liveEventsConnected => _t('liveEventsConnected');
+  String get liveEventsDisconnected => _t('liveEventsDisconnected');
+
   String _t(String key) => _localizedValues[locale.languageCode]?[key] ?? key;
 
   static const Map<String, Map<String, String>> _localizedValues = {
@@ -547,6 +554,13 @@ class AppLocalizations {
     'live': 'Live',
     'joinTime': 'Joined',
     'leaveTime': 'Left',
+
+    // Live Events
+    'liveEventsTitle': 'Live Events',
+    'liveEventsEmpty': 'No events yet. Subscribe to a meeting to start tracking.',
+    'liveEventsSubscribe': 'Subscribe to Meeting Events',
+    'liveEventsConnected': 'Connected — receiving live updates',
+    'liveEventsDisconnected': 'Disconnected — click Resume to reconnect',
   };
 
   static const Map<String, String> _ar = {
@@ -803,6 +817,13 @@ class AppLocalizations {
     'live': 'مباشر',
     'joinTime': 'انضم',
     'leaveTime': 'غادر',
+
+    // Live Events
+    'liveEventsTitle': 'الأحداث المباشرة',
+    'liveEventsEmpty': 'لا توجد أحداث بعد. اشترك في اجتماع لبدء التتبع.',
+    'liveEventsSubscribe': 'اشترك في أحداث الاجتماع',
+    'liveEventsConnected': 'متصل — يتم استقبال التحديثات المباشرة',
+    'liveEventsDisconnected': 'غير متصل — انقر على استئناف لإعادة الاتصال',
   };
 }
 

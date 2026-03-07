@@ -9,10 +9,12 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../domain/entities/meeting_entity.dart';
 import '../../providers/meetings_provider.dart';
+import '../../providers/meet_events_provider.dart';
 import '../../widgets/common/loading_screen.dart';
 import 'create_meeting_dialog.dart';
 import 'meeting_detail_view.dart';
 import 'attendance_analytics_view.dart';
+import 'live_events_view.dart';
 
 class MeetingsPage extends StatefulWidget {
   const MeetingsPage({super.key});
@@ -21,18 +23,15 @@ class MeetingsPage extends StatefulWidget {
   State<MeetingsPage> createState() => _MeetingsPageState();
 }
 
-class _MeetingsPageState extends State<MeetingsPage> {
+class _MeetingsPageState extends State<MeetingsPage>
+    with SingleTickerProviderStateMixin {
   Timer? _authPollingTimer;
-
-  @override
-  void dispose() {
-    _authPollingTimer?.cancel();
-    super.dispose();
-  }
+  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<MeetingsProvider>();
@@ -45,6 +44,13 @@ class _MeetingsPageState extends State<MeetingsPage> {
   }
 
   @override
+  void dispose() {
+    _authPollingTimer?.cancel();
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<MeetingsProvider>(
       builder: (context, provider, _) {
@@ -52,54 +58,96 @@ class _MeetingsPageState extends State<MeetingsPage> {
           return const LoadingScreen();
         }
 
-        return Align(
-          alignment: Alignment.topLeft,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        return Column(
+          children: [
+            // Tab bar header
+            _buildTabBar(context, provider),
+            // Tab content
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
                 children: [
-                  _buildHeader(context, provider),
-                  const SizedBox(height: AppSpacing.xl),
-
-                  // Optional: rate limit banner warning if low
-                  if (provider.rateLimit.isLow)
-                    _buildRateLimitBanner(context, provider),
-
-                  // Analytics section
-                  if (provider.analytics.totalMeetings > 0) ...[
-                    const AttendanceAnalyticsView(),
-                    const SizedBox(height: AppSpacing.xxl),
-                  ],
-
-                  // Active meetings list
-                  _buildMeetingsList(context, provider),
+                  // Tab 1: Meetings list
+                  _buildMeetingsTab(context, provider),
+                  // Tab 2: Live events
+                  const Padding(
+                    padding: EdgeInsets.all(AppSpacing.xl),
+                    child: LiveEventsView(),
+                  ),
                 ],
               ),
             ),
-          ),
+          ],
         );
       },
     );
   }
 
-  Widget _buildHeader(BuildContext context, MeetingsProvider provider) {
-    final l10n = AppLocalizations.of(context);
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          l10n.meetingsTitle,
-          style: AppTypography.title.copyWith(
-            color: context.colors.title,
-            fontSize: 28,
-          ),
-        ),
-        Row(
-          mainAxisSize: MainAxisSize.min,
+  Widget _buildTabBar(BuildContext context, MeetingsProvider provider) {
+    final scheme = context.colors;
+    final eventsProvider = context.watch<MeetEventsProvider>();
+
+    return Container(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: scheme.stroke)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
+        child: Row(
           children: [
+            Expanded(
+              child: TabBar(
+                controller: _tabController,
+                isScrollable: true,
+                labelColor: scheme.primary,
+                unselectedLabelColor: scheme.hint,
+                indicatorColor: scheme.primary,
+                indicatorWeight: 2,
+                labelStyle: AppTypography.subtitle.copyWith(fontSize: 14),
+                tabAlignment: TabAlignment.start,
+                tabs: [
+                  const Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.video, size: 16),
+                        SizedBox(width: AppSpacing.sm),
+                        Text('Meetings'),
+                      ],
+                    ),
+                  ),
+                  Tab(
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(LucideIcons.radio, size: 16),
+                        const SizedBox(width: AppSpacing.sm),
+                        const Text('Live Events'),
+                        if (eventsProvider.isStreaming) ...[
+                          const SizedBox(width: AppSpacing.sm),
+                          Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(
+                              color: SellioColors.green,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ],
+                        if (eventsProvider.events.isNotEmpty) ...[
+                          const SizedBox(width: AppSpacing.xs),
+                          SBadge(
+                            label: '${eventsProvider.events.length}',
+                            variant: SBadgeVariant.secondary,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Action buttons (always visible)
             if (provider.isAuthenticated) ...[
               SButton(
                 variant: SButtonVariant.ghost,
@@ -114,16 +162,15 @@ class _MeetingsPageState extends State<MeetingsPage> {
                   children: [
                     const Icon(LucideIcons.plus, size: 16),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(l10n.newMeeting),
+                    Text(AppLocalizations.of(context).newMeeting),
                   ],
                 ),
               ),
             ] else ...[
               SButton(
                 variant: SButtonVariant.primary,
-                onPressed: provider.isLoading
-                    ? null
-                    : () => _handleLogin(provider),
+                onPressed:
+                    provider.isLoading ? null : () => _handleLogin(provider),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -148,7 +195,37 @@ class _MeetingsPageState extends State<MeetingsPage> {
             ],
           ],
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _buildMeetingsTab(BuildContext context, MeetingsProvider provider) {
+    final l10n = AppLocalizations.of(context);
+    return Align(
+      alignment: Alignment.topLeft,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 1200),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Optional: rate limit banner warning if low
+              if (provider.rateLimit.isLow)
+                _buildRateLimitBanner(context, provider),
+
+              // Analytics section
+              if (provider.analytics.totalMeetings > 0) ...[
+                const AttendanceAnalyticsView(),
+                const SizedBox(height: AppSpacing.xxl),
+              ],
+
+              // Active meetings list
+              _buildMeetingsList(context, provider),
+            ],
+          ),
+        ),
+      ),
     );
   }
 

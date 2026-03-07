@@ -32,6 +32,7 @@ interface WorkerEnv {
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
     GOOGLE_REDIRECT_URI?: string;
+    GOOGLE_PUBSUB_TOPIC?: string;
 
     // KV namespace binding
     CACHE: KVNamespace;
@@ -93,6 +94,8 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
             const { MembersService } = await import("./modules/members/members.service");
             const { GoogleMeetClient } = await import("./infra/google/google-meet.client");
             const { MeetingsService } = await import("./modules/meetings/meetings.service");
+            const { WorkspaceEventsClient } = await import("./infra/google/workspace-events.client");
+            const { MeetEventsService } = await import("./modules/meet-events/meet-events.service");
 
             const logger = createConsoleLogger();
 
@@ -139,6 +142,16 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
                     cacheService,
                 })).singleton(),
                 meetingsService: asClass(MeetingsService).singleton(),
+                workspaceEventsClient: asFunction(({ logger, cacheService }: Cradle) => new WorkspaceEventsClient({
+                    logger,
+                    cacheService,
+                })).singleton(),
+                meetEventsService: asFunction(({ logger, workspaceEventsClient, cacheService, env }: Cradle) => new MeetEventsService({
+                    logger,
+                    workspaceEventsClient,
+                    cacheService,
+                    pubsubTopic: env.googlePubsubTopic,
+                })).singleton(),
             });
 
             return container;
@@ -287,6 +300,118 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
     return json({ ok: true, event, repo: repo.full_name, cacheKeysInvalidated: deleted });
 }
 
+async function handleMeetEvents(cradle: Cradle, request: Request, path: string, url: URL): Promise<Response> {
+    const { meetEventsService } = cradle;
+
+    // POST /api/meet-events/webhook — Pub/Sub push (no auth required)
+    if (request.method === "POST" && path === "/webhook") {
+        try {
+            const body = await request.json() as any;
+            const event = await meetEventsService.handleWebhook(body);
+            return json({ ok: true, eventId: event.id, type: event.label });
+        } catch (err: any) {
+            console.error("Webhook processing error:", err?.message);
+            // Return 200 anyway so Pub/Sub doesn't retry on bad data
+            return json({ ok: false, error: err?.message || "Processing failed" });
+        }
+    }
+
+    // POST /api/meet-events/subscribe — Create subscription for a space
+    if (request.method === "POST" && path === "/subscribe") {
+        const body = await request.json() as any;
+        const spaceName = body?.spaceName;
+        if (!spaceName) return errorResponse("Body must contain 'spaceName'", 400);
+        const subscription = await meetEventsService.subscribe(spaceName);
+        return json(subscription);
+    }
+
+    // GET /api/meet-events/stream — SSE endpoint for real-time event streaming
+    if (request.method === "GET" && path === "/stream") {
+        const lastEventId = request.headers.get("Last-Event-ID") || url.searchParams.get("lastEventId") || "";
+
+        const { readable, writable } = new TransformStream();
+        const writer = writable.getWriter();
+        const encoder = new TextEncoder();
+
+        const write = (data: string) => writer.write(encoder.encode(data));
+
+        // Start streaming in the background
+        (async () => {
+            try {
+                // Send initial heartbeat
+                await write(": connected\n\n");
+
+                let knownIds = new Set<string>();
+                const MAX_ITERATIONS = 8; // ~24 seconds (8 × 3s)
+
+                for (let i = 0; i < MAX_ITERATIONS; i++) {
+                    const events = await meetEventsService.listEvents(50);
+
+                    for (const evt of events) {
+                        // Skip events already sent (by ID or before lastEventId)
+                        if (knownIds.has(evt.id)) continue;
+                        if (lastEventId && evt.id <= lastEventId) continue;
+
+                        knownIds.add(evt.id);
+                        const sseData = JSON.stringify({
+                            id: evt.id,
+                            eventType: evt.eventType,
+                            label: evt.label,
+                            spaceName: evt.spaceName,
+                            conferenceId: evt.conferenceId,
+                            participantInfo: evt.participantInfo,
+                            timestamp: evt.timestamp,
+                        });
+
+                        await write(`id: ${evt.id}\nevent: meet-event\ndata: ${sseData}\n\n`);
+                    }
+
+                    // Heartbeat comment to keep connection alive
+                    await write(`: heartbeat ${new Date().toISOString()}\n\n`);
+
+                    // Wait 3 seconds before next check
+                    await new Promise((r) => setTimeout(r, 3000));
+                }
+            } catch (err) {
+                // Client disconnected or error — gracefully close
+            } finally {
+                try { await writer.close(); } catch { }
+            }
+        })();
+
+        return new Response(readable, {
+            headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                ...CORS_HEADERS,
+            },
+        });
+    }
+
+    // GET /api/meet-events/events — List recent events
+    if (request.method === "GET" && path === "/events") {
+        const limit = parseInt(url.searchParams.get("limit") || "50", 10);
+        const events = await meetEventsService.listEvents(limit);
+        return json({ count: events.length, events });
+    }
+
+    // GET /api/meet-events/subscriptions — List active subscriptions
+    if (request.method === "GET" && path === "/subscriptions") {
+        const subscriptions = await meetEventsService.listSubscriptions();
+        return json({ count: subscriptions.length, subscriptions });
+    }
+
+    // DELETE /api/meet-events/subscriptions/:name
+    if (request.method === "DELETE" && path.startsWith("/subscriptions/")) {
+        const subName = path.replace("/subscriptions/", "");
+        await meetEventsService.deleteSubscription(subName);
+        return json({ ok: true });
+    }
+
+    return errorResponse("Not Found", 404);
+}
+
 // ─── URL Pattern Router ─────────────────────────────────────
 
 function matchRoute(pathname: string): { handler: string; params?: Record<string, string> } | null {
@@ -297,6 +422,9 @@ function matchRoute(pathname: string): { handler: string; params?: Record<string
     if (pathname === "/api/members/status") return { handler: "membersStatus" };
     if (pathname.startsWith("/api/meetings")) {
         return { handler: "meetings", params: { path: pathname.replace("/api/meetings", "") } };
+    }
+    if (pathname.startsWith("/api/meet-events")) {
+        return { handler: "meetEvents", params: { path: pathname.replace("/api/meet-events", "") } };
     }
 
     // /api/metrics/:owner/:repo
@@ -327,6 +455,7 @@ export default {
             if (workerEnv.GOOGLE_CLIENT_ID) process.env.GOOGLE_CLIENT_ID = workerEnv.GOOGLE_CLIENT_ID;
             if (workerEnv.GOOGLE_CLIENT_SECRET) process.env.GOOGLE_CLIENT_SECRET = workerEnv.GOOGLE_CLIENT_SECRET;
             if (workerEnv.GOOGLE_REDIRECT_URI) process.env.GOOGLE_REDIRECT_URI = workerEnv.GOOGLE_REDIRECT_URI;
+            if (workerEnv.GOOGLE_PUBSUB_TOPIC) process.env.GOOGLE_PUBSUB_TOPIC = workerEnv.GOOGLE_PUBSUB_TOPIC;
         }
 
         try {
@@ -358,6 +487,9 @@ export default {
 
                 case "meetings":
                     return handleMeetings(cradle, request, route.params!.path, url);
+
+                case "meetEvents":
+                    return handleMeetEvents(cradle, request, route.params!.path, url);
 
                 case "webhook":
                     if (request.method !== "POST") return errorResponse("Method Not Allowed", 405);

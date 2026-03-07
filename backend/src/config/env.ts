@@ -128,6 +128,7 @@ interface EnvSchema {
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
     GOOGLE_REDIRECT_URI?: string;
+    GOOGLE_PUBSUB_TOPIC?: string;
 }
 
 function requireEnv(name: keyof EnvSchema): string {
@@ -207,6 +208,9 @@ function _createEnv() {
 
         /** Google OAuth2 Redirect URI */
         googleRedirectUri: optionalEnv("GOOGLE_REDIRECT_URI", "http://localhost:3001/api/meetings/oauth2callback"),
+
+        /** Google Pub/Sub topic for Workspace Events (e.g. "projects/my-proj/topics/meet-events-topic"). */
+        googlePubsubTopic: optionalEnv("GOOGLE_PUBSUB_TOPIC", ""),
     });
 }
 
