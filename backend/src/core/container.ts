@@ -24,7 +24,9 @@ import { MetricsService } from "../modules/metrics/metrics.service";
 import { LeaderboardService } from "../modules/metrics/leaderboard.service";
 import { MembersService } from "../modules/members/members.service";
 import { GoogleMeetClient } from "../infra/google/google-meet.client";
+import { WorkspaceEventsClient } from "../infra/google/workspace-events.client";
 import { MeetingsService } from "../modules/meetings/meetings.service";
+import { MeetEventsService } from "../modules/meet-events/meet-events.service";
 import { env } from "../config/env";
 import { logger } from "./logger";
 
@@ -43,7 +45,9 @@ export interface Cradle {
     leaderboardService: LeaderboardService;
     membersService: MembersService;
     googleMeetClient: GoogleMeetClient;
+    workspaceEventsClient: WorkspaceEventsClient;
     meetingsService: MeetingsService;
+    meetEventsService: MeetEventsService;
 }
 
 // ─── Builder ────────────────────────────────────────────────
@@ -110,6 +114,17 @@ export function buildContainer(kvNamespace: KVNamespace | null = null): AwilixCo
             });
         }).singleton(),
         meetingsService: asClass(MeetingsService).singleton(),
+        workspaceEventsClient: asFunction(({ logger, cacheService }) => {
+            return new WorkspaceEventsClient({ logger, cacheService });
+        }).singleton(),
+        meetEventsService: asFunction(({ logger, workspaceEventsClient, cacheService, env }) => {
+            return new MeetEventsService({
+                logger,
+                workspaceEventsClient,
+                cacheService,
+                pubsubTopic: env.googlePubsubTopic,
+            });
+        }).singleton(),
         membersService: asClass(MembersService).singleton(),
     });
 
