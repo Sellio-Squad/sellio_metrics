@@ -23,6 +23,12 @@ import '../../data/repositories/meetings_repository_impl.dart';
 import '../../domain/repositories/meetings_repository.dart';
 import '../../presentation/providers/meetings_provider.dart';
 
+// Meet Events Feature
+import '../../data/datasources/meet_events_data_source.dart';
+import '../../data/repositories/meet_events_repository_impl.dart';
+import '../../domain/repositories/meet_events_repository.dart';
+import '../../presentation/providers/meet_events_provider.dart';
+
 /// Global service locator instance.
 final sl = ServiceLocator();
 
@@ -87,6 +93,12 @@ void setupDependencies() {
   sl.registerLazySingleton<MeetingsRepository>(
     () => MeetingsRepositoryImpl(dataSource: sl.get<MeetingsDataSource>()),
   );
+  sl.registerSingleton<MeetEventsDataSource>(
+    RemoteMeetEventsDataSource(baseUrl: ApiConfig.baseUrl),
+  );
+  sl.registerLazySingleton<MeetEventsRepository>(
+    () => MeetEventsRepositoryImpl(dataSource: sl.get<MeetEventsDataSource>()),
+  );
 
   // Domain services
   sl.registerSingleton<KpiService>(const KpiService());
@@ -115,5 +127,8 @@ void setupDependencies() {
   );
   sl.registerFactory<MeetingsProvider>(
     () => MeetingsProvider(repository: sl.get<MeetingsRepository>()),
+  );
+  sl.registerFactory<MeetEventsProvider>(
+    () => MeetEventsProvider(repository: sl.get<MeetEventsRepository>()),
   );
 }
