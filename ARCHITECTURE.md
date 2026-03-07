@@ -9,18 +9,18 @@ This document provides detailed architecture diagrams for every layer of the sys
 ```mermaid
 graph TB
     Dev["👨‍💻 Developer<br/>(Sellio Squad)"]
-    Frontend["📊 Sellio Metrics<br/>Flutter Web Dashboard"]
-    Backend["⚡ Fastify Backend<br/>TypeScript API"]
+    Frontend["📊 Sellio Metrics<br/>Cloudflare Pages (Flutter)"]
+    Backend["⚡ Cloudflare Worker<br/>TypeScript API"]
     GitHub["🐙 GitHub API<br/>REST v3"]
     GHApp["🔑 GitHub App<br/>(Auth + Tokens)"]
-    Actions["⚙️ GitHub Actions<br/>(CI/CD Bot)"]
+    Google["🎬 Google Meet API<br/>REST v2"]
 
     Dev -->|"views metrics"| Frontend
-    Frontend -->|"GET /api/*"| Backend
+    Frontend -->|"HTTPS /api/*"| Backend
     Backend -->|"paginate/list"| GitHub
     Backend -->|"JWT → token"| GHApp
     GHApp -->|"access token (1hr)"| GitHub
-    Actions -->|"every 6hrs / manual"| Backend
+    Backend -->|"OAuth2 → create/end"| Google
 ```
 
 ---
@@ -29,12 +29,13 @@ graph TB
 
 ```mermaid
 graph TD
-    subgraph HTTP["🌐 HTTP Layer"]
+    subgraph HTTP["🌐 Router (Worker Entry)"]
         R1["GET /api/health"]
-        R2["GET /api/repos"]
-        R3["GET /api/metrics/:owner/:repo"]
-        EH["⚠️ Error Handler Plugin"]
-        RL["🚦 Rate Limiter Plugin"]
+        R2["GET /repo/*"]
+        R3["GET /api/metrics/*"]
+        R4["/api/meetings/*"]
+        R5["/api/members/*"]
+        CORS[" CORS & Auth Middleware"]
     end
 
     subgraph DI["⚙️ Awilix DI Container"]
@@ -42,8 +43,10 @@ graph TD
     end
 
     subgraph Services["🧠 Service Layer"]
-        RS["ReposService<br/>+ 5min cache"]
-        MS["MetricsService<br/>+ batch enrichment"]
+        RS["ReposService<br/>(KV Cached)"]
+        MS["MetricsService<br/>(Repo Analytics)"]
+        ME["MeetingsService<br/>(Google LifeCycle)"]
+        MB["MembersService<br/>(Status Analysis)"]
     end
 
     subgraph Mapper["🗺️ Mapper Layer"]
@@ -85,36 +88,25 @@ graph TD
 ```mermaid
 sequenceDiagram
     participant F as Flutter App
-    participant B as Fastify Backend
-    participant D as DI Container
-    participant A as GitHub App Auth
+    participant B as Cloudflare Worker
+    participant KV as Workers KV
     participant G as GitHub API
 
-    F->>B: GET /api/metrics/Sellio-Squad/sellio_mobile?state=all
-    B->>B: JSON Schema validation ✓
-    B->>D: resolve('metricsService')
-    D-->>B: MetricsService instance
+    F->>B: GET /api/metrics/...
+    B->>KV: Check Cache (sellio:metrics:...)
     
-    B->>A: getInstallationToken(installationId)
-    A->>G: POST /app/installations/:id/access_tokens (JWT)
-    G-->>A: { token, expires_at }
-    A-->>B: access_token (cached 1hr)
-
-    B->>G: GET /repos/owner/repo/pulls?state=all (paginate)
-    G-->>B: raw PR list (all pages)
-
-    par Parallel enrichment per PR
-        B->>G: GET /repos/owner/repo/pulls/:n/reviews
-        B->>G: GET /repos/owner/repo/pulls/:n/comments
+    alt Cache Hit
+        KV-->>B: return JSON
+    else Cache Miss
+        B->>G: GitHub App Auth
+        B->>G: Fetch PRs & Enrichment
+        G-->>B: data
+        B->>B: Transform (Mapper)
+        B->>KV: Save result (1hr TTL)
     end
-    G-->>B: reviews[] + comments[]
 
-    B->>B: mapper.mapToPrMetric(rawPr, reviews, comments)
-    Note over B: Pure function — no side effects<br/>Computes: timeToMerge, approvals,<br/>isoWeek, diffStats, etc.
-
-    B-->>F: { count, metrics: PrMetric[] }
-    F->>F: DashboardProvider.notifyListeners()
-    F->>F: Re-renders all dependent widgets
+    B-->>F: HTTP 200 { metrics[] }
+    F->>F: Re-render UI with Provider
 ```
 
 ---
@@ -335,15 +327,17 @@ graph LR
 
 ```mermaid
 graph TD
-    REQ["Incoming Request"] --> CHECK{"Cache hit?<br/>TTL not expired?"}
-    CHECK -->|"YES"| RETURN["Return cached data<br/>(~1ms)"]
-    CHECK -->|"NO"| FETCH["Fetch from GitHub API<br/>(200-2000ms)"]
-    FETCH --> STORE["Store in memory cache<br/>with TTL timestamp"]
+    REQ["Incoming Request"] --> CHECK{"KV Cache hit?<br/>(sellio:*)?"}
+    CHECK -->|"YES"| RETURN["Return from KV<br/>(~5-20ms)"]
+    CHECK -->|"NO"| FETCH["Fetch from GitHub API<br/>(Network Latency)"]
+    FETCH --> STORE["Store in Workers KV<br/>with expirationTtl"]
     STORE --> RETURN2["Return fresh data"]
 
-    subgraph Cache["In-Memory Cache (per service instance)"]
-        K1["repos:{org} → TTL 5min"]
-        K2["(future) metrics:{owner}/{repo} → TTL 2min"]
+    subgraph Cache["Cloudflare Workers KV"]
+        K1["sellio:repos:{org} → 5min"]
+        K2["sellio:metrics:{repo} → 1hr"]
+        K3["sellio:google_oauth_tokens → 30d"]
+        K4["sellio:meetings_list → 30d"]
     end
 
     STORE --> Cache
@@ -366,16 +360,15 @@ graph TB
         BOT["sellio-metrics-bot.yml<br/>Runs every 6 hours"]
     end
 
-    subgraph Prod["🚀 Production (Future)"]
-        VPS["Backend on VPS/Cloud<br/>(Node.js + PM2)"]
-        WEB["Flutter Web<br/>(Firebase Hosting / Vercel)"]
-        ENV["Environment Secrets<br/>(GitHub Secrets / Vault)"]
+    subgraph Deployment["🚀 Production (Cloudflare Edge)"]
+        WEB["Cloudflare Pages<br/>(Flutter Web)"]
+        API["Cloudflare Workers<br/>(Serverless API)"]
+        KV["Cloudflare KV<br/>(Distributed Data)"]
     end
 
-    FL -->|"proxy"| TS
-    BOT --> TS
-    ENV --> VPS
-    VPS --> WEB
+    BOT --> API
+    API <--> KV
+    WEB <--> API
 ```
 
 ---

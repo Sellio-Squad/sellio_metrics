@@ -15,6 +15,7 @@ compatibility_flags = ["nodejs_compat"]
 GITHUB_ORG = "Sellio-Squad"
 LOG_LEVEL = "info"
 NODE_ENV = "production"
+GOOGLE_REDIRECT_URI = "https://sellio-metrics.abdoessam743.workers.dev/api/meetings/oauth2callback"
 
 # Workers KV for caching (replaces Redis)
 # After first deploy, create the namespace via:

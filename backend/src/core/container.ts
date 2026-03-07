@@ -100,12 +100,13 @@ export function buildContainer(kvNamespace: KVNamespace | null = null): AwilixCo
         leaderboardService: asClass(LeaderboardService).singleton(),
 
         // Google Meet integration
-        googleMeetClient: asFunction(({ logger, env }) => {
+        googleMeetClient: asFunction(({ logger, env, cacheService }) => {
             return new GoogleMeetClient({
                 logger,
                 clientId: env.googleClientId,
                 clientSecret: env.googleClientSecret,
                 redirectUri: env.googleRedirectUri,
+                cacheService,
             });
         }).singleton(),
         meetingsService: asClass(MeetingsService).singleton(),
