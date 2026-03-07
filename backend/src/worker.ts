@@ -29,6 +29,9 @@ interface WorkerEnv {
     GITHUB_ORG?: string;
     LOG_LEVEL?: string;
     NODE_ENV?: string;
+    GOOGLE_CLIENT_ID?: string;
+    GOOGLE_CLIENT_SECRET?: string;
+    GOOGLE_REDIRECT_URI?: string;
 
     // KV namespace binding
     CACHE: KVNamespace;
@@ -87,6 +90,9 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
             const { ReposService } = await import("./modules/repos/repos.service");
             const { MetricsService } = await import("./modules/metrics/metrics.service");
             const { LeaderboardService } = await import("./modules/metrics/leaderboard.service");
+            const { MembersService } = await import("./modules/members/members.service");
+            const { GoogleMeetClient } = await import("./infra/google/google-meet.client");
+            const { MeetingsService } = await import("./modules/meetings/meetings.service");
 
             const logger = createConsoleLogger();
 
@@ -124,6 +130,15 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
                 reposService: asClass(ReposService).singleton(),
                 metricsService: asClass(MetricsService).singleton(),
                 leaderboardService: asClass(LeaderboardService).singleton(),
+                membersService: asClass(MembersService).singleton(),
+                googleMeetClient: asFunction(({ logger, env, cacheService }: Cradle) => new GoogleMeetClient({
+                    logger,
+                    clientId: env.googleClientId,
+                    clientSecret: env.googleClientSecret,
+                    redirectUri: env.googleRedirectUri,
+                    cacheService,
+                })).singleton(),
+                meetingsService: asClass(MeetingsService).singleton(),
             });
 
             return container;
@@ -182,6 +197,63 @@ async function handleLeaderboard(cradle: Cradle, body: any): Promise<Response> {
     return json(result);
 }
 
+async function handleMembersStatus(cradle: Cradle, request: Request): Promise<Response> {
+    if (request.method !== "POST") return errorResponse("Method Not Allowed", 405);
+    const body = (await request.json()) as any;
+    const prs = body?.prs;
+    if (!Array.isArray(prs)) return errorResponse("Body must contain a 'prs' array", 400);
+    const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
+    const result = cradle.membersService.calculateMemberStatus(prs, orgMembers);
+    return json(result);
+}
+
+async function handleMeetings(cradle: Cradle, request: Request, path: string, url: URL): Promise<Response> {
+    const { meetingsService } = cradle;
+
+    if (request.method === "GET") {
+        if (path === "/auth-url") return json({ authUrl: meetingsService.getAuthUrl() });
+        if (path === "/auth-status") return json({ isReady: await meetingsService.isReady() });
+        if (path === "/oauth2callback") {
+            const code = url.searchParams.get("code");
+            const error = url.searchParams.get("error");
+            if (error) return new Response(`<h1>Failed</h1><p>${error}</p>`, { headers: { "Content-Type": "text/html", ...CORS_HEADERS } });
+            if (!code) return errorResponse("Missing code", 400);
+            try {
+                await meetingsService.authorize(code);
+                return new Response(`<html><body><h1>Success</h1><script>setTimeout(() => window.close(), 3000);</script></body></html>`, { headers: { "Content-Type": "text/html", ...CORS_HEADERS } });
+            } catch {
+                return errorResponse("Authentication failed", 500);
+            }
+        }
+        if (path === "/rate-limit") return json(meetingsService.getRateLimitStatus());
+        if (path === "/analytics") return json(await meetingsService.getAnalytics());
+        if (path === "" || path === "/") return json(await meetingsService.listMeetings());
+
+        const idMatch = path.match(/^\/([^/]+)$/);
+        if (idMatch) return json(await meetingsService.getMeeting(idMatch[1]));
+        const attMatch = path.match(/^\/([^/]+)\/attendance$/);
+        if (attMatch) return json(await meetingsService.getAttendance(attMatch[1]));
+    } else if (request.method === "POST") {
+        if (path === "/auth-logout") {
+            await meetingsService.clearCredentials();
+            return json({ success: true });
+        }
+        if (path === "" || path === "/") {
+            const body = await request.json() as any;
+            if (!(await meetingsService.isReady())) {
+                return new Response(JSON.stringify({ error: "UNAUTHORIZED", message: "Sign in required.", authUrl: meetingsService.getAuthUrl() }), { status: 401, headers: { "Content-Type": "application/json", ...CORS_HEADERS } });
+            }
+            return json(await meetingsService.createMeeting(body.title));
+        }
+        const endMatch = path.match(/^\/([^/]+)\/end$/);
+        if (endMatch) {
+            await meetingsService.endMeeting(endMatch[1]);
+            return json({ success: true });
+        }
+    }
+    return errorResponse("Not Found", 404);
+}
+
 async function handleWebhook(cradle: Cradle, request: Request): Promise<Response> {
     const event = request.headers.get("x-github-event");
     const RELEVANT_EVENTS = new Set([
@@ -222,6 +294,10 @@ function matchRoute(pathname: string): { handler: string; params?: Record<string
     if (pathname === "/api/repos") return { handler: "repos" };
     if (pathname === "/api/metrics/leaderboard") return { handler: "leaderboard" };
     if (pathname === "/api/webhooks/github") return { handler: "webhook" };
+    if (pathname === "/api/members/status") return { handler: "membersStatus" };
+    if (pathname.startsWith("/api/meetings")) {
+        return { handler: "meetings", params: { path: pathname.replace("/api/meetings", "") } };
+    }
 
     // /api/metrics/:owner/:repo
     const metricsMatch = pathname.match(/^\/api\/metrics\/([^/]+)\/([^/]+)$/);
@@ -248,6 +324,9 @@ export default {
             process.env.APP_PRIVATE_KEY = workerEnv.APP_PRIVATE_KEY;
             if (workerEnv.GITHUB_ORG) process.env.GITHUB_ORG = workerEnv.GITHUB_ORG;
             if (workerEnv.LOG_LEVEL) process.env.LOG_LEVEL = workerEnv.LOG_LEVEL;
+            if (workerEnv.GOOGLE_CLIENT_ID) process.env.GOOGLE_CLIENT_ID = workerEnv.GOOGLE_CLIENT_ID;
+            if (workerEnv.GOOGLE_CLIENT_SECRET) process.env.GOOGLE_CLIENT_SECRET = workerEnv.GOOGLE_CLIENT_SECRET;
+            if (workerEnv.GOOGLE_REDIRECT_URI) process.env.GOOGLE_REDIRECT_URI = workerEnv.GOOGLE_REDIRECT_URI;
         }
 
         try {
@@ -273,6 +352,12 @@ export default {
                     const body = await request.json();
                     return handleLeaderboard(cradle, body);
                 }
+
+                case "membersStatus":
+                    return handleMembersStatus(cradle, request);
+
+                case "meetings":
+                    return handleMeetings(cradle, request, route.params!.path, url);
 
                 case "webhook":
                     if (request.method !== "POST") return errorResponse("Method Not Allowed", 405);

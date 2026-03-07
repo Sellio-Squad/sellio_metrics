@@ -2,18 +2,17 @@
  * Sellio Metrics Backend — Google Meet Client
  *
  * Low-level wrapper around the Google Meet REST API.
- * Handles service-account authentication and rate-limit tracking.
- *
- * Uses `@google-apps/meet` SDK with `google-auth-library` JWT.
+ * Handles OAuth2 authentication and native fetch to Google APIs
+ * (avoids @google-apps/meet which crashes on Cloudflare Workers due to protobuf eval).
  */
 
-import { SpacesServiceClient, ConferenceRecordsServiceClient } from "@google-apps/meet";
 import { OAuth2Client } from "google-auth-library";
+import type { CacheService } from "../cache/cache.service";
 import type { Logger } from "../../core/logger";
 
 // ─── Rate-limit tracking ────────────────────────────────────
 
-interface RateLimitState {
+export interface RateLimitState {
     remaining: number;
     limit: number;
     resetAt: number; // unix seconds
@@ -25,13 +24,14 @@ interface RateLimitState {
 
 export class GoogleMeetClient {
     private readonly logger: Logger;
+    private readonly cacheService: CacheService;
     private oauth2Client: OAuth2Client;
-    private spacesClient: SpacesServiceClient | null = null;
-    private conferenceClient: ConferenceRecordsServiceClient | null = null;
     private readonly rateLimit: RateLimitState;
+    private currentToken: string | null = null;
 
-    constructor({ logger, clientId, clientSecret, redirectUri }: { logger: Logger; clientId: string; clientSecret: string; redirectUri: string }) {
+    constructor({ logger, clientId, clientSecret, redirectUri, cacheService }: { logger: Logger; clientId: string; clientSecret: string; redirectUri: string; cacheService: CacheService }) {
         this.logger = logger.child({ module: "google-meet-client" });
+        this.cacheService = cacheService;
 
         this.oauth2Client = new OAuth2Client(
             clientId,
@@ -48,68 +48,57 @@ export class GoogleMeetClient {
         };
     }
 
-    /**
-     * Set the credentials after a successful OAuth2 callback.
-     * Re-initializes the Meet service clients with the new token.
-     */
-    setCredentials(tokens: any) {
+    async setCredentials(tokens: any) {
         this.oauth2Client.setCredentials(tokens);
-
-        this.spacesClient = new SpacesServiceClient({ authClient: this.oauth2Client });
-        this.conferenceClient = new ConferenceRecordsServiceClient({ authClient: this.oauth2Client });
-
+        this.currentToken = tokens.access_token || null;
+        await this.cacheService.set("google_oauth_tokens", tokens, 30 * 24 * 60 * 60); // 30 days
         this.logger.info("✅ Google Meet OAuth2 Credentials configured.");
     }
 
-    /**
-     * Generate the OAuth2 consent screen URL.
-     */
     getAuthUrl(): string {
         return this.oauth2Client.generateAuthUrl({
-            access_type: 'offline', // Get a refresh token
+            access_type: 'offline',
             scope: [
                 "https://www.googleapis.com/auth/meetings.space.created",
                 "https://www.googleapis.com/auth/meetings.space.readonly",
             ],
-            prompt: 'consent' // Force to get refresh token
+            prompt: 'consent'
         });
     }
 
-    /**
-     * Exchange auth code for tokens.
-     */
     async authorize(code: string): Promise<any> {
         const { tokens } = await this.oauth2Client.getToken(code);
-        this.setCredentials(tokens);
+        await this.setCredentials(tokens);
         return tokens;
     }
 
-    /**
-     * Check if client is authenticated
-     */
-    isReady(): boolean {
-        return this.spacesClient !== null && this.conferenceClient !== null;
+    async isReady(): Promise<boolean> {
+        if (this.currentToken) return true;
+
+        // Check cache on new instances
+        const cached = await this.cacheService.get<any>("google_oauth_tokens");
+        if (cached?.data) {
+            this.oauth2Client.setCredentials(cached.data);
+            this.currentToken = cached.data.access_token || null;
+            return true;
+        }
+
+        return false;
     }
 
-    /**
-     * Clear the credentials to sign out.
-     */
-    clearCredentials(): void {
+    async clearCredentials(): Promise<void> {
         this.oauth2Client.setCredentials({});
-        this.spacesClient = null;
-        this.conferenceClient = null;
+        this.currentToken = null;
+        await this.cacheService.del("google_oauth_tokens");
     }
 
     // ─── Rate Limit Tracking ────────────────────────────────
 
     private trackCall(): void {
         const now = Math.floor(Date.now() / 1000);
-
-        // Reset counter every 60 seconds
         if (now - this.rateLimit.lastCallAt > 60) {
             this.rateLimit.callCount = 0;
         }
-
         this.rateLimit.callCount++;
         this.rateLimit.lastCallAt = now;
         this.rateLimit.remaining = Math.max(0, this.rateLimit.limit - this.rateLimit.callCount);
@@ -127,202 +116,118 @@ export class GoogleMeetClient {
         };
     }
 
-    // ─── Exponential Backoff Wrapper ────────────────────────
+    // ─── Generic Fetch Wrapper ─────────────────────────────
 
-    private async withRetry<T>(operation: () => Promise<T>, label: string): Promise<T> {
+    private async apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+        if (!(await this.isReady())) throw new Error("Not authorized");
+
+        const url = `https://meet.googleapis.com/v2/${endpoint}`;
+        const accessToken = (await this.oauth2Client.getAccessToken()).token;
+        if (!accessToken) throw new Error("Failed to get access token");
+
+        this.currentToken = accessToken; // Keep updated
+
+        const fetchOptions: RequestInit = {
+            ...options,
+            headers: {
+                "Authorization": `Bearer ${this.currentToken}`,
+                "Content-Type": "application/json",
+                ...options.headers,
+            },
+        };
+
         const maxRetries = 3;
         for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            try {
-                this.trackCall();
-                return await operation();
-            } catch (error: any) {
-                const status = error?.code ?? error?.status;
+            this.trackCall();
+            const res = await fetch(url, fetchOptions);
 
-                // Rate limited (429) or server error (5xx): retry with backoff
-                if ((status === 429 || (status >= 500 && status < 600)) && attempt < maxRetries) {
+            if (res.ok) {
+                // Return empty object for 204 No Content
+                if (res.status === 204 || res.headers.get("content-length") === "0") return {} as T;
+                return await res.json() as T;
+            }
+
+            if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
+                if (attempt < maxRetries) {
                     const delayMs = Math.pow(2, attempt) * 1000 + Math.random() * 500;
-                    this.logger.warn(
-                        { attempt, delayMs, status, label },
-                        `⚠️  Google Meet API ${label} — retrying after ${Math.round(delayMs)}ms`,
-                    );
-                    await new Promise((r) => setTimeout(r, delayMs));
+                    this.logger.warn({ attempt, delayMs, status: res.status, url }, `⚠️ Rate limited / Server Error — retrying fetch`);
+                    await new Promise(r => setTimeout(r, delayMs));
                     continue;
                 }
-
-                this.logger.error({ err: error, label }, `❌ Google Meet API ${label} failed`);
-                throw error;
             }
-        }
 
-        throw new Error(`Exhausted retries for ${label}`);
+            let errBody = "";
+            try { errBody = await res.text(); } catch { }
+            throw new Error(`Google Meet API failed: ${res.status} ${res.statusText} - ${errBody}`);
+        }
+        throw new Error("Exhausted retries");
     }
 
     // ─── Space Operations ───────────────────────────────────
 
-    /**
-     * Create a new Google Meet space.
-     * Returns the space resource with meetingUri and meetingCode.
-     */
-    async createSpace(): Promise<{
-        spaceName: string;
-        meetingUri: string;
-        meetingCode: string;
-    }> {
-        if (!this.spacesClient) {
-            throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
-        }
+    async createSpace(): Promise<{ spaceName: string; meetingUri: string; meetingCode: string; }> {
+        const space = await this.apiFetch<any>("spaces", {
+            method: "POST",
+            body: JSON.stringify({ config: { accessType: "OPEN" } })
+        });
 
-        return this.withRetry(async () => {
-            const [space] = await this.spacesClient!.createSpace({
-                space: {
-                    config: {
-                        accessType: "OPEN",
-                    },
-                },
-            });
-
-            this.logger.info(
-                { spaceName: space.name, meetingUri: space.meetingUri },
-                "✅ Created Google Meet space",
-            );
-
-            return {
-                spaceName: space.name ?? "",
-                meetingUri: space.meetingUri ?? "",
-                meetingCode: space.meetingCode ?? "",
-            };
-        }, "createSpace");
+        return {
+            spaceName: space.name ?? "",
+            meetingUri: space.meetingUri ?? "",
+            meetingCode: space.meetingCode ?? "",
+        };
     }
 
-    /**
-     * Get details of an existing Meet space.
-     */
-    async getSpace(spaceName: string): Promise<{
-        spaceName: string;
-        meetingUri: string;
-        meetingCode: string;
-    }> {
-        if (!this.spacesClient) {
-            throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
-        }
-
-        return this.withRetry(async () => {
-            const [space] = await this.spacesClient!.getSpace({ name: spaceName });
-
-            return {
-                spaceName: space.name ?? "",
-                meetingUri: space.meetingUri ?? "",
-                meetingCode: space.meetingCode ?? "",
-            };
-        }, "getSpace");
+    async getSpace(spaceName: string): Promise<{ spaceName: string; meetingUri: string; meetingCode: string; }> {
+        const space = await this.apiFetch<any>(spaceName);
+        return {
+            spaceName: space.name ?? "",
+            meetingUri: space.meetingUri ?? "",
+            meetingCode: space.meetingCode ?? "",
+        };
     }
 
-    /**
-     * Ends an active conference (kicks everyone out and ends the meeting).
-     */
     async endSpace(spaceName: string): Promise<void> {
-        if (!this.spacesClient) {
-            throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
-        }
-
-        return this.withRetry(async () => {
-            await this.spacesClient!.endActiveConference({ name: spaceName });
-        }, "endSpace");
+        await this.apiFetch(`${spaceName}:endActiveConference`, { method: "POST", body: "{}" });
     }
 
-    /**
-     * Safely format Google Protobuf Timestamps to ISO strings.
-     */
-    private formatTimestamp(ts: any): string {
-        if (!ts) return "";
-        if (typeof ts === "string") return ts;
-        if (ts.seconds) {
-            return new Date(Number(ts.seconds) * 1000).toISOString();
-        }
-        return "";
+    // ─── Conference Analytics ───────────────────────────────
+
+    async listConferenceRecords(spaceName: string): Promise<Array<{ name: string; startTime: string; endTime: string; }>> {
+        const query = encodeURIComponent(`space.name="${spaceName}"`);
+        const res = await this.apiFetch<any>(`conferenceRecords?filter=${query}`);
+        const records = res.conferenceRecords || [];
+
+        return records.map((r: any) => ({
+            name: r.name ?? "",
+            startTime: r.startTime ?? "",
+            endTime: r.endTime ?? "",
+        }));
     }
 
-    /**
-     * List conference records (past meetings that actually happened).
-     */
-    async listConferenceRecords(spaceName: string): Promise<Array<{
-        name: string;
-        startTime: string;
-        endTime: string;
-    }>> {
-        if (!this.conferenceClient) {
-            throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
-        }
-
-        return this.withRetry(async () => {
-            const [records] = await this.conferenceClient!.listConferenceRecords({
-                filter: `space.name="${spaceName}"`,
-            });
-
-            return (records ?? []).map((r: any) => ({
-                name: r.name ?? "",
-                startTime: this.formatTimestamp(r.startTime),
-                endTime: this.formatTimestamp(r.endTime),
-            }));
-        }, "listConferenceRecords");
-    }
-
-    /**
-     * List participants for a conference record.
-     */
     async listParticipants(conferenceRecordName: string): Promise<Array<{
-        name: string;
-        displayName: string;
-        email: string | null;
-        earliestStartTime: string;
-        latestEndTime: string;
+        name: string; displayName: string; email: string | null;
+        earliestStartTime: string; latestEndTime: string;
     }>> {
-        if (!this.conferenceClient) {
-            throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
-        }
+        const res = await this.apiFetch<any>(`${conferenceRecordName}/participants`);
+        const participants = res.participants || [];
 
-        return this.withRetry(async () => {
-            const [participants] = await this.conferenceClient!.listParticipants({
-                parent: conferenceRecordName,
-            });
-
-            return (participants ?? []).map((p: any) => ({
-                name: p.name ?? "",
-                displayName: p.signedinUser?.displayName ?? p.anonymousUser?.displayName ?? "Unknown",
-                email: p.signedinUser?.user
-                    ? `${p.signedinUser.user.replace("users/", "")}@gmail.com`
-                    : null,
-                earliestStartTime: this.formatTimestamp(p.earliestStartTime),
-                latestEndTime: this.formatTimestamp(p.latestEndTime),
-            }));
-        }, "listParticipants");
+        return participants.map((p: any) => ({
+            name: p.name ?? "",
+            displayName: p.signedinUser?.displayName ?? p.anonymousUser?.displayName ?? "Unknown",
+            email: p.signedinUser?.user ? p.signedinUser.user.replace("users/", "") : null, // Not always valid format if no gmail, but fallback
+            earliestStartTime: p.earliestStartTime ?? "",
+            latestEndTime: p.latestEndTime ?? "",
+        }));
     }
 
-    /**
-     * List participant sessions (individual join/leave events).
-     */
-    async listParticipantSessions(participantName: string): Promise<Array<{
-        startTime: string;
-        endTime: string | null;
-    }>> {
-        if (!this.conferenceClient) {
-            throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
-        }
+    async listParticipantSessions(participantName: string): Promise<Array<{ startTime: string; endTime: string | null; }>> {
+        const res = await this.apiFetch<any>(`${participantName}/participantSessions`);
+        const sessions = res.participantSessions || [];
 
-        return this.withRetry(async () => {
-            const [sessions] = await this.conferenceClient!.listParticipantSessions({
-                parent: participantName,
-            });
-
-            return (sessions ?? []).map((s: any) => {
-                const endTime = this.formatTimestamp(s.endTime);
-                return {
-                    startTime: this.formatTimestamp(s.startTime),
-                    endTime: endTime === "" ? null : endTime,
-                };
-            });
-        }, "listParticipantSessions");
+        return sessions.map((s: any) => ({
+            startTime: s.startTime ?? "",
+            endTime: s.endTime || null,
+        }));
     }
 }
-
-export type { RateLimitState };

@@ -562,6 +562,40 @@
                     "response": []
                 }
             ]
+        },
+        {
+            "name": "Members",
+            "item": [
+                {
+                    "name": "Get Members Status",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"prs\": []\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/members/status",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "members",
+                                "status"
+                            ]
+                        },
+                        "description": "Determines member activity (Active/Inactive) based on PR data and organization membership."
+                    },
+                    "response": []
+                }
+            ]
         }
     ]
 }
