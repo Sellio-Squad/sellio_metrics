@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -21,6 +22,14 @@ class MeetingsPage extends StatefulWidget {
 }
 
 class _MeetingsPageState extends State<MeetingsPage> {
+  Timer? _authPollingTimer;
+
+  @override
+  void dispose() {
+    _authPollingTimer?.cancel();
+    super.dispose();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -149,6 +158,28 @@ class _MeetingsPageState extends State<MeetingsPage> {
       final uri = Uri.parse(provider.authUrl!);
       if (await canLaunchUrl(uri)) {
         await launchUrl(uri, mode: LaunchMode.externalApplication);
+        
+        _authPollingTimer?.cancel();
+        _authPollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+          if (!mounted) {
+            timer.cancel();
+            return;
+          }
+          await provider.checkAuthStatus();
+          if (provider.isAuthenticated) {
+            timer.cancel();
+            provider.loadMeetings();
+            provider.loadAnalytics();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Successfully signed in with Google!'),
+                  backgroundColor: SellioColors.green,
+                ),
+              );
+            }
+          }
+        });
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(

@@ -9,9 +9,13 @@ cd /path/to/sellio_metrics
 ### Frontend (Flutter)
 
 ```bash
-# Run Flutter web (Chrome) with real backend (default API_BASE_URL = http://localhost:3001)
+# Run Flutter web (Chrome) against local Worker (default port 8787)
 cd frontend
-flutter run -d chrome
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8787
+
+# Run Flutter web against local Fastify (port 3001)
+cd frontend
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:3001
 
 # Build Flutter web for release (real backend)
 cd frontend
@@ -39,7 +43,13 @@ cd frontend
 cd backend
 npm install
 
-# Run backend in development mode (with tsx + watch)
+# Run backend in Cloudflare Worker mode (LOCAL)
+# Most accurate to production. Default port: 8787.
+cd backend
+npm run dev:worker
+
+# Run backend in Legacy Fastify mode (LOCAL)
+# Port: 3001.
 cd backend
 npm run dev
 
@@ -54,6 +64,10 @@ npm run build
 # Start built backend
 cd backend
 npm start
+
+
+cd backend
+npm run deploy
 ```
 
 ### Frontend + Backend together (real API)

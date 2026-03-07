@@ -7,6 +7,7 @@
  */
 
 import type { GoogleMeetClient } from "../../infra/google/google-meet.client";
+import type { CacheService } from "../../infra/cache/cache.service";
 import type { Logger } from "../../core/logger";
 import type {
     MeetingSpace,
@@ -34,12 +35,26 @@ interface StoredMeeting {
 export class MeetingsService {
     private readonly logger: Logger;
     private readonly meetClient: GoogleMeetClient;
-    private readonly meetings: Map<string, StoredMeeting> = new Map();
-    private idCounter = 0;
+    private readonly cacheService: CacheService;
 
-    constructor({ logger, googleMeetClient }: { logger: Logger; googleMeetClient: GoogleMeetClient }) {
+    constructor({ logger, googleMeetClient, cacheService }: { logger: Logger; googleMeetClient: GoogleMeetClient; cacheService: CacheService }) {
         this.logger = logger.child({ module: "meetings" });
         this.meetClient = googleMeetClient;
+        this.cacheService = cacheService;
+    }
+
+    private async getMeetings(): Promise<Map<string, StoredMeeting>> {
+        const res = await this.cacheService.get<StoredMeeting[]>("meetings_list");
+        const list = res?.data || [];
+        const map = new Map<string, StoredMeeting>();
+        for (const m of list) map.set(m.id, m);
+        return map;
+    }
+
+    private async saveMeetings(map: Map<string, StoredMeeting>): Promise<void> {
+        const list = Array.from(map.values());
+        // Store for 30 days
+        await this.cacheService.set("meetings_list", list, 30 * 24 * 60 * 60);
     }
 
     // ─── OAuth2 Authentication ──────────────────────────────
@@ -53,12 +68,12 @@ export class MeetingsService {
         return this.meetClient.authorize(code);
     }
 
-    isReady(): boolean {
+    async isReady(): Promise<boolean> {
         return this.meetClient.isReady();
     }
 
-    clearCredentials(): void {
-        this.meetClient.clearCredentials();
+    async clearCredentials(): Promise<void> {
+        await this.meetClient.clearCredentials();
     }
 
     // ─── Create ─────────────────────────────────────────────
@@ -68,7 +83,7 @@ export class MeetingsService {
 
         const space = await this.meetClient.createSpace();
 
-        const id = `meet_${++this.idCounter}_${Date.now()}`;
+        const id = `meet_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
         const stored: StoredMeeting = {
             id,
             title,
@@ -78,7 +93,9 @@ export class MeetingsService {
             createdAt: new Date().toISOString(),
         };
 
-        this.meetings.set(id, stored);
+        const map = await this.getMeetings();
+        map.set(id, stored);
+        await this.saveMeetings(map);
 
         this.logger.info({ id, meetingUri: space.meetingUri }, "✅ Meeting created");
 
@@ -91,7 +108,8 @@ export class MeetingsService {
     // ─── List ───────────────────────────────────────────────
 
     async listMeetings(): Promise<MeetingSpace[]> {
-        const list = Array.from(this.meetings.values());
+        const map = await this.getMeetings();
+        const list = Array.from(map.values());
 
         return list
             .map((m) => ({
@@ -109,7 +127,8 @@ export class MeetingsService {
     // ─── Get Detail ─────────────────────────────────────────
 
     async getMeeting(id: string): Promise<MeetingDetail> {
-        const meeting = this.meetings.get(id);
+        const map = await this.getMeetings();
+        const meeting = map.get(id);
         if (!meeting) {
             throw new Error(`Meeting not found: ${id}`);
         }
@@ -147,7 +166,8 @@ export class MeetingsService {
     }
 
     async endMeeting(id: string): Promise<void> {
-        const meeting = this.meetings.get(id);
+        const map = await this.getMeetings();
+        const meeting = map.get(id);
         if (!meeting) {
             throw new Error(`Meeting not found: ${id}`);
         }
@@ -159,7 +179,8 @@ export class MeetingsService {
     // ─── Attendance ─────────────────────────────────────────
 
     async getAttendance(meetingId: string): Promise<AttendanceRecord> {
-        const meeting = this.meetings.get(meetingId);
+        const map = await this.getMeetings();
+        const meeting = map.get(meetingId);
         if (!meeting) {
             throw new Error(`Meeting not found: ${meetingId}`);
         }
@@ -211,7 +232,8 @@ export class MeetingsService {
     // ─── Analytics ──────────────────────────────────────────
 
     async getAnalytics(): Promise<AttendanceAnalytics> {
-        const meetingsList = Array.from(this.meetings.values());
+        const map = await this.getMeetings();
+        const meetingsList = Array.from(map.values());
 
         const meetingsWithParticipants: Array<{
             id: string;

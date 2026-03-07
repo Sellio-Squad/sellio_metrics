@@ -37,7 +37,7 @@ const meetingsRoute: FastifyPluginAsync = async (fastify) => {
         },
         async (request, reply) => {
             const { meetingsService, logger } = request.diScope.cradle as Cradle;
-            if (!meetingsService.isReady()) {
+            if (!(await meetingsService.isReady())) {
                 return reply.status(401).send({
                     error: "UNAUTHORIZED",
                     message: "Google Meet API is not authorized. Please visit /api/meetings/auth-url to sign in.",
@@ -109,7 +109,7 @@ const meetingsRoute: FastifyPluginAsync = async (fastify) => {
      */
     fastify.get("/auth-status", async (request) => {
         const { meetingsService } = request.diScope.cradle as Cradle;
-        return { isReady: meetingsService.isReady() };
+        return { isReady: await meetingsService.isReady() };
     });
 
     /**
@@ -118,7 +118,7 @@ const meetingsRoute: FastifyPluginAsync = async (fastify) => {
      */
     fastify.post("/auth-logout", async (request) => {
         const { meetingsService } = request.diScope.cradle as Cradle;
-        meetingsService.clearCredentials();
+        await meetingsService.clearCredentials();
         return { success: true };
     });
 
@@ -216,7 +216,7 @@ const meetingsRoute: FastifyPluginAsync = async (fastify) => {
         async (request) => {
             const { meetingsService } = request.diScope.cradle as Cradle;
 
-            if (!meetingsService.isReady()) {
+            if (!(await meetingsService.isReady())) {
                 throw new Error("Google Meet Client not authorized. Requires OAuth2 sign-in.");
             }
 

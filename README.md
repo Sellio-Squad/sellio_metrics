@@ -29,6 +29,7 @@
 |---------|-------------|
 | 📈 **PR Metrics Dashboard** | Open/merged/closed counts, velocity trends, weekly activity charts |
 | 🏆 **Team Leaderboard** | Ranked team members by merged PRs, reviews, comments, and code volume |
+| 👥 **Team Members Status**| Real-time active/inactive status based on organization activity |
 | 🔥 **Team Spotlights** | Hot streaks, fastest reviewers, top commenters |
 | ⏱️ **Review Velocity** | Time-to-first-review, time-to-merge, reviewer load analytics |
 | 🐢 **Bottleneck Detection** | Slow PRs ranked by wait time with severity coloring |
@@ -80,8 +81,9 @@
 | **Awilix** | Dependency injection (PROXY mode, scoped lifetimes) |
 | **Octokit** | GitHub REST API client with App authentication |
 | **GitHub App Auth** | JWT → Installation token (5,000 req/hr, auto-refresh) |
-| **Google Meet API**| Using `@google-apps/meet` for creating workspaces and conferences |
+| **Google Meet API**| Native REST API via `fetch` (Cloudflare Worker compatible) |
 | **Google Auth Library**| Managing OAuth2 user consent flow and handling permissions |
+| **Workers KV Cache** | Persistent storage for OAuth tokens and meeting history |
 
 ### Frontend
 | Technology | Purpose |
@@ -144,7 +146,7 @@ APP_PRIVATE_KEY="-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIB...\n-----END RSA PRIV
 # Google Meet Credentials
 GOOGLE_CLIENT_ID=your_oauth2_client_id.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=your_oauth2_client_secret
-GOOGLE_REDIRECT_URI=http://localhost:3001/api/meetings/oauth2callback
+GOOGLE_REDIRECT_URI=https://sellio-metrics.abdoessam743.workers.dev/api/meetings/oauth2callback
 ```
 
 > **💡 Private Key Tip (PowerShell):**
@@ -294,11 +296,20 @@ Calculate leaderboard from PR data (sent in body).
 ### `GET /api/meetings/auth-url`
 Retrieves the target Google OAuth2 login link for Google Meet consent page.
 
+### `GET /api/meetings/auth-status`
+Checks if the backend currently possesses a valid Google OAuth2 token.
+
+### `POST /api/meetings/auth-logout`
+Clears the current Google OAuth2 tokens from persistent storage.
+
 ### `POST /api/meetings`
-Creates a brand new Google workspace, returning the direct link to jump into the call. Only works if authenticated via callback flow.
+Creates a brand new Google workspace, returning the direct link to jump into the call. Only works if authenticated.
 
 ### `POST /api/meetings/:id/end`
 Removes all users and terminates an ongoing meeting via the Google Meet infrastructure.
+
+### `POST /api/members/status`
+Returns activity status (Active/Inactive) for all organization members.
 
 ### `POST /api/webhooks/github`
 GitHub webhook endpoint — invalidates cached metrics on PR events.
