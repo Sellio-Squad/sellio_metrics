@@ -24,4 +24,4 @@ GOOGLE_PUBSUB_TOPIC = "projects/meet-test-488313/topics/meet-events-topic"
 # Then paste the generated id below.
 [[kv_namespaces]]
 binding = "CACHE"
-id = "4670f71d4e744e9f83da2e785aaba700"
+id = "843d801d5cb14986995bf6f15f914002"

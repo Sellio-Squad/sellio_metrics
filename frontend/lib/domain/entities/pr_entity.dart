@@ -59,6 +59,103 @@ class PrEntity {
     this.draft = false,
   });
 
+  factory PrEntity.fromJson(Map<String, dynamic> json) {
+    // Parse approvals
+    final rawApprovals = json['approvals'] as List<dynamic>? ?? [];
+    final approvals = rawApprovals.map((a) {
+      final reviewer = a['reviewer'] as Map<String, dynamic>? ?? {};
+      return ApprovalEntity(
+        reviewer: UserEntity(
+          id: reviewer['id'] as int? ?? 0,
+          login: reviewer['login'] as String? ?? 'unknown',
+          avatarUrl: reviewer['avatar_url'] as String? ?? '',
+        ),
+        submittedAt: DateTime.tryParse(a['submitted_at']?.toString() ?? '') ?? DateTime.now(),
+        commitId: a['commit_id'] as String? ?? '',
+        note: a['note'] as String?,
+      );
+    }).toList();
+
+    // Parse comments (grouped by author from backend)
+    final rawComments = json['comments'] as List<dynamic>? ?? [];
+    final comments = rawComments.map((c) {
+      final author = c['author'] as Map<String, dynamic>? ?? {};
+      return CommentEntity(
+        author: UserEntity(
+          id: author['id'] as int? ?? 0,
+          login: author['login'] as String? ?? 'unknown',
+          avatarUrl: author['avatar_url'] as String? ?? '',
+        ),
+        firstCommentAt: c['first_comment_at'] != null
+            ? DateTime.tryParse(c['first_comment_at'].toString())
+            : null,
+        lastCommentAt: c['last_comment_at'] != null
+            ? DateTime.tryParse(c['last_comment_at'].toString())
+            : null,
+        count: c['count'] as int? ?? 1,
+      );
+    }).toList();
+
+    // Parse mergedBy
+    final mergedByRaw = json['merged_by'] as Map<String, dynamic>?;
+    final mergedBy = mergedByRaw != null
+        ? UserEntity(
+            id: mergedByRaw['id'] as int? ?? 0,
+            login: mergedByRaw['login'] as String? ?? 'unknown',
+            avatarUrl: mergedByRaw['avatar_url'] as String? ?? '',
+          )
+        : null;
+
+    return PrEntity(
+      prNumber: json['pr_number'] as int? ?? 0,
+      url: json['url'] as String? ?? '',
+      title: json['title'] as String? ?? 'Untitled PR',
+      openedAt: DateTime.tryParse(json['opened_at']?.toString() ?? '') ?? DateTime.now(),
+      headRef: json['head_ref'] as String? ?? '',
+      baseRef: json['base_ref'] as String? ?? '',
+      creator: UserEntity(
+        id: json['creator']?['id'] as int? ?? 0,
+        login: json['creator']?['login'] as String? ?? 'unknown',
+        avatarUrl: json['creator']?['avatar_url'] as String? ?? '',
+      ),
+      assignees: (json['assignees'] as List<dynamic>?)?.map((e) => UserEntity(
+        id: e['id'] as int? ?? 0,
+        login: e['login'] as String? ?? 'unknown',
+        avatarUrl: e['avatar_url'] as String? ?? '',
+      )).toList() ?? [],
+      comments: comments,
+      approvals: approvals,
+      requiredApprovals: json['required_approvals'] as int? ?? 0,
+      firstApprovedAt: json['first_approved_at'] != null
+          ? DateTime.tryParse(json['first_approved_at'].toString())
+          : null,
+      timeToFirstApprovalMinutes:
+          (json['time_to_first_approval_minutes'] as num?)?.toDouble(),
+      requiredApprovalsMetAt: json['required_approvals_met_at'] != null
+          ? DateTime.tryParse(json['required_approvals_met_at'].toString())
+          : null,
+      timeToRequiredApprovalsMinutes:
+          (json['time_to_required_approvals_minutes'] as num?)?.toDouble(),
+      closedAt: json['closed_at'] != null
+          ? DateTime.tryParse(json['closed_at'].toString())
+          : null,
+      mergedAt: json['merged_at'] != null
+          ? DateTime.tryParse(json['merged_at'].toString())
+          : null,
+      mergedBy: mergedBy,
+      week: json['week'] as String? ?? '',
+      status: json['status'] as String? ?? 'pending',
+      diffStats: DiffStatsEntity(
+        additions: json['diff_stats']?['additions'] as int? ?? 0,
+        deletions: json['diff_stats']?['deletions'] as int? ?? 0,
+        changedFiles: json['diff_stats']?['changed_files'] as int? ?? 0,
+      ),
+      labels: (json['labels'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      milestone: (json['milestone'] as Map<String, dynamic>?)?['title'] as String?,
+      draft: json['draft'] as bool? ?? false,
+    );
+  }
+
   int get totalComments => comments.fold(0, (sum, c) => sum + c.count);
 
   List<String> get commenterLogins =>
@@ -67,7 +164,7 @@ class PrEntity {
   List<String> get reviewerLogins =>
       approvals.map((a) => a.reviewer.login).toList();
 
-  bool get isOpen => mergedAt == null && closedAt == null;
+  bool get isOpen => status == 'pending' || status == 'approved';
 
   bool get isMerged => status == 'merged';
 
