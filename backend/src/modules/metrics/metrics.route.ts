@@ -40,14 +40,11 @@ const metricsRoute: FastifyPluginAsync = async (fastify) => {
             },
         },
         async (request): Promise<MetricsResponse> => {
-            const { metricsService } = request.diScope.cradle as Cradle;
+            const { prFetcherService } = request.diScope.cradle as Cradle;
             const { owner, repo } = request.params;
             const { state = "all", per_page = 100 } = request.query;
 
-            const metrics = await metricsService.fetchPrMetrics(owner, repo, {
-                state,
-                perPage: per_page,
-            });
+            const metrics = await prFetcherService.fetch(owner, repo, state as any);
 
             return {
                 owner,
@@ -65,8 +62,8 @@ const metricsRoute: FastifyPluginAsync = async (fastify) => {
     fastify.post<{ Body: { prs: PrMetric[] } }>(
         "/leaderboard",
         async (request): Promise<LeaderboardEntry[]> => {
-            const { leaderboardService } = request.diScope.cradle as Cradle;
-            return leaderboardService.calculateLeaderboard(request.body.prs);
+            const { calculateLeaderboard } = await import("../../modules/metrics/leaderboard.calculator");
+            return calculateLeaderboard(request.body.prs);
         },
     );
 };
