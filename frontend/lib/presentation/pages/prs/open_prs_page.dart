@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/kpi_card.dart';
 import 'bottleneck_item.dart';
@@ -47,7 +47,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Consumer3<PrDataProvider, FilterProvider, AnalyticsProvider>(
       builder: (context, prData, filter, analytics, _) {

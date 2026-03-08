@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import 'about_section_header.dart';
 
 class AboutTechStackSection extends StatelessWidget {
@@ -13,7 +13,7 @@ class AboutTechStackSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     final techItems = [
       _TechItem(l10n.techFlutter, l10n.techFlutterRole, LucideIcons.smartphone),

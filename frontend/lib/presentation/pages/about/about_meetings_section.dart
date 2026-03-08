@@ -7,7 +7,7 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/utils/ics_generator.dart';
 import '../../../core/utils/web_download.dart';
 import '../../../design_system/design_system.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import 'about_section_header.dart';
 
 class AboutMeetingsSection extends StatelessWidget {
@@ -15,7 +15,7 @@ class AboutMeetingsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     // Using placeholder dates but mapping them to correct names/times
     final now = DateTime.now();
@@ -190,7 +190,7 @@ class _MeetingCard extends StatelessWidget {
   const _MeetingCard({required this.meeting});
 
   void _downloadIcs(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final icsContent = IcsGenerator.generate(
       title: meeting.title,
       description: meeting.description,
@@ -207,7 +207,7 @@ class _MeetingCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     // Dynamic layout handling for web
     return LayoutBuilder(

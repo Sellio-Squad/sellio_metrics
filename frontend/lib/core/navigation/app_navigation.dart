@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../design_system/design_system.dart';
-import '../l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../presentation/pages/leaderboard/leaderboard_page.dart';
 import '../../presentation/pages/members/members_page.dart';
 import '../../presentation/pages/prs/open_prs_page.dart';

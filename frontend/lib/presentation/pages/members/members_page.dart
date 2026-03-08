@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../design_system/components/s_avatar.dart';
@@ -62,7 +62,7 @@ class _MembersPageState extends State<MembersPage> {
         }
 
         if (memberProvider.memberStatuses.isEmpty) {
-          final l10n = AppLocalizations.of(context);
+          final l10n = AppLocalizations.of(context)!;
           return Center(
             child: Text(
               l10n.emptyData,
@@ -84,7 +84,7 @@ class _MembersPageState extends State<MembersPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    AppLocalizations.of(context).navMembers,
+                    AppLocalizations.of(context)!.navMembers,
                     style: AppTypography.title.copyWith(
                       color: context.colors.title,
                       fontSize: 24,

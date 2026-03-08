@@ -8,7 +8,7 @@ import '../../../../core/theme/app_radius.dart';
 import '../../../../core/theme/app_spacing.dart';
 import '../../../../design_system/components/s_button.dart';
 import '../../../../design_system/components/s_date_picker.dart';
-import '../../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../providers/filter_provider.dart';
 import 'date_range_chip.dart';
 
@@ -18,7 +18,7 @@ class DateRangeFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<FilterProvider>();
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = context.colors;
     final now = DateTime.now();
     final firstDate = DateTime(2024);

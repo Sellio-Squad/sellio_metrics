@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../presentation/pages/about/about_section_header.dart';
 
 class AboutVisionSection extends StatelessWidget {
@@ -13,7 +13,7 @@ class AboutVisionSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = context.colors;
 
     return Column(

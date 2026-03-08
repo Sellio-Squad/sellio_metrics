@@ -3,7 +3,7 @@ library;
 import 'package:flutter/material.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 
 class ErrorScreen extends StatelessWidget {
   final VoidCallback onRetry;
@@ -13,7 +13,7 @@ class ErrorScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Center(
       child: Column(

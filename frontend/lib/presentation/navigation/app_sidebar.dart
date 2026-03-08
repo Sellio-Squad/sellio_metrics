@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/navigation/app_navigation.dart';
 import '../providers/app_settings_provider.dart';
 
@@ -20,7 +20,7 @@ class AppSidebar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     final items = AppNavigation.routes.map((route) {
       return SSidebarItemData(
@@ -52,7 +52,7 @@ class _SidebarHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Row(
       children: [
@@ -102,7 +102,7 @@ class _SidebarFooter extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = context.colors;
     final settings = context.watch<AppSettingsProvider>();
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     return Column(
       children: [

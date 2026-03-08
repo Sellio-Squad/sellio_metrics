@@ -11,8 +11,8 @@ class AppRadius {
   static const double xl = 20;
   static const double full = 999;
 
-  static BorderRadius get smAll => BorderRadius.circular(sm);
-  static BorderRadius get mdAll => BorderRadius.circular(md);
-  static BorderRadius get lgAll => BorderRadius.circular(lg);
-  static BorderRadius get xlAll => BorderRadius.circular(xl);
+  static final BorderRadius smAll = BorderRadius.circular(sm);
+  static final BorderRadius mdAll = BorderRadius.circular(md);
+  static final BorderRadius lgAll = BorderRadius.circular(lg);
+  static final BorderRadius xlAll = BorderRadius.circular(xl);
 }

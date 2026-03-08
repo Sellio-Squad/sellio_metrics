@@ -3,7 +3,7 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../design_system/components/s_avatar.dart';
 import '../../../domain/entities/leaderboard_entry.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 
 class LeaderboardRow extends StatelessWidget {
   final int index;
@@ -16,7 +16,7 @@ class LeaderboardRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final medal = index < 3 ? _medals[index] : '${index + 1}';
 
     return Padding(

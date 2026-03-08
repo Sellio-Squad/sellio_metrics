@@ -3,7 +3,7 @@ library;
 import 'package:flutter/material.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../widgets/date_filter/date_range_filter.dart';
 import 'settings_section.dart';
 import 'repository_selector.dart';
@@ -17,7 +17,7 @@ class SettingsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = context.colors;
 
     return Align(

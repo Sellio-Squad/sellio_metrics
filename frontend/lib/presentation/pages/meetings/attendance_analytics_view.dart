@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../providers/meetings_provider.dart';
@@ -12,7 +12,7 @@ class AttendanceAnalyticsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = context.colors;
     final analytics = context.watch<MeetingsProvider>().analytics;
 
@@ -77,7 +77,7 @@ class AttendanceAnalyticsView extends StatelessWidget {
   }
 
   Widget _buildTrendChart(BuildContext context, dynamic analytics) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = context.colors;
     final trends = analytics.attendanceTrends as List;
 
@@ -217,7 +217,7 @@ class AttendanceAnalyticsView extends StatelessWidget {
   }
 
   Widget _buildMostActiveCard(BuildContext context, dynamic analytics) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = context.colors;
     final topList = analytics.mostActiveParticipants as List;
 

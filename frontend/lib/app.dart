@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'design_system/design_system.dart' show SellioThemes;
-import 'core/l10n/app_localizations.dart';
+import 'l10n/app_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'presentation/providers/app_settings_provider.dart';
 import 'presentation/providers/filter_provider.dart';

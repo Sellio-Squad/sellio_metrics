@@ -2,7 +2,7 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../../core/extensions/theme_extensions.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/navigation/app_navigation.dart';
 
 class AppBottomNav extends StatelessWidget {
@@ -17,7 +17,7 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = context.colors;
     final safeIndex = currentIndex < AppNavigation.routes.length
         ? currentIndex

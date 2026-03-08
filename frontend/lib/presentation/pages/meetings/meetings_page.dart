@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../domain/entities/meeting_entity.dart';
@@ -162,7 +162,7 @@ class _MeetingsPageState extends State<MeetingsPage>
                   children: [
                     const Icon(LucideIcons.plus, size: 16),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(AppLocalizations.of(context).newMeeting),
+                    Text(AppLocalizations.of(context)!.newMeeting),
                   ],
                 ),
               ),
@@ -200,7 +200,6 @@ class _MeetingsPageState extends State<MeetingsPage>
   }
 
   Widget _buildMeetingsTab(BuildContext context, MeetingsProvider provider) {
-    final l10n = AppLocalizations.of(context);
     return Align(
       alignment: Alignment.topLeft,
       child: SingleChildScrollView(
@@ -275,7 +274,7 @@ class _MeetingsPageState extends State<MeetingsPage>
     BuildContext context,
     MeetingsProvider provider,
   ) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final limit = provider.rateLimit;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -304,7 +303,7 @@ class _MeetingsPageState extends State<MeetingsPage>
   }
 
   Widget _buildMeetingsList(BuildContext context, MeetingsProvider provider) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
 
     if (provider.meetings.isEmpty) {
       return Center(
@@ -377,7 +376,7 @@ class _MeetingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
+    final l10n = AppLocalizations.of(context)!;
     final scheme = context.colors;
     final formatter = DateFormat('MMM d, h:mm a');
 
