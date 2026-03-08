@@ -7,13 +7,13 @@ import 'design_system/design_system.dart' show SellioThemes;
 import 'core/l10n/app_localizations.dart';
 import 'core/di/service_locator.dart';
 import 'presentation/providers/app_settings_provider.dart';
-import 'presentation/providers/pr_data_provider.dart';
 import 'presentation/providers/filter_provider.dart';
-import 'presentation/providers/analytics_provider.dart';
 import 'presentation/providers/leaderboard_provider.dart';
 import 'presentation/providers/member_provider.dart';
 import 'presentation/providers/meetings_provider.dart';
 import 'presentation/providers/meet_events_provider.dart';
+import 'presentation/providers/pr_data_provider.dart';
+import 'presentation/providers/analytics_provider.dart';
 import 'presentation/pages/dashboard_page.dart';
 
 class SellioMetricsApp extends StatelessWidget {
@@ -24,13 +24,13 @@ class SellioMetricsApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => sl.get<AppSettingsProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<PrDataProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<FilterProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<AnalyticsProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<LeaderboardProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<MemberProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<MeetingsProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<MeetEventsProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<PrDataProvider>()),
+        ChangeNotifierProvider(create: (_) => sl.get<AnalyticsProvider>()),
       ],
       child: Consumer<AppSettingsProvider>(
         builder: (context, settings, _) {
@@ -71,25 +71,23 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _initializeData();
-      });
+      WidgetsBinding.instance.addPostFrameCallback((_) => _initializeData());
     }
   }
 
   Future<void> _initializeData() async {
+    if (!mounted) return;
     final settings = context.read<AppSettingsProvider>();
-    final prData = context.read<PrDataProvider>();
     await settings.loadRepositories();
 
-    if (settings.selectedRepos.isEmpty) {
-      prData.setError(
-        'No repositories available. Check your network connection.',
-      );
-      return;
-    }
+    if (!mounted) return;
+    if (settings.selectedRepos.isEmpty) return;
 
-    prData.loadData(repos: settings.selectedRepos);
+    // Kick off initial data loads — LeaderboardPage and MembersPage
+    // also trigger their own fetches, but pre-loading here avoids a flash.
+    final repoNames = settings.selectedRepos.map((r) => r.fullName).toList();
+    context.read<LeaderboardProvider>().fetchLeaderboard(repoNames);
+    context.read<MemberProvider>().fetchStatuses(repoNames);
   }
 
   @override

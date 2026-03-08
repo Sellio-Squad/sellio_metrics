@@ -14,7 +14,7 @@ class ApiConfig {
   /// Falls back to localhost:3001 for local development.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:3001',
+    defaultValue: 'http://127.0.0.1:8787',
   );
 
   /// Whether to use a local fake data source instead of the backend.

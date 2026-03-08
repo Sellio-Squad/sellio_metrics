@@ -111,7 +111,29 @@
             "name": "Metrics",
             "item": [
                 {
-                    "name": "Get PR Metrics",
+                    "name": "Get PRs",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/metrics/{{org}}/{{repo}}/prs",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "metrics",
+                                "{{org}}",
+                                "{{repo}}",
+                                "prs"
+                            ]
+                        },
+                        "description": "Fetches raw PR metrics arrays."
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Get PR Metrics Old (Deprecated)",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -231,29 +253,22 @@
                 {
                     "name": "Calculate Leaderboard",
                     "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            }
-                        ],
-                        "body": {
-                            "mode": "raw",
-                            "raw": "{\n  \"prs\": [\n    {\n      \"status\": \"merged\",\n      \"creator\": {\n        \"login\": \"dev-01\",\n        \"avatar_url\": \"https://avatars.githubusercontent.com/u/1\"\n      },\n      \"approvals\": [\n        {\n          \"reviewer\": {\n            \"login\": \"dev-02\",\n            \"avatar_url\": \"https://avatars.githubusercontent.com/u/2\"\n          }\n        }\n      ],\n      \"comments\": [\n        {\n          \"author\": {\n            \"login\": \"dev-02\",\n            \"avatar_url\": \"https://avatars.githubusercontent.com/u/2\"\n          }\n        }\n      ],\n      \"diff_stats\": {\n        \"additions\": 150,\n        \"deletions\": 30\n      }\n    }\n  ]\n}"
-                        },
+                        "method": "GET",
+                        "header": [],
                         "url": {
-                            "raw": "{{baseUrl}}/api/metrics/leaderboard",
+                            "raw": "{{baseUrl}}/api/metrics/{{org}}/{{repo}}/leaderboard",
                             "host": [
                                 "{{baseUrl}}"
                             ],
                             "path": [
                                 "api",
                                 "metrics",
+                                "{{org}}",
+                                "{{repo}}",
                                 "leaderboard"
                             ]
                         },
-                        "description": "Calculates leaderboard rankings from the provided PR data.\n\nThe frontend sends pre-filtered PR data (by date range, repos) and the backend computes weighted scores.\n\nScoring weights:\n- PRs Created: 3 points\n- PRs Merged: 2 points\n- Reviews Given: 0 points\n- Comments Given: 1 point\n- Code additions/deletions factored in"
+                        "description": "Calculates leaderboard rankings directly from pre-fetched PR data inside the backend.\n\nScoring weights:\n- PRs Created: 3 points\n- PRs Merged: 2 points\n- Reviews Given: 0 points\n- Comments Given: 1 point\n- Code additions/deletions factored in"
                     },
                     "response": [
                         {
@@ -569,26 +584,19 @@
                 {
                     "name": "Get Members Status",
                     "request": {
-                        "method": "POST",
-                        "header": [
-                            {
-                                "key": "Content-Type",
-                                "value": "application/json"
-                            }
-                        ],
-                        "body": {
-                            "mode": "raw",
-                            "raw": "{\n  \"prs\": []\n}"
-                        },
+                        "method": "GET",
+                        "header": [],
                         "url": {
-                            "raw": "{{baseUrl}}/api/members/status",
+                            "raw": "{{baseUrl}}/api/metrics/{{org}}/{{repo}}/members",
                             "host": [
                                 "{{baseUrl}}"
                             ],
                             "path": [
                                 "api",
-                                "members",
-                                "status"
+                                "metrics",
+                                "{{org}}",
+                                "{{repo}}",
+                                "members"
                             ]
                         },
                         "description": "Determines member activity (Active/Inactive) based on PR data and organization membership."

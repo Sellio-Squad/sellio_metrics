@@ -34,7 +34,14 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
       if (!mounted) return;
       final settings = context.read<AppSettingsProvider>();
       final prData = context.read<PrDataProvider>();
-      prData.ensureDataLoaded(settings.selectedRepos);
+      // Load all PRs for analytics KPIs (state=all)
+      prData.ensureDataLoaded(settings.availableRepos.isNotEmpty
+          ? settings.availableRepos
+          : settings.selectedRepos);
+      // Load open PRs for the list (state=open — small, fast)
+      prData.loadOpenPrs(repos: settings.availableRepos.isNotEmpty
+          ? settings.availableRepos
+          : settings.selectedRepos);
     });
   }
 
@@ -46,7 +53,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
       builder: (context, prData, filter, analytics, _) {
         final filterService = sl.get<FilterService>();
 
-        // Data pipeline
+        // All PRs pipeline (for analytics KPIs)
         final weekFiltered = filterService.filterByWeek(
           filterService.filterByDateRange(
             prData.allPrs,
@@ -55,21 +62,29 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
           ),
           filter.weekFilter,
         );
-        final filteredPrs = filterService.filterPrs(
-          weekFiltered,
-          searchTerm: filter.searchTerm,
-          statusFilter: filter.statusFilter,
-        );
-        final openPrs = filteredPrs.where((pr) => pr.isOpen).toList();
 
-        if (prData.status == DataLoadingStatus.loading && openPrs.isEmpty) {
+        // Open PRs pipeline: use the dedicated openPrs list (state=open from backend)
+        // Apply search/text filter client-side only
+        final openPrs = prData.openPrs.where((pr) {
+          if (filter.searchTerm.isEmpty) return true;
+          final term = filter.searchTerm.toLowerCase();
+          return pr.title.toLowerCase().contains(term) ||
+              pr.creator.login.toLowerCase().contains(term);
+        }).toList();
+
+        // Show loading only if both are still loading and no data yet
+        if (prData.status == DataLoadingStatus.loading &&
+            prData.openPrsStatus == DataLoadingStatus.loading &&
+            prData.allPrs.isEmpty) {
           return const LoadingScreen();
         }
-        if (prData.status == DataLoadingStatus.error && openPrs.isEmpty) {
+        if (prData.openPrsStatus == DataLoadingStatus.error && openPrs.isEmpty) {
           return ErrorScreen(
             onRetry: () {
               final settings = context.read<AppSettingsProvider>();
-              prData.loadData(repos: settings.selectedRepos);
+              prData.loadOpenPrs(repos: settings.availableRepos.isNotEmpty
+                  ? settings.availableRepos
+                  : settings.selectedRepos);
             },
           );
         }
