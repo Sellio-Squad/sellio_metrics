@@ -1,130 +1,175 @@
+/// Sellio Metrics — Service Locator (DI Container)
+///
+/// Registers dependencies following Clean Architecture:
+///   - Datasource interfaces → remote or fake implementations
+///   - Repository interfaces → implementation classes (depend on datasource interfaces)
+///   - Providers              → depend on repository INTERFACES (DIP)
+///
+/// No provider depends on a concrete class. All wiring is here only.
 library;
 
 import '../../core/constants/app_constants.dart';
-import '../../data/datasources/local_data_source.dart';
-import '../../data/datasources/remote_data_source.dart';
-import '../../data/datasources/fake_metrics_data_source.dart';
-import '../../data/repositories/metrics_repository_impl.dart';
-import '../../domain/repositories/metrics_repository.dart';
+
+// ── Datasource Interfaces & Impls ────────────────────────────
+import '../../data/datasources/repos_data_source.dart';
+import '../../data/datasources/leaderboard_data_source.dart';
+import '../../data/datasources/members_data_source.dart';
+import '../../data/datasources/fake_datasources.dart';
+import '../../data/datasources/pr_data_source.dart';
+
+// ── Repository Interfaces & Impls ────────────────────────────
+import '../../domain/repositories/repos_repository.dart';
+import '../../domain/repositories/leaderboard_repository.dart';
+import '../../domain/repositories/members_repository.dart';
+import '../../domain/repositories/pr_repository.dart';
+import '../../data/repositories/repos_repository_impl.dart';
+import '../../data/repositories/leaderboard_repository_impl.dart';
+import '../../data/repositories/members_repository_impl.dart';
+import '../../data/repositories/pr_repository_impl.dart';
+import 'package:http/http.dart' as http;
+
+// ── Domain Services ──────────────────────────────────────────
 import '../../domain/services/kpi_service.dart';
 import '../../domain/services/bottleneck_service.dart';
 import '../../domain/services/filter_service.dart';
+
+// ── Providers ────────────────────────────────────────────────
 import '../../presentation/providers/app_settings_provider.dart';
-import '../../presentation/providers/pr_data_provider.dart';
 import '../../presentation/providers/filter_provider.dart';
-import '../../presentation/providers/analytics_provider.dart';
 import '../../presentation/providers/leaderboard_provider.dart';
 import '../../presentation/providers/member_provider.dart';
+import '../../presentation/providers/pr_data_provider.dart';
+import '../../presentation/providers/analytics_provider.dart';
 
-// Meetings Feature
+// ── Meetings Feature ─────────────────────────────────────────
 import '../../data/datasources/meetings_data_source.dart';
 import '../../data/datasources/fake_meetings_data_source.dart';
 import '../../data/repositories/meetings_repository_impl.dart';
 import '../../domain/repositories/meetings_repository.dart';
 import '../../presentation/providers/meetings_provider.dart';
 
-// Meet Events Feature
+// ── Meet Events Feature ───────────────────────────────────────
 import '../../data/datasources/meet_events_data_source.dart';
 import '../../data/repositories/meet_events_repository_impl.dart';
 import '../../domain/repositories/meet_events_repository.dart';
 import '../../presentation/providers/meet_events_provider.dart';
 
+// ─────────────────────────────────────────────────────────────
+
 /// Global service locator instance.
 final sl = ServiceLocator();
 
-/// Simple service locator / DI container.
+/// Minimal service locator / DI container.
 class ServiceLocator {
-  final Map<Type, Object> _instances = {};
+  final Map<Type, Object> _singletons = {};
   final Map<Type, Object Function()> _factories = {};
 
-  /// Register a singleton instance.
   void registerSingleton<T extends Object>(T instance) {
-    _instances[T] = instance;
+    _singletons[T] = instance;
   }
 
-  /// Register a lazy singleton (created on first access).
   void registerLazySingleton<T extends Object>(T Function() factory) {
     _factories[T] = factory;
   }
 
-  /// Register a factory (creates a new instance each time).
   void registerFactory<T extends Object>(T Function() factory) {
     _factories[T] = factory;
   }
 
-  /// Get an instance of type T.
   T get<T extends Object>() {
-    if (_instances.containsKey(T)) return _instances[T] as T;
+    if (_singletons.containsKey(T)) return _singletons[T] as T;
     if (_factories.containsKey(T)) {
       final instance = _factories[T]!() as T;
-      // Cache lazy singletons
-      _instances[T] = instance;
+      _singletons[T] = instance; // cache as singleton after first creation
       return instance;
     }
     throw StateError('No registration for type $T');
   }
 
-  /// Reset all registrations (useful for testing).
   void reset() {
-    _instances.clear();
+    _singletons.clear();
     _factories.clear();
   }
 }
 
-/// Initialize all dependencies.
+/// Wire up all dependencies.
 void setupDependencies() {
-  // Data sources — switchable between remote backend and local fake data.
-  if (ApiConfig.useFakeData) {
-    sl.registerSingleton<MetricsDataSource>(FakeMetricsDataSource());
+  final useFake = ApiConfig.useFakeData;
+  final baseUrl = ApiConfig.baseUrl;
+
+  // ── Datasources (interface ← impl) ────────────────────────
+  if (useFake) {
+    sl.registerSingleton<ReposDataSource>(FakeReposDataSource());
+    sl.registerSingleton<LeaderboardDataSource>(FakeLeaderboardDataSource());
+    sl.registerSingleton<MembersDataSource>(FakeMembersDataSource());
     sl.registerSingleton<MeetingsDataSource>(FakeMeetingsDataSource());
+    sl.registerSingleton<PrDataSource>(FakePrDataSource());
   } else {
-    sl.registerSingleton<MetricsDataSource>(
-      RemoteDataSource(baseUrl: ApiConfig.baseUrl),
+    final client = http.Client();
+    sl.registerSingleton<ReposDataSource>(
+      RemoteReposDataSource(baseUrl: baseUrl),
+    );
+    sl.registerSingleton<LeaderboardDataSource>(
+      RemoteLeaderboardDataSource(baseUrl: baseUrl),
+    );
+    sl.registerSingleton<MembersDataSource>(
+      RemoteMembersDataSource(baseUrl: baseUrl),
     );
     sl.registerSingleton<MeetingsDataSource>(
-      RemoteMeetingsDataSource(baseUrl: ApiConfig.baseUrl),
+      RemoteMeetingsDataSource(baseUrl: baseUrl),
+    );
+    sl.registerSingleton<PrDataSource>(
+      RemotePrDataSource(client: client),
     );
   }
+  // Meet Events is always remote
+  sl.registerSingleton<MeetEventsDataSource>(
+    RemoteMeetEventsDataSource(baseUrl: baseUrl),
+  );
 
-  // Repository
-  sl.registerLazySingleton<MetricsRepository>(
-    () => MetricsRepositoryImpl(dataSource: sl.get<MetricsDataSource>()),
+  // ── Repositories (interface ← impl, depends on datasource interface) ──
+  sl.registerLazySingleton<ReposRepository>(
+    () => ReposRepositoryImpl(dataSource: sl.get<ReposDataSource>()),
+  );
+  sl.registerLazySingleton<LeaderboardRepository>(
+    () => LeaderboardRepositoryImpl(dataSource: sl.get<LeaderboardDataSource>()),
+  );
+  sl.registerLazySingleton<MembersRepository>(
+    () => MembersRepositoryImpl(dataSource: sl.get<MembersDataSource>()),
+  );
+  sl.registerLazySingleton<PrRepository>(
+    () => PrRepositoryImpl(remoteDataSource: sl.get<PrDataSource>()),
   );
   sl.registerLazySingleton<MeetingsRepository>(
     () => MeetingsRepositoryImpl(dataSource: sl.get<MeetingsDataSource>()),
-  );
-  sl.registerSingleton<MeetEventsDataSource>(
-    RemoteMeetEventsDataSource(baseUrl: ApiConfig.baseUrl),
   );
   sl.registerLazySingleton<MeetEventsRepository>(
     () => MeetEventsRepositoryImpl(dataSource: sl.get<MeetEventsDataSource>()),
   );
 
-  // Domain services
+  // ── Domain Services ────────────────────────────────────────
   sl.registerSingleton<KpiService>(const KpiService());
   sl.registerSingleton<BottleneckService>(const BottleneckService());
   sl.registerSingleton<FilterService>(const FilterService());
 
-  // Providers
+  // ── Providers (depend on repository INTERFACES only) ───────
   sl.registerFactory<AppSettingsProvider>(
-    () => AppSettingsProvider(repository: sl.get<MetricsRepository>()),
-  );
-  sl.registerFactory<PrDataProvider>(
-    () => PrDataProvider(repository: sl.get<MetricsRepository>()),
+    () => AppSettingsProvider(repository: sl.get<ReposRepository>()),
   );
   sl.registerFactory<FilterProvider>(() => FilterProvider());
-  sl.registerFactory<AnalyticsProvider>(
-    () => AnalyticsProvider(
-      kpiService: sl.get<KpiService>(),
-      bottleneckService: sl.get<BottleneckService>(),
-    ),
-  );
   sl.registerFactory<LeaderboardProvider>(
-    () => LeaderboardProvider(repository: sl.get<MetricsRepository>()),
+    () => LeaderboardProvider(repository: sl.get<LeaderboardRepository>()),
   );
   sl.registerFactory<MemberProvider>(
-    () => MemberProvider(repository: sl.get<MetricsRepository>()),
+    () => MemberProvider(repository: sl.get<MembersRepository>()),
   );
+  sl.registerFactory<PrDataProvider>(
+    () => PrDataProvider(repository: sl.get<PrRepository>()),
+  );
+  sl.registerFactory<AnalyticsProvider>(() => AnalyticsProvider(
+    kpiService: sl.get<KpiService>(),
+    bottleneckService: sl.get<BottleneckService>(),
+  ));
   sl.registerFactory<MeetingsProvider>(
     () => MeetingsProvider(repository: sl.get<MeetingsRepository>()),
   );

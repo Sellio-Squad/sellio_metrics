@@ -1,22 +1,30 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/pr_entity.dart';
-import '../../domain/repositories/metrics_repository.dart';
+import '../../domain/repositories/pr_repository.dart';
+import '../../domain/repositories/repos_repository.dart';
 
 enum DataLoadingStatus { loading, loaded, error }
 
 class PrDataProvider extends ChangeNotifier {
-  final MetricsRepository _repository;
+  final PrRepository _repository;
 
-  PrDataProvider({required MetricsRepository repository})
+  PrDataProvider({required PrRepository repository})
     : _repository = repository;
 
   DataLoadingStatus _status = DataLoadingStatus.loading;
+  // All PRs (unfiltered) loaded once from all available repos
   List<PrEntity> _allPrs = [];
-  List<RepoInfo> _currentRepos = [];
+  // Current repos that have been loaded
+  List<RepoInfo> _loadedRepos = [];
+  // Open PRs specifically fetched with state=open
+  List<PrEntity> _openPrs = [];
+  DataLoadingStatus _openPrsStatus = DataLoadingStatus.loading;
 
   DataLoadingStatus get status => _status;
   List<PrEntity> get allPrs => _allPrs;
-  List<RepoInfo> get currentRepos => _currentRepos;
+  List<RepoInfo> get loadedRepos => _loadedRepos;
+  List<PrEntity> get openPrs => _openPrs;
+  DataLoadingStatus get openPrsStatus => _openPrsStatus;
 
   void setError(String message) {
     _status = DataLoadingStatus.error;
@@ -24,11 +32,24 @@ class PrDataProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Filter allPrs by a subset of repos (client-side, no API call).
+  List<PrEntity> filterByRepos(List<RepoInfo> selectedRepos) {
+    if (selectedRepos.isEmpty) return _allPrs;
+    final names = selectedRepos.map((r) => r.name.toLowerCase()).toSet();
+    return _allPrs.where((pr) {
+      final repoName = pr.repoName.split('/').last.toLowerCase();
+      return names.contains(repoName);
+    }).toList();
+  }
+
+  /// Load all PRs from [repos] (typically ALL available repos).
+  /// Safe to call multiple times — will skip if same repos are already loaded.
   Future<void> ensureDataLoaded(List<RepoInfo> repos) async {
     if (repos.isEmpty) return;
 
-    if (_currentRepos.length == repos.length &&
-        _currentRepos.every(
+    // Skip if same set already loaded
+    if (_loadedRepos.length == repos.length &&
+        _loadedRepos.every(
           (r1) => repos.any((r2) => r1.fullName == r2.fullName),
         )) {
       return;
@@ -37,15 +58,15 @@ class PrDataProvider extends ChangeNotifier {
     await loadData(repos: repos);
   }
 
+  /// Load all-state PRs for analytics/leaderboard (state=all).
   Future<void> loadData({List<RepoInfo>? repos}) async {
-    final rs = repos ?? _currentRepos;
-
+    final rs = repos ?? _loadedRepos;
     if (rs.isEmpty) {
       debugPrint('[PrDataProvider] No repos set. Waiting for selection.');
       return;
     }
 
-    _currentRepos = List.from(rs);
+    _loadedRepos = List.from(rs);
     _status = DataLoadingStatus.loading;
     notifyListeners();
 
@@ -55,7 +76,8 @@ class PrDataProvider extends ChangeNotifier {
         final parts = repo.fullName.split('/');
         final owner = parts.isNotEmpty ? parts.first : '';
         final repoName = repo.name;
-        final prs = await _repository.getPullRequests(owner, repoName);
+        // Fetch all PRs (state=all) for analytics
+        final prs = await _repository.fetchPrs(org: owner, repo: repoName, state: 'all');
         aggregatedPrs.addAll(prs);
       }
       _allPrs = aggregatedPrs;
@@ -67,27 +89,33 @@ class PrDataProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> refresh() async {
-    if (_currentRepos.isEmpty) return;
+  /// Load only open PRs (state=open) for the Open PRs page.
+  Future<void> loadOpenPrs({List<RepoInfo>? repos}) async {
+    final rs = repos ?? _loadedRepos;
+    if (rs.isEmpty) return;
 
-    _status = DataLoadingStatus.loading;
+    _openPrsStatus = DataLoadingStatus.loading;
     notifyListeners();
 
     try {
-      final List<PrEntity> aggregatedPrs = [];
-      for (final repo in _currentRepos) {
+      final List<PrEntity> aggregated = [];
+      for (final repo in rs) {
         final parts = repo.fullName.split('/');
         final owner = parts.isNotEmpty ? parts.first : '';
         final repoName = repo.name;
-        final prs = await _repository.refresh(owner, repoName);
-        aggregatedPrs.addAll(prs);
+        final prs = await _repository.fetchPrs(org: owner, repo: repoName, state: 'open');
+        aggregated.addAll(prs);
       }
-      _allPrs = aggregatedPrs;
-      _status = DataLoadingStatus.loaded;
+      _openPrs = aggregated;
+      _openPrsStatus = DataLoadingStatus.loaded;
     } catch (e) {
-      _status = DataLoadingStatus.error;
-      debugPrint('Error refreshing PR data: $e');
+      _openPrsStatus = DataLoadingStatus.error;
+      debugPrint('Error loading open PRs: $e');
     }
     notifyListeners();
+  }
+
+  Future<void> refresh() async {
+    await loadData();
   }
 }

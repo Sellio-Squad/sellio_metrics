@@ -1,36 +1,37 @@
+/// Presentation — AppSettingsProvider
+///
+/// Manages app-wide settings: theme, locale, and selected repositories.
+/// Depends on [ReposRepository] (interface) for repo loading — NOT on
+/// MetricsRepository or any concrete class.
 library;
 
 import 'package:flutter/material.dart';
-import '../../domain/repositories/metrics_repository.dart';
+import '../../domain/repositories/repos_repository.dart';
 
 class AppSettingsProvider extends ChangeNotifier {
-  final MetricsRepository _repository;
+  /// Depends on INTERFACE — satisfies Dependency Inversion Principle.
+  final ReposRepository _repository;
 
   ThemeMode _themeMode = ThemeMode.light;
   Locale _locale = const Locale('en');
-
   List<RepoInfo> _selectedRepos = [];
-
   List<RepoInfo> _availableRepos = [];
   bool _isLoadingRepos = false;
 
-  AppSettingsProvider({required MetricsRepository repository})
+  AppSettingsProvider({required ReposRepository repository})
     : _repository = repository;
 
   // ─── Getters ─────────────────────────────────────────────
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
   bool get isDarkMode => _themeMode == ThemeMode.dark;
-
   List<RepoInfo> get selectedRepos => _selectedRepos;
   List<RepoInfo> get availableRepos => _availableRepos;
   bool get isLoadingRepos => _isLoadingRepos;
 
   // ─── Theme ───────────────────────────────────────────────
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.dark
-        ? ThemeMode.light
-        : ThemeMode.dark;
+    _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     notifyListeners();
   }
 
@@ -52,19 +53,18 @@ class AppSettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Repository Selection ────────────────────────────────
+  // ─── Repositories ────────────────────────────────────────
   Future<void> loadRepositories() async {
     _isLoadingRepos = true;
     notifyListeners();
 
     try {
       _availableRepos = await _repository.getRepositories();
-
       if (_selectedRepos.isEmpty && _availableRepos.isNotEmpty) {
-        _selectedRepos = _availableRepos;
+        _selectedRepos = List.from(_availableRepos);
       }
     } catch (e) {
-      debugPrint('Error loading repositories: $e');
+      debugPrint('[AppSettingsProvider] Error loading repos: $e');
     }
 
     _isLoadingRepos = false;

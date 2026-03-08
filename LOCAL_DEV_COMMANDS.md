@@ -65,9 +65,14 @@ npm run build
 cd backend
 npm start
 
-
 cd backend
 npm run deploy
+
+# Get what inside cache
+npx wrangler kv key list --binding CACHE
+
+# Get what inside cache using prefix
+npx wrangler kv key list --binding CACHE --prefix "sellio:google"
 ```
 
 ### Frontend + Backend together (real API)
