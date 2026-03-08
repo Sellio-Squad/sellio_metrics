@@ -10,11 +10,7 @@ import 'presentation/providers/app_settings_provider.dart';
 import 'presentation/providers/filter_provider.dart';
 import 'presentation/providers/leaderboard_provider.dart';
 import 'presentation/providers/member_provider.dart';
-import 'presentation/providers/meetings_provider.dart';
-import 'presentation/providers/meet_events_provider.dart';
-import 'presentation/providers/pr_data_provider.dart';
-import 'presentation/providers/analytics_provider.dart';
-import 'presentation/pages/dashboard_page.dart';
+import 'core/navigation/app_navigation.dart';
 
 class SellioMetricsApp extends StatelessWidget {
   const SellioMetricsApp({super.key});
@@ -25,45 +21,21 @@ class SellioMetricsApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => sl.get<AppSettingsProvider>()),
         ChangeNotifierProvider(create: (_) => sl.get<FilterProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<LeaderboardProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<MemberProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<MeetingsProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<MeetEventsProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<PrDataProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<AnalyticsProvider>()),
       ],
-      child: Consumer<AppSettingsProvider>(
-        builder: (context, settings, _) {
-          return MaterialApp(
-            title: 'Sellio Squad Dashboard',
-            debugShowCheckedModeBanner: false,
-            theme: SellioThemes.lightTheme,
-            darkTheme: SellioThemes.darkTheme,
-            themeMode: settings.themeMode,
-            locale: settings.locale,
-            supportedLocales: AppLocalizations.supportedLocales,
-            localizationsDelegates: const [
-              AppLocalizations.delegate,
-              GlobalMaterialLocalizations.delegate,
-              GlobalWidgetsLocalizations.delegate,
-              GlobalCupertinoLocalizations.delegate,
-            ],
-            home: const _AppEntryPoint(),
-          );
-        },
-      ),
+      child: const _AppInitializationWrapper(),
     );
   }
 }
 
-class _AppEntryPoint extends StatefulWidget {
-  const _AppEntryPoint();
+class _AppInitializationWrapper extends StatefulWidget {
+  const _AppInitializationWrapper();
 
   @override
-  State<_AppEntryPoint> createState() => _AppEntryPointState();
+  State<_AppInitializationWrapper> createState() =>
+      _AppInitializationWrapperState();
 }
 
-class _AppEntryPointState extends State<_AppEntryPoint> {
+class _AppInitializationWrapperState extends State<_AppInitializationWrapper> {
   bool _initialized = false;
 
   @override
@@ -83,18 +55,32 @@ class _AppEntryPointState extends State<_AppEntryPoint> {
     if (!mounted) return;
     if (settings.selectedRepos.isEmpty) return;
 
-    // Kick off initial data loads — LeaderboardPage and MembersPage
-    // also trigger their own fetches, but pre-loading here avoids a flash.
     final repoNames = settings.selectedRepos.map((r) => r.fullName).toList();
-    context.read<LeaderboardProvider>().fetchLeaderboard(repoNames);
-    context.read<MemberProvider>().fetchStatuses(repoNames);
+    sl.get<LeaderboardProvider>().fetchLeaderboard(repoNames);
+    sl.get<MemberProvider>().fetchStatuses(repoNames);
   }
 
   @override
   Widget build(BuildContext context) {
-    return const AnimatedSwitcher(
-      duration: Duration(milliseconds: 300),
-      child: DashboardPage(),
+    return Consumer<AppSettingsProvider>(
+      builder: (context, settings, _) {
+        return MaterialApp.router(
+          routerConfig: AppNavigation.router,
+          title: 'Sellio Squad Dashboard',
+          debugShowCheckedModeBanner: false,
+          theme: SellioThemes.lightTheme,
+          darkTheme: SellioThemes.darkTheme,
+          themeMode: settings.themeMode,
+          locale: settings.locale,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: const [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+        );
+      },
     );
   }
 }

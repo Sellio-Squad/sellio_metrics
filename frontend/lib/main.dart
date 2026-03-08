@@ -1,7 +1,6 @@
 library;
 
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'core/di/service_locator.dart';
 import 'app.dart';
@@ -10,7 +9,6 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   FlutterError.onError = (details) {
-    // Log to your observability system
     debugPrint('Flutter error: ${details.exception}');
   };
 
