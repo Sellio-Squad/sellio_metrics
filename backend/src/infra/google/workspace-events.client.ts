@@ -111,11 +111,6 @@ export class WorkspaceEventsClient {
             notificationEndpoint: {
                 pubsubTopic,
             },
-            // Subscriptions expire — max 7 days for Meet events
-            // The payloadOptions control what's included in notifications
-            payloadOptions: {
-                includeResource: true,
-            },
         };
 
         const result = await this.apiFetch<any>("subscriptions", {
