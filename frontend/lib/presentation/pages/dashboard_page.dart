@@ -69,7 +69,10 @@ class _DashboardPageState extends State<DashboardPage> {
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 200),
-                  child: currentRoute.page,
+                  child: KeyedSubtree(
+                    key: ValueKey(currentRoute.id),
+                    child: currentRoute.pageBuilder(context),
+                  ),
                 ),
               ),
             ],
@@ -100,7 +103,10 @@ class _DashboardPageState extends State<DashboardPage> {
         Expanded(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: currentRoute.page,
+            child: KeyedSubtree(
+              key: ValueKey(currentRoute.id),
+              child: currentRoute.pageBuilder(context),
+            ),
           ),
         ),
       ],
