@@ -96,7 +96,7 @@ export class CachedGitHubClient {
      */
     async getPull(owner: string, repo: string, pullNumber: number, _isOpen: boolean): Promise<any> {
         const response = await this.github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
-        if (response?.headers) this.guard.updateFromHeaders(response.headers);
+        if (response?.headers) this.guard.updateFromHeaders(response.headers as Record<string, string | undefined>);
         return response.data;
     }
 
