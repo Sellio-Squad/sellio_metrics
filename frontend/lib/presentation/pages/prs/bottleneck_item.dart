@@ -25,7 +25,7 @@ class _BottleneckItemState extends State<BottleneckItem> {
   Widget build(BuildContext context) {
     final b = widget.bottleneck;
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final severityColor = b.severity.color;
 
     return MouseRegion(

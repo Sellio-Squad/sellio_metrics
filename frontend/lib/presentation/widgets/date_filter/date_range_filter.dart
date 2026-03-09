@@ -18,7 +18,7 @@ class DateRangeFilter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final provider = context.watch<FilterProvider>();
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
     final now = DateTime.now();
     final firstDate = DateTime(2024);

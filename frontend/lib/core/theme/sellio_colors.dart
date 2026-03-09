@@ -58,6 +58,11 @@ class SellioColorScheme {
     required this.uploadImageTint,
     required this.shadowColor,
   });
+
+  // ─── Subtle Variants (Design Tokens) ─────────────────────
+  Color get greenSubtle => green.withValues(alpha: 0.12);
+  Color get redSubtle => red.withValues(alpha: 0.10);
+  Color get greenSurface => green.withValues(alpha: 0.15);
 }
 
 class SellioColors {

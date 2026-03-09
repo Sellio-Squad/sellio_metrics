@@ -39,7 +39,7 @@ class _LoadingScreenState extends State<LoadingScreen>
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
 
     return Center(
       child: Column(

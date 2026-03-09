@@ -17,6 +17,7 @@ import '../../presentation/providers/pr_data_provider.dart';
 import '../../presentation/providers/analytics_provider.dart';
 import '../../presentation/providers/meetings_provider.dart';
 import '../../presentation/providers/meet_events_provider.dart';
+import '../../presentation/providers/health_status_provider.dart';
 
 class AppRoute {
   final String id;
@@ -98,7 +99,10 @@ class AppNavigation {
       path: '/settings',
       icon: LucideIcons.settings,
       labelBuilder: (l10n) => l10n.navSettings,
-      pageBuilder: (_) => const SettingsPage(),
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: sl.get<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
+        child: const SettingsPage(),
+      ),
       showDateFilter: false,
     ),
   ];

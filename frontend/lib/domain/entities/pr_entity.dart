@@ -1,6 +1,6 @@
 library;
 
-import 'PrTimelineEvent.dart';
+import 'pr_timeline_event.dart';
 import 'approval_entity.dart';
 import 'comment_entity.dart';
 import 'diff_stats_entity.dart';

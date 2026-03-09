@@ -16,7 +16,7 @@ class LeaderboardRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final medal = index < 3 ? _medals[index] : '${index + 1}';
 
     return Padding(

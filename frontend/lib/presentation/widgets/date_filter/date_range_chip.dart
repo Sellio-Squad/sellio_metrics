@@ -17,7 +17,7 @@ class DateRangeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
 
     String text;
     if (start != null && end != null) {

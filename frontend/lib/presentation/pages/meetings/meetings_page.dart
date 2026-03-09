@@ -162,7 +162,7 @@ class _MeetingsPageState extends State<MeetingsPage>
                   children: [
                     const Icon(LucideIcons.plus, size: 16),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(AppLocalizations.of(context)!.newMeeting),
+                    Text(AppLocalizations.of(context).newMeeting),
                   ],
                 ),
               ),
@@ -274,7 +274,7 @@ class _MeetingsPageState extends State<MeetingsPage>
     BuildContext context,
     MeetingsProvider provider,
   ) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final limit = provider.rateLimit;
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xl),
@@ -303,7 +303,7 @@ class _MeetingsPageState extends State<MeetingsPage>
   }
 
   Widget _buildMeetingsList(BuildContext context, MeetingsProvider provider) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
 
     if (provider.meetings.isEmpty) {
       return Center(
@@ -376,7 +376,7 @@ class _MeetingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
     final formatter = DateFormat('MMM d, h:mm a');
 

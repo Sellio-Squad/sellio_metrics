@@ -5,19 +5,19 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../widgets/date_filter/date_range_filter.dart';
-import 'settings_section.dart';
-import 'repository_selector.dart';
-import 'theme_toggle.dart';
-import 'language_toggle.dart';
-import 'github_rate_limit_banner.dart';
-import 'kv_cache_quota_banner.dart';
+import 'widgets/settings_section.dart';
+import 'widgets/repository_selector.dart';
+import 'widgets/theme_toggle.dart';
+import 'widgets/language_toggle.dart';
+import 'widgets/github_rate_limit_banner.dart';
+import 'widgets/kv_cache_quota_banner.dart';
 
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
 
     return Align(
@@ -65,7 +65,7 @@ class SettingsPage extends StatelessWidget {
 
             // Date range filter as a settings section
             SettingsSection(
-              title: l10n.filterAllTime,
+              title: 'Date Range Filter',
               icon: Icons.calendar_today_outlined,
               children: const [DateRangeFilter()],
             ),

@@ -16,16 +16,19 @@ import '../../data/datasources/leaderboard_data_source.dart';
 import '../../data/datasources/members_data_source.dart';
 import '../../data/datasources/fake_datasources.dart';
 import '../../data/datasources/pr_data_source.dart';
+import '../../data/datasources/health_data_source.dart';
 
 // ── Repository Interfaces & Impls ────────────────────────────
 import '../../domain/repositories/repos_repository.dart';
 import '../../domain/repositories/leaderboard_repository.dart';
 import '../../domain/repositories/members_repository.dart';
 import '../../domain/repositories/pr_repository.dart';
+import '../../domain/repositories/health_repository.dart';
 import '../../data/repositories/repos_repository_impl.dart';
 import '../../data/repositories/leaderboard_repository_impl.dart';
 import '../../data/repositories/members_repository_impl.dart';
 import '../../data/repositories/pr_repository_impl.dart';
+import '../../data/repositories/health_repository_impl.dart';
 import 'package:http/http.dart' as http;
 
 // ── Domain Services ──────────────────────────────────────────
@@ -40,6 +43,7 @@ import '../../presentation/providers/leaderboard_provider.dart';
 import '../../presentation/providers/member_provider.dart';
 import '../../presentation/providers/pr_data_provider.dart';
 import '../../presentation/providers/analytics_provider.dart';
+import '../../presentation/providers/health_status_provider.dart';
 
 // ── Meetings Feature ─────────────────────────────────────────
 import '../../data/datasources/meetings_data_source.dart';
@@ -104,6 +108,8 @@ void setupDependencies() {
     sl.registerSingleton<MembersDataSource>(FakeMembersDataSource());
     sl.registerSingleton<MeetingsDataSource>(FakeMeetingsDataSource());
     sl.registerSingleton<PrDataSource>(FakePrDataSource());
+    // Health data source - can add Fake if needed, but for now remote is fine or dummy
+    sl.registerSingleton<HealthDataSource>(RemoteHealthDataSource(baseUrl: baseUrl));
   } else {
     final client = http.Client();
     sl.registerSingleton<ReposDataSource>(
@@ -120,6 +126,9 @@ void setupDependencies() {
     );
     sl.registerSingleton<PrDataSource>(
       RemotePrDataSource(client: client),
+    );
+    sl.registerSingleton<HealthDataSource>(
+      RemoteHealthDataSource(baseUrl: baseUrl, client: client),
     );
   }
   // Meet Events is always remote
@@ -145,6 +154,9 @@ void setupDependencies() {
   );
   sl.registerLazySingleton<MeetEventsRepository>(
     () => MeetEventsRepositoryImpl(dataSource: sl.get<MeetEventsDataSource>()),
+  );
+  sl.registerLazySingleton<HealthRepository>(
+    () => HealthRepositoryImpl(dataSource: sl.get<HealthDataSource>()),
   );
 
   // ── Domain Services ────────────────────────────────────────
@@ -175,5 +187,8 @@ void setupDependencies() {
   );
   sl.registerFactory<MeetEventsProvider>(
     () => MeetEventsProvider(repository: sl.get<MeetEventsRepository>()),
+  );
+  sl.registerFactory<HealthStatusProvider>(
+    () => HealthStatusProvider(repository: sl.get<HealthRepository>()),
   );
 }

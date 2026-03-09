@@ -13,7 +13,7 @@ class AboutFeaturesSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
 
     final features = [
       l10n.featureMarketplace,

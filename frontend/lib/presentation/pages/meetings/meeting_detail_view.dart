@@ -38,7 +38,7 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
 
     return Dialog(
@@ -262,7 +262,7 @@ class _ParticipantRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final isLive = participant.isCurrentlyPresent;
 
     final joinFormatter = DateFormat('h:mm a');

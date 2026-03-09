@@ -208,5 +208,18 @@
   "liveEventsEmpty": "لا توجد أحداث بعد. اشترك في اجتماع لبدء التتبع.",
   "liveEventsSubscribe": "اشترك في أحداث الاجتماع",
   "liveEventsConnected": "متصل — يتم استقبال التحديثات المباشرة",
-  "liveEventsDisconnected": "غير متصل — انقر على استئناف لإعادة الاتصال"
+  "liveEventsDisconnected": "غير متصل — انقر على استئناف لإعادة الاتصال",
+  "githubRateLimitTitle": "حد واجهة برمجة تطبيقات GitHub",
+  "githubRateLimitChecking": "جارٍ التحقق من حد واجهة برمجة تطبيقات GitHub...",
+  "githubRateLimitRemaining": "{remaining} متبقي من {limit}",
+  "kvCacheQuotaTitle": "Cloudflare KV Cache",
+  "kvCacheQuotaChecking": "جارٍ التحقق من حصة KV cache...",
+  "kvCacheQuotaDailyWriteLimit": "حد الكتابة اليومي",
+  "kvCacheQuotaMaxWrites": "أقصى عدد كتابة لكل طلب",
+  "kvCacheQuotaResetLabel": "منتصف الليل بتوقيت UTC",
+  "kvCacheQuotaKeysCached": "{cached} / {total} مفاتيح نتائج مخزنة مؤقتاً",
+  "unableToFetchGitHubRateLimit": "تعذر جلب حد واجهة برمجة تطبيقات GitHub.",
+  "unableToFetchKvCacheQuota": "تعذر جلب حصة KV cache.",
+  "freeTier": "الفئة المجانية",
+  "utcMidnight": "منتصف الليل UTC"
 }

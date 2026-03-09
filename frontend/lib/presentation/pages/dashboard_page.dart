@@ -11,10 +11,7 @@ import '../widgets/date_filter/date_range_filter.dart';
 class DashboardPage extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
 
-  const DashboardPage({
-    super.key,
-    required this.navigationShell,
-  });
+  const DashboardPage({super.key, required this.navigationShell});
 
   void _onItemTapped(int index) {
     navigationShell.goBranch(
@@ -31,15 +28,12 @@ class DashboardPage extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: context.colors.surface,
-      body: isDesktop 
-          ? _buildDesktopLayout(context, selectedIndex) 
+      body: isDesktop
+          ? _buildDesktopLayout(context, selectedIndex)
           : _buildMobileLayout(context, selectedIndex),
       bottomNavigationBar: isDesktop
           ? null
-          : AppBottomNav(
-              currentIndex: selectedIndex,
-              onTap: _onItemTapped,
-            ),
+          : AppBottomNav(currentIndex: selectedIndex, onTap: _onItemTapped),
     );
   }
 
@@ -49,10 +43,7 @@ class DashboardPage extends StatelessWidget {
 
     return Row(
       children: [
-        AppSidebar(
-          selectedIndex: selectedIndex,
-          onItemSelected: _onItemTapped,
-        ),
+        AppSidebar(selectedIndex: selectedIndex, onItemSelected: _onItemTapped),
         Expanded(
           child: Column(
             children: [
@@ -72,10 +63,7 @@ class DashboardPage extends StatelessWidget {
                   switchInCurve: Curves.easeInOut,
                   switchOutCurve: Curves.easeInOut,
                   transitionBuilder: (child, animation) {
-                    return FadeTransition(
-                      opacity: animation,
-                      child: child,
-                    );
+                    return FadeTransition(opacity: animation, child: child);
                   },
                   layoutBuilder: (currentChild, previousChildren) {
                     return Stack(

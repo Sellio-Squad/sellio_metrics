@@ -12,7 +12,7 @@ class AttendanceAnalyticsView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
     final analytics = context.watch<MeetingsProvider>().analytics;
 
@@ -77,7 +77,7 @@ class AttendanceAnalyticsView extends StatelessWidget {
   }
 
   Widget _buildTrendChart(BuildContext context, dynamic analytics) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
     final trends = analytics.attendanceTrends as List;
 
@@ -217,7 +217,7 @@ class AttendanceAnalyticsView extends StatelessWidget {
   }
 
   Widget _buildMostActiveCard(BuildContext context, dynamic analytics) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
     final topList = analytics.mostActiveParticipants as List;
 

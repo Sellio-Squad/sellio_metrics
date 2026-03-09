@@ -208,5 +208,18 @@
   "liveEventsEmpty": "No events yet. Subscribe to a meeting to start tracking.",
   "liveEventsSubscribe": "Subscribe to Meeting Events",
   "liveEventsConnected": "Connected — receiving live updates",
-  "liveEventsDisconnected": "Disconnected — click Resume to reconnect"
+  "liveEventsDisconnected": "Disconnected — click Resume to reconnect",
+  "githubRateLimitTitle": "GitHub API rate limit",
+  "githubRateLimitChecking": "Checking GitHub API rate limit…",
+  "githubRateLimitRemaining": "{remaining} remaining of {limit}",
+  "kvCacheQuotaTitle": "Cloudflare KV Cache",
+  "kvCacheQuotaChecking": "Checking KV cache quota…",
+  "kvCacheQuotaDailyWriteLimit": "Daily write limit",
+  "kvCacheQuotaMaxWrites": "Max writes per request",
+  "kvCacheQuotaResetLabel": "UTC midnight",
+  "kvCacheQuotaKeysCached": "{cached} / {total} result keys cached",
+  "unableToFetchGitHubRateLimit": "Unable to fetch GitHub API rate limit.",
+  "unableToFetchKvCacheQuota": "Unable to fetch KV cache quota.",
+  "freeTier": "free tier",
+  "utcMidnight": "UTC midnight"
 }

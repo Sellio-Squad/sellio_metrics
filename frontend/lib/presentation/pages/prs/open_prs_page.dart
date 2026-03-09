@@ -47,7 +47,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
 
     return Consumer3<PrDataProvider, FilterProvider, AnalyticsProvider>(
       builder: (context, prData, filter, analytics, _) {

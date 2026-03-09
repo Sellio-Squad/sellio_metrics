@@ -37,7 +37,7 @@ class _CreateMeetingDialogState extends State<CreateMeetingDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
     final scheme = context.colors;
     final isCreating = context.watch<MeetingsProvider>().isCreating;
     final error = context.watch<MeetingsProvider>().error;

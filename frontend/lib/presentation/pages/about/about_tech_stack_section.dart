@@ -13,7 +13,7 @@ class AboutTechStackSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context);
 
     final techItems = [
       _TechItem(l10n.techFlutter, l10n.techFlutterRole, LucideIcons.smartphone),

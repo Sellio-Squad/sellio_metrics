@@ -62,7 +62,7 @@ class _MembersPageState extends State<MembersPage> {
         }
 
         if (memberProvider.memberStatuses.isEmpty) {
-          final l10n = AppLocalizations.of(context)!;
+          final l10n = AppLocalizations.of(context);
           return Center(
             child: Text(
               l10n.emptyData,
@@ -84,7 +84,7 @@ class _MembersPageState extends State<MembersPage> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    AppLocalizations.of(context)!.navMembers,
+                    AppLocalizations.of(context).navMembers,
                     style: AppTypography.title.copyWith(
                       color: context.colors.title,
                       fontSize: 24,
