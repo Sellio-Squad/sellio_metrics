@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../domain/entities/meeting_entity.dart';
@@ -200,7 +200,6 @@ class _MeetingsPageState extends State<MeetingsPage>
   }
 
   Widget _buildMeetingsTab(BuildContext context, MeetingsProvider provider) {
-    final l10n = AppLocalizations.of(context);
     return Align(
       alignment: Alignment.topLeft,
       child: SingleChildScrollView(

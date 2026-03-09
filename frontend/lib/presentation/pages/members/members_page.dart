@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../design_system/components/s_avatar.dart';

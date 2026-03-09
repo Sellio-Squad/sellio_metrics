@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import '../../domain/entities/pr_entity.dart';
+import '../../domain/entities/repo_info.dart';
 import '../../domain/repositories/pr_repository.dart';
-import '../../domain/repositories/repos_repository.dart';
 
 enum DataLoadingStatus { loading, loaded, error }
 

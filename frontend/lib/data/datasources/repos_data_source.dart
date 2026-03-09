@@ -6,8 +6,7 @@ library;
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-
-import '../../domain/repositories/repos_repository.dart';
+import '../../domain/entities/repo_info.dart';
 
 // ─── Abstract Interface ──────────────────────────────────────
 

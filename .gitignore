@@ -41,3 +41,5 @@ frontend/.wrangler/
 backend/.wrangler/
 .dev.vars
 /backend/meet-test.json
+# ─── Generated Localization ────────────────────────────────────
+frontend/lib/l10n/app_localizations*.dart

@@ -4,6 +4,7 @@
 /// Depends on ReposDataSource (interface, not concrete).
 library;
 
+import '../../domain/entities/repo_info.dart';
 import '../../domain/repositories/repos_repository.dart';
 import '../datasources/repos_data_source.dart';
 

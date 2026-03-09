@@ -6,6 +6,7 @@
 library;
 
 import 'package:flutter/material.dart';
+import '../../domain/entities/repo_info.dart';
 import '../../domain/repositories/repos_repository.dart';
 
 class AppSettingsProvider extends ChangeNotifier {
@@ -17,6 +18,7 @@ class AppSettingsProvider extends ChangeNotifier {
   List<RepoInfo> _selectedRepos = [];
   List<RepoInfo> _availableRepos = [];
   bool _isLoadingRepos = false;
+  String? _errorRepoLoad;
 
   AppSettingsProvider({required ReposRepository repository})
     : _repository = repository;
@@ -28,6 +30,7 @@ class AppSettingsProvider extends ChangeNotifier {
   List<RepoInfo> get selectedRepos => _selectedRepos;
   List<RepoInfo> get availableRepos => _availableRepos;
   bool get isLoadingRepos => _isLoadingRepos;
+  String? get errorRepoLoad => _errorRepoLoad;
 
   // ─── Theme ───────────────────────────────────────────────
   void toggleTheme() {
@@ -56,6 +59,7 @@ class AppSettingsProvider extends ChangeNotifier {
   // ─── Repositories ────────────────────────────────────────
   Future<void> loadRepositories() async {
     _isLoadingRepos = true;
+    _errorRepoLoad = null;
     notifyListeners();
 
     try {
@@ -64,6 +68,7 @@ class AppSettingsProvider extends ChangeNotifier {
         _selectedRepos = List.from(_availableRepos);
       }
     } catch (e) {
+      _errorRepoLoad = e.toString();
       debugPrint('[AppSettingsProvider] Error loading repos: $e');
     }
 

@@ -2,7 +2,7 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../../core/extensions/theme_extensions.dart';
-import '../../../core/l10n/app_localizations.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/navigation/app_navigation.dart';
 
 class AppBottomNav extends StatelessWidget {
