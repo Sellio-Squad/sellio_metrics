@@ -4,9 +4,10 @@
 library;
 
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../domain/entities/repo_info.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 // ─── Abstract Interface ──────────────────────────────────────
 
@@ -27,7 +28,7 @@ class RemoteReposDataSource implements ReposDataSource {
   @override
   Future<List<RepoInfo>> fetchRepositories() async {
     final url = Uri.parse('$baseUrl/api/repos');
-    debugPrint('[ReposDataSource] GET $url');
+    sl.get<AppLogger>().network('ReposDataSource', 'GET', url);
 
     final response = await _client.get(url);
 

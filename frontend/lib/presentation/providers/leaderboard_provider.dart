@@ -5,9 +5,12 @@
 /// entries across repos by summing scores for each developer.
 library;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
 import '../../domain/entities/leaderboard_entry.dart';
 import '../../domain/repositories/leaderboard_repository.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 class LeaderboardProvider extends ChangeNotifier {
   /// Depends on INTERFACE — satisfies Dependency Inversion Principle.
@@ -66,8 +69,8 @@ class LeaderboardProvider extends ChangeNotifier {
 
       _leaderboard = merged.values.toList()
         ..sort((a, b) => b.totalScore.compareTo(a.totalScore));
-    } catch (e) {
-      debugPrint('[LeaderboardProvider] Error: $e');
+    } catch (e, stack) {
+      sl.get<AppLogger>().error('LeaderboardProvider', 'Error: $e', stack);
       _error = e.toString();
       _leaderboard = [];
     } finally {

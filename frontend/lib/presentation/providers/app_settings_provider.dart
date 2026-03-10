@@ -8,6 +8,8 @@ library;
 import 'package:flutter/material.dart';
 import '../../domain/entities/repo_info.dart';
 import '../../domain/repositories/repos_repository.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 class AppSettingsProvider extends ChangeNotifier {
   /// Depends on INTERFACE — satisfies Dependency Inversion Principle.
@@ -67,9 +69,9 @@ class AppSettingsProvider extends ChangeNotifier {
       if (_selectedRepos.isEmpty && _availableRepos.isNotEmpty) {
         _selectedRepos = List.from(_availableRepos);
       }
-    } catch (e) {
+    } catch (e, stack) {
       _errorRepoLoad = e.toString();
-      debugPrint('[AppSettingsProvider] Error loading repos: $e');
+      sl.get<AppLogger>().error('AppSettingsProvider', 'Error loading repos: $e', stack);
     }
 
     _isLoadingRepos = false;

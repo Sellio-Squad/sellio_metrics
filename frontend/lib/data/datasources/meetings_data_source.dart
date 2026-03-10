@@ -5,8 +5,9 @@
 library;
 
 import 'dart:convert';
-import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 // ─── Abstract Interface ─────────────────────────────────────
 
@@ -54,7 +55,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<Map<String, dynamic>> createMeeting(String title) async {
     final url = Uri.parse('$baseUrl/api/meetings');
-    debugPrint('[MeetingsDataSource] POST $url');
+    sl.get<AppLogger>().network('MeetingsDataSource', 'POST', url);
 
     final response = await _client.post(
       url,
@@ -84,7 +85,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<List<Map<String, dynamic>>> fetchMeetings() async {
     final url = Uri.parse('$baseUrl/api/meetings');
-    debugPrint('[MeetingsDataSource] GET $url');
+    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
 
     final response = await _client.get(url);
 
@@ -101,7 +102,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<Map<String, dynamic>> fetchMeetingDetail(String id) async {
     final url = Uri.parse('$baseUrl/api/meetings/$id');
-    debugPrint('[MeetingsDataSource] GET $url');
+    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
 
     final response = await _client.get(url);
 
@@ -117,7 +118,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<Map<String, dynamic>> fetchAttendance(String meetingId) async {
     final url = Uri.parse('$baseUrl/api/meetings/$meetingId/attendance');
-    debugPrint('[MeetingsDataSource] GET $url');
+    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
 
     final response = await _client.get(url);
 
@@ -133,7 +134,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<Map<String, dynamic>> fetchAnalytics() async {
     final url = Uri.parse('$baseUrl/api/meetings/analytics');
-    debugPrint('[MeetingsDataSource] GET $url');
+    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
 
     final response = await _client.get(url);
 
@@ -149,7 +150,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<Map<String, dynamic>> fetchRateLimitStatus() async {
     final url = Uri.parse('$baseUrl/api/meetings/rate-limit');
-    debugPrint('[MeetingsDataSource] GET $url');
+    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
 
     final response = await _client.get(url);
 
@@ -191,7 +192,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<void> logout() async {
     final url = Uri.parse('$baseUrl/api/meetings/auth-logout');
-    debugPrint('[MeetingsDataSource] POST $url');
+    sl.get<AppLogger>().network('MeetingsDataSource', 'POST', url);
     final response = await _client.post(url);
     if (response.statusCode != 200) {
       throw Exception(
@@ -203,7 +204,7 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<void> endMeeting(String id) async {
     final url = Uri.parse('$baseUrl/api/meetings/$id/end');
-    debugPrint('[MeetingsDataSource] POST $url');
+    sl.get<AppLogger>().network('MeetingsDataSource', 'POST', url);
     final response = await _client.post(url);
     if (response.statusCode != 200) {
       throw Exception(

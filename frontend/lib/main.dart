@@ -4,16 +4,20 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'core/di/service_locator.dart';
 import 'app.dart';
+import 'core/logging/app_logger.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
+  setupDependencies();
+  final logger = sl.get<AppLogger>();
+
   FlutterError.onError = (details) {
-    debugPrint('Flutter error: ${details.exception}');
+    logger.error('Flutter', details.exception, details.stack);
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
-    debugPrint('Platform error: $error');
+    logger.error('Platform', error, stack);
     return true;
   };
 
@@ -26,6 +30,5 @@ void main() {
     );
   };
 
-  setupDependencies();
   runApp(const SellioMetricsApp());
 }
