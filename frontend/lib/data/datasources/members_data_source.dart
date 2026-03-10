@@ -4,8 +4,9 @@
 library;
 
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 // ─── Abstract Interface ──────────────────────────────────────
 
@@ -26,7 +27,7 @@ class RemoteMembersDataSource implements MembersDataSource {
   @override
   Future<List<dynamic>> fetchMembersStatus(String owner, String repo) async {
     final url = Uri.parse('$baseUrl/api/metrics/$owner/$repo/members');
-    debugPrint('[MembersDataSource] GET $url');
+    sl.get<AppLogger>().network('MembersDataSource', 'GET', url);
 
     final response = await _client.get(url);
 

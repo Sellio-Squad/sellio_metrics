@@ -7,8 +7,9 @@ library;
 import 'dart:async';
 import 'dart:convert';
 import 'dart:html' as html;
-import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 // ─── Abstract Interface ─────────────────────────────────────
 
@@ -44,7 +45,7 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
   @override
   Future<Map<String, dynamic>> subscribe(String spaceName) async {
     final url = Uri.parse('$baseUrl/api/meet-events/subscribe');
-    debugPrint('[MeetEventsDataSource] POST $url');
+    sl.get<AppLogger>().network('MeetEventsDataSource', 'POST', url);
 
     final response = await _client.post(
       url,
@@ -64,7 +65,7 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
   @override
   Future<List<Map<String, dynamic>>> fetchEvents({int limit = 50}) async {
     final url = Uri.parse('$baseUrl/api/meet-events/events?limit=$limit');
-    debugPrint('[MeetEventsDataSource] GET $url');
+    sl.get<AppLogger>().network('MeetEventsDataSource', 'GET', url);
 
     final response = await _client.get(url);
 
@@ -82,7 +83,7 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
   @override
   Future<List<Map<String, dynamic>>> fetchSubscriptions() async {
     final url = Uri.parse('$baseUrl/api/meet-events/subscriptions');
-    debugPrint('[MeetEventsDataSource] GET $url');
+    sl.get<AppLogger>().network('MeetEventsDataSource', 'GET', url);
 
     final response = await _client.get(url);
 
@@ -108,7 +109,8 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
         ? '$baseUrl/api/meet-events/stream?lastEventId=$lastEventId'
         : '$baseUrl/api/meet-events/stream';
 
-    debugPrint('[MeetEventsDataSource] SSE connecting to $sseUrl');
+    final sseUri = Uri.parse(sseUrl);
+    sl.get<AppLogger>().network('MeetEventsDataSource', 'SSE-CONNECT', sseUri);
 
     _eventSource = html.EventSource(sseUrl);
 
@@ -118,17 +120,17 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
         final data = json.decode(messageEvent.data as String)
             as Map<String, dynamic>;
         _streamController?.add(data);
-      } catch (e) {
-        debugPrint('[MeetEventsDataSource] SSE parse error: $e');
+      } catch (e, stack) {
+        sl.get<AppLogger>().error('MeetEventsDataSource', 'SSE parse error: $e', stack);
       }
     });
 
     _eventSource!.onOpen.listen((_) {
-      debugPrint('[MeetEventsDataSource] SSE connected');
+      sl.get<AppLogger>().info('MeetEventsDataSource', 'SSE connected');
     });
 
     _eventSource!.onError.listen((event) {
-      debugPrint('[MeetEventsDataSource] SSE error — will auto-reconnect');
+      sl.get<AppLogger>().info('MeetEventsDataSource', 'SSE error — will auto-reconnect');
       // EventSource handles reconnection automatically
     });
 

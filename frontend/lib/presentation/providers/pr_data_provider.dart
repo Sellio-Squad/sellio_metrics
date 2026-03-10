@@ -1,7 +1,10 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/entities/repo_info.dart';
 import '../../domain/repositories/pr_repository.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 enum DataLoadingStatus { loading, loaded, error }
 
@@ -28,7 +31,7 @@ class PrDataProvider extends ChangeNotifier {
 
   void setError(String message) {
     _status = DataLoadingStatus.error;
-    debugPrint('[PrDataProvider] $message');
+    sl.get<AppLogger>().error('PrDataProvider', message);
     notifyListeners();
   }
 
@@ -62,7 +65,7 @@ class PrDataProvider extends ChangeNotifier {
   Future<void> loadData({List<RepoInfo>? repos}) async {
     final rs = repos ?? _loadedRepos;
     if (rs.isEmpty) {
-      debugPrint('[PrDataProvider] No repos set. Waiting for selection.');
+      sl.get<AppLogger>().info('PrDataProvider', 'No repos set. Waiting for selection.');
       return;
     }
 
@@ -82,9 +85,9 @@ class PrDataProvider extends ChangeNotifier {
       }
       _allPrs = aggregatedPrs;
       _status = DataLoadingStatus.loaded;
-    } catch (e) {
+    } catch (e, stack) {
       _status = DataLoadingStatus.error;
-      debugPrint('Error loading PR data: $e');
+      sl.get<AppLogger>().error('PrDataProvider', 'Error loading PR data: $e', stack);
     }
     notifyListeners();
   }
@@ -108,9 +111,9 @@ class PrDataProvider extends ChangeNotifier {
       }
       _openPrs = aggregated;
       _openPrsStatus = DataLoadingStatus.loaded;
-    } catch (e) {
+    } catch (e, stack) {
       _openPrsStatus = DataLoadingStatus.error;
-      debugPrint('Error loading open PRs: $e');
+      sl.get<AppLogger>().error('PrDataProvider', 'Error loading open PRs: $e', stack);
     }
     notifyListeners();
   }

@@ -4,7 +4,7 @@
 /// without a backend.
 library;
 
-import '../datasources/meetings_data_source.dart';
+import '../meetings_data_source.dart';
 
 class FakeMeetingsDataSource implements MeetingsDataSource {
   final List<Map<String, dynamic>> _meetings = [
