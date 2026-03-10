@@ -4,9 +4,12 @@
 /// Fetches server-computed member active/inactive status.
 library;
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+
 import '../../domain/entities/member_status_entity.dart';
 import '../../domain/repositories/members_repository.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 class MemberProvider extends ChangeNotifier {
   /// Depends on INTERFACE — satisfies Dependency Inversion Principle.
@@ -43,8 +46,8 @@ class MemberProvider extends ChangeNotifier {
         return;
       }
       _memberStatuses = await _repository.getMembersStatus(parts[0], parts[1]);
-    } catch (e) {
-      debugPrint('[MemberProvider] Error: $e');
+    } catch (e, stack) {
+      sl.get<AppLogger>().error('MemberProvider', 'Error: $e', stack);
       _error = e.toString();
       _memberStatuses = [];
     } finally {

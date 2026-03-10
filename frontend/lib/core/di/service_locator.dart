@@ -9,12 +9,14 @@
 library;
 
 import '../../core/constants/app_constants.dart';
+import '../../data/datasources/fake/fake_meetings_data_source.dart';
+import '../logging/app_logger.dart';
 
 // ── Datasource Interfaces & Impls ────────────────────────────
 import '../../data/datasources/repos_data_source.dart';
 import '../../data/datasources/leaderboard_data_source.dart';
 import '../../data/datasources/members_data_source.dart';
-import '../../data/datasources/fake_datasources.dart';
+import '../../data/datasources/fake/fake_datasources.dart';
 import '../../data/datasources/pr_data_source.dart';
 import '../../data/datasources/health_data_source.dart';
 
@@ -47,7 +49,6 @@ import '../../presentation/providers/health_status_provider.dart';
 
 // ── Meetings Feature ─────────────────────────────────────────
 import '../../data/datasources/meetings_data_source.dart';
-import '../../data/datasources/fake_meetings_data_source.dart';
 import '../../data/repositories/meetings_repository_impl.dart';
 import '../../domain/repositories/meetings_repository.dart';
 import '../../presentation/providers/meetings_provider.dart';
@@ -100,6 +101,9 @@ class ServiceLocator {
 void setupDependencies() {
   final useFake = ApiConfig.useFakeData;
   final baseUrl = ApiConfig.baseUrl;
+
+  // ── Core Utilities ──────────────────────────────────────────
+  sl.registerSingleton<AppLogger>(ConsoleAppLogger());
 
   // ── Datasources (interface ← impl) ────────────────────────
   if (useFake) {

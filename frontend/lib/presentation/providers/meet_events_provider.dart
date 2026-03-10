@@ -5,9 +5,13 @@
 library;
 
 import 'dart:async';
+
 import 'package:flutter/material.dart';
+
 import '../../domain/entities/meet_event_entity.dart';
 import '../../domain/repositories/meet_events_repository.dart';
+import '../../core/di/service_locator.dart';
+import '../../core/logging/app_logger.dart';
 
 class MeetEventsProvider extends ChangeNotifier {
   final MeetEventsRepository _repository;
@@ -82,12 +86,12 @@ class MeetEventsProvider extends ChangeNotifier {
 
         notifyListeners();
       },
-      onError: (error) {
-        debugPrint('[MeetEventsProvider] SSE error: $error');
+      onError: (error, stack) {
+        sl.get<AppLogger>().error('MeetEventsProvider', 'SSE error: $error', stack);
         // EventSource auto-reconnects, so we don't need to handle this
       },
       onDone: () {
-        debugPrint('[MeetEventsProvider] SSE stream closed — will reconnect');
+        sl.get<AppLogger>().info('MeetEventsProvider', 'SSE stream closed — will reconnect');
         _isStreaming = false;
         notifyListeners();
         // Auto-reconnect after a brief delay
