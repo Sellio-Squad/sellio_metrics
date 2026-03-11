@@ -97,7 +97,7 @@ export class CacheService {
      * For critical keys (like OAuth tokens), a KV write failure throws.
      * For all other keys, failures are logged and silently skipped.
      */
-    async set<T>(key: string, data: T, ttlSeconds: number, etag?: string): Promise<void> {
+    async set<T>(key: string, data: T, ttlSeconds?: number, etag?: string): Promise<void> {
         const value: CachedValue<T> = {
             data,
             ...(etag && { etag }),
@@ -105,17 +105,21 @@ export class CacheService {
         };
 
         // Always write to in-memory cache first (fast, always works)
+        const memTtl = ttlSeconds ? Math.min(ttlSeconds, 60) * 1000 : 300_000; // 5min default for permanent keys
         this.memCache.set(this.prefix + key, {
             value: value as CachedValue<unknown>,
-            expiresAt: Date.now() + Math.min(ttlSeconds, 60) * 1000,
+            expiresAt: Date.now() + memTtl,
         });
 
         if (!this.kv) return;
 
         try {
-            await this.kv.put(this.prefix + key, JSON.stringify(value), {
-                expirationTtl: Math.max(ttlSeconds, 60), // KV minimum TTL is 60s
-            });
+            const putOptions: { expirationTtl?: number } = {};
+            if (ttlSeconds) {
+                putOptions.expirationTtl = Math.max(ttlSeconds, 60); // KV minimum TTL is 60s
+            }
+            // When ttlSeconds is omitted, no expirationTtl → stored permanently
+            await this.kv.put(this.prefix + key, JSON.stringify(value), putOptions);
         } catch (err: any) {
             if (CRITICAL_KEYS.has(key)) {
                 // For critical keys, surface the error so callers know the write failed

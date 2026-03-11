@@ -1,7 +1,7 @@
 {
     "info": {
         "name": "Sellio Metrics API",
-        "description": "GitHub PR analytics API for the Sellio Squad.\n\nDeployed on Cloudflare Workers.\n\nAuthentication: None required (GitHub App auth handled server-side).",
+        "description": "GitHub PR analytics API for the Sellio Squad.\n\nDeployed on Cloudflare Workers with D1 database for event storage.\n\nAuthentication: None required (GitHub App auth handled server-side).\n\nNew in v2: Event-driven scoring, dynamic point rules, attendance tracking, D1-backed leaderboard.",
         "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
     },
     "variable": [
@@ -43,7 +43,7 @@
                                 "health"
                             ]
                         },
-                        "description": "Returns server health status, org name, and timestamp.\n\nUse this to verify the Worker is running and configured correctly."
+                        "description": "Returns server health status, org name, D1 availability, and timestamp.\n\nUse this to verify the Worker is running and configured correctly."
                     },
                     "response": [
                         {
@@ -56,7 +56,7 @@
                                     "value": "application/json"
                                 }
                             ],
-                            "body": "{\n  \"status\": \"ok\",\n  \"org\": \"Sellio-Squad\",\n  \"timestamp\": \"2026-02-28T15:21:48.926Z\"\n}"
+                            "body": "{\n  \"status\": \"ok\",\n  \"org\": \"Sellio-Squad\",\n  \"timestamp\": \"2026-03-12T00:00:00.000Z\",\n  \"d1Available\": true\n}"
                         }
                     ]
                 }
@@ -164,32 +164,7 @@
                         },
                         "description": "Fetches detailed PR metrics for a specific repository.\n\nIncludes: PR details, reviews, comments, diff stats, approvals, time-to-merge, time-to-first-review, and more.\n\nResults are cached in Workers KV for 1 hour. Cache is invalidated by GitHub webhooks.\n\n⚠️ First call for a repo may take 15-30 seconds (fetches from GitHub API). Subsequent calls return instantly from cache."
                     },
-                    "response": [
-                        {
-                            "name": "200 OK",
-                            "status": "OK",
-                            "code": 200,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                }
-                            ],
-                            "body": "{\n  \"owner\": \"Sellio-Squad\",\n  \"repo\": \"sellio_mobile\",\n  \"count\": 127,\n  \"metrics\": [\n    {\n      \"prNumber\": 42,\n      \"title\": \"feat: add checkout flow\",\n      \"state\": \"merged\",\n      \"isMerged\": true,\n      \"repoName\": \"sellio_mobile\",\n      \"creator\": {\n        \"login\": \"dev-01\",\n        \"name\": \"Ahmed\",\n        \"avatarUrl\": \"https://avatars.githubusercontent.com/u/...\"\n      },\n      \"openedAt\": \"2026-02-15T10:00:00Z\",\n      \"mergedAt\": \"2026-02-16T14:30:00Z\",\n      \"closedAt\": null,\n      \"timeToMergeMinutes\": 1710,\n      \"timeToFirstReviewMinutes\": 240,\n      \"isoWeek\": \"2026-W07\",\n      \"diffStats\": {\n        \"additions\": 523,\n        \"deletions\": 102,\n        \"changedFiles\": 14\n      },\n      \"approvals\": [\n        {\n          \"reviewer\": {\n            \"login\": \"reviewer-01\",\n            \"avatarUrl\": \"https://avatars.githubusercontent.com/u/...\"\n          },\n          \"submittedAt\": \"2026-02-16T12:00:00Z\"\n        }\n      ],\n      \"comments\": [\n        {\n          \"author\": {\n            \"login\": \"dev-02\",\n            \"avatarUrl\": \"https://avatars.githubusercontent.com/u/...\"\n          },\n          \"body\": \"Looks good!\",\n          \"createdAt\": \"2026-02-15T14:30:00Z\",\n          \"isReviewComment\": false\n        }\n      ],\n      \"isApproved\": true,\n      \"hasRequiredApprovals\": true,\n      \"reviewCommentCount\": 3,\n      \"generalCommentCount\": 2\n    }\n  ]\n}"
-                        },
-                        {
-                            "name": "404 Not Found",
-                            "status": "Not Found",
-                            "code": 404,
-                            "header": [
-                                {
-                                    "key": "Content-Type",
-                                    "value": "application/json"
-                                }
-                            ],
-                            "body": "{\n  \"error\": \"Not Found\"\n}"
-                        }
-                    ]
+                    "response": []
                 },
                 {
                     "name": "Get PR Metrics (Open Only)",
@@ -248,10 +223,10 @@
             ]
         },
         {
-            "name": "Leaderboard",
+            "name": "Leaderboard (Legacy)",
             "item": [
                 {
-                    "name": "Calculate Leaderboard",
+                    "name": "Calculate Leaderboard (from GitHub API)",
                     "request": {
                         "method": "GET",
                         "header": [],
@@ -268,7 +243,7 @@
                                 "leaderboard"
                             ]
                         },
-                        "description": "Calculates leaderboard rankings directly from pre-fetched PR data inside the backend.\n\nScoring weights:\n- PRs Created: 3 points\n- PRs Merged: 2 points\n- Reviews Given: 0 points\n- Comments Given: 1 point\n- Code additions/deletions factored in"
+                        "description": "Calculates leaderboard rankings from PR data fetched from GitHub.\n\nScoring weights are now dynamic (fetched from point rules).\n\nDefault weights:\n- PRs Created: 3 points\n- PRs Merged: 2 points\n- Reviews Given: 0 points\n- Comments Given: 1 point"
                     },
                     "response": [
                         {
@@ -281,7 +256,378 @@
                                     "value": "application/json"
                                 }
                             ],
-                            "body": "[\n  {\n    \"developer\": \"dev-01\",\n    \"avatarUrl\": \"https://avatars.githubusercontent.com/u/1\",\n    \"prsCreated\": 15,\n    \"prsMerged\": 12,\n    \"reviewsGiven\": 8,\n    \"commentsGiven\": 23,\n    \"additions\": 2400,\n    \"deletions\": 580,\n    \"totalScore\": 89.5\n  },\n  {\n    \"developer\": \"dev-02\",\n    \"avatarUrl\": \"https://avatars.githubusercontent.com/u/2\",\n    \"prsCreated\": 10,\n    \"prsMerged\": 9,\n    \"reviewsGiven\": 15,\n    \"commentsGiven\": 30,\n    \"additions\": 1800,\n    \"deletions\": 400,\n    \"totalScore\": 76.2\n  }\n]"
+                            "body": "[{\n  \"developer\": \"dev-01\",\n  \"avatarUrl\": \"https://avatars.githubusercontent.com/u/1\",\n  \"prsCreated\": 15,\n  \"prsMerged\": 12,\n  \"reviewsGiven\": 8,\n  \"commentsGiven\": 23,\n  \"additions\": 2400,\n  \"deletions\": 580,\n  \"totalScore\": 89.5\n}]"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Point Rules",
+            "description": "Manage dynamic scoring rules. Changes persist in D1 and KV (no TTL). Changing rules auto-reflects in all future leaderboard calculations.",
+            "item": [
+                {
+                    "name": "Get Point Rules",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/points/rules",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "points",
+                                "rules"
+                            ]
+                        },
+                        "description": "Returns all point rules.\n\nReads from SCORES_KV (fast), falls back to D1.\n\nDefault rules:\n- PR_CREATED: 3 points\n- PR_MERGED: 2 points\n- PR_REVIEW: 0 points\n- COMMENT: 1 point\n- CHECK_IN: 2 points\n- CHECK_OUT: 0 points\n- ATTENDANCE_DURATION: 1 point (per 15-min block)"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"rules\": [\n    { \"eventType\": \"PR_CREATED\", \"points\": 3, \"description\": \"Developer created a pull request\" },\n    { \"eventType\": \"PR_MERGED\", \"points\": 2, \"description\": \"Pull request was merged\" },\n    { \"eventType\": \"PR_REVIEW\", \"points\": 0, \"description\": \"Developer reviewed a pull request\" },\n    { \"eventType\": \"COMMENT\", \"points\": 1, \"description\": \"Developer left a comment on a PR\" },\n    { \"eventType\": \"CHECK_IN\", \"points\": 2, \"description\": \"Developer checked in to a meeting/session\" },\n    { \"eventType\": \"CHECK_OUT\", \"points\": 0, \"description\": \"Developer checked out of a meeting/session\" },\n    { \"eventType\": \"ATTENDANCE_DURATION\", \"points\": 1, \"description\": \"Per 15-minute block of attendance duration\" }\n  ]\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Update Point Rule",
+                    "request": {
+                        "method": "PUT",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"eventType\": \"PR_REVIEW\",\n  \"points\": 2,\n  \"description\": \"Developer reviewed a pull request\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/points/rules",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "points",
+                                "rules"
+                            ]
+                        },
+                        "description": "Update a specific point rule.\n\nWrites to D1 and syncs to KV. Invalidates ALL cached scores (rules affect everyone).\nChange is logged for audit.\n\nBody:\n- eventType (string, required): e.g. PR_REVIEW\n- points (number, required): new point value\n- description (string, optional): rule description"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"ok\": true,\n  \"rule\": { \"eventType\": \"PR_REVIEW\", \"points\": 2, \"description\": \"Developer reviewed a pull request\" }\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Scores (Event-Driven)",
+            "description": "Event-driven leaderboard from D1. Uses SQL JOIN with point_rules for dynamic scoring.",
+            "item": [
+                {
+                    "name": "Get Scores Leaderboard",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/scores/leaderboard",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "scores",
+                                "leaderboard"
+                            ],
+                            "query": [
+                                {
+                                    "key": "since",
+                                    "value": "2026-03-01T00:00:00Z",
+                                    "description": "ISO 8601 start date (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "until",
+                                    "value": "2026-03-31T23:59:59Z",
+                                    "description": "ISO 8601 end date (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "10",
+                                    "description": "Max number of entries (default: 10)",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "Returns aggregated leaderboard from D1 events.\n\nScores are computed via:\nSELECT e.developer_id, SUM(r.points) as total_points\nFROM events e JOIN point_rules r ON e.event_type = r.event_type\nWHERE e.event_timestamp BETWEEN :start AND :end\nGROUP BY e.developer_id ORDER BY total_points DESC\n\nResults are cached in SCORES_KV. Cache is precomputed every 6 hours by Cron Trigger.\n\nChanging point rules invalidates all caches."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"entries\": [\n    {\n      \"developer_id\": \"dev-01\",\n      \"total_points\": 42,\n      \"event_counts\": {\n        \"PR_CREATED\": 8,\n        \"PR_MERGED\": 6,\n        \"COMMENT\": 12\n      }\n    },\n    {\n      \"developer_id\": \"dev-02\",\n      \"total_points\": 35,\n      \"event_counts\": {\n        \"PR_CREATED\": 5,\n        \"PR_MERGED\": 4,\n        \"PR_REVIEW\": 10\n      }\n    }\n  ],\n  \"cachedAt\": \"2026-03-12T00:00:00.000Z\",\n  \"since\": null,\n  \"until\": null\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Events",
+            "description": "Browse raw scoring events stored in D1. Events are immutable and have no TTL.",
+            "item": [
+                {
+                    "name": "List Events",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/events",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "events"
+                            ],
+                            "query": [
+                                {
+                                    "key": "developerId",
+                                    "value": "dev-01",
+                                    "description": "Filter by developer login (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "eventType",
+                                    "value": "PR_CREATED",
+                                    "description": "Filter by event type (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "since",
+                                    "value": "2026-03-01T00:00:00Z",
+                                    "description": "ISO 8601 start date (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "until",
+                                    "value": "2026-03-31T23:59:59Z",
+                                    "description": "ISO 8601 end date (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "50",
+                                    "description": "Max number of events (default: 50)",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "List raw scoring events from D1.\n\nEvents are immutable (no TTL, no deletion).\nEach event has a unique deterministic ID for idempotency.\n\nEvent types: PR_CREATED, PR_MERGED, PR_REVIEW, COMMENT, CHECK_IN, CHECK_OUT, ATTENDANCE_DURATION"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"count\": 2,\n  \"events\": [\n    {\n      \"id\": \"github:pr_created:Sellio-Squad/sellio_mobile:42:dev-01\",\n      \"developer_id\": \"dev-01\",\n      \"event_type\": \"PR_CREATED\",\n      \"source\": \"github\",\n      \"source_id\": \"https://github.com/Sellio-Squad/sellio_mobile/pull/42\",\n      \"event_timestamp\": \"2026-03-10T14:30:00.000Z\",\n      \"created_at\": \"2026-03-10T14:30:05.000Z\",\n      \"metadata\": \"{\\\"pr_number\\\":42,\\\"title\\\":\\\"feat: new feature\\\",\\\"repo\\\":\\\"Sellio-Squad/sellio_mobile\\\"}\"\n    },\n    {\n      \"id\": \"github:comment:Sellio-Squad/sellio_mobile:12345:dev-02\",\n      \"developer_id\": \"dev-02\",\n      \"event_type\": \"COMMENT\",\n      \"source\": \"github\",\n      \"source_id\": \"https://github.com/Sellio-Squad/sellio_mobile/pull/42#issuecomment-12345\",\n      \"event_timestamp\": \"2026-03-10T15:00:00.000Z\",\n      \"created_at\": \"2026-03-10T15:00:01.000Z\",\n      \"metadata\": \"{\\\"pr_number\\\":42,\\\"repo\\\":\\\"Sellio-Squad/sellio_mobile\\\"}\"\n    }\n  ]\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "Attendance",
+            "description": "CHECK_IN / CHECK_OUT tracking with duration-based scoring.\n\nDuration is calculated on CHECK_OUT and generates an ATTENDANCE_DURATION event scored per 15-minute block.",
+            "item": [
+                {
+                    "name": "Check In",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"developerId\": \"dev-01\",\n  \"checkin_time\": \"2026-03-12T09:00:00.000Z\",\n  \"meeting_id\": \"daily-standup-0312\",\n  \"location\": \"Room A\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/attendance/check-in",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "attendance",
+                                "check-in"
+                            ]
+                        },
+                        "description": "Register a CHECK_IN event.\n\nRequired fields:\n- developerId (string): GitHub login or identifier\n- checkin_time (ISO 8601, optional - defaults to now)\n\nOptional fields:\n- meeting_id (string): Meeting identifier\n- location (string): Location or context\n\nAll timestamps are validated as ISO 8601 and normalized to UTC."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"eventId\": \"checkin:dev-01:2026-03-12T09:00:00.000Z\",\n  \"inserted\": true\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Check Out",
+                    "request": {
+                        "method": "POST",
+                        "header": [
+                            {
+                                "key": "Content-Type",
+                                "value": "application/json"
+                            }
+                        ],
+                        "body": {
+                            "mode": "raw",
+                            "raw": "{\n  \"developerId\": \"dev-01\",\n  \"checkout_time\": \"2026-03-12T10:30:00.000Z\",\n  \"meeting_id\": \"daily-standup-0312\"\n}"
+                        },
+                        "url": {
+                            "raw": "{{baseUrl}}/api/attendance/check-out",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "attendance",
+                                "check-out"
+                            ]
+                        },
+                        "description": "Register a CHECK_OUT event.\n\nAutomatically:\n1. Finds matching CHECK_IN from ATTENDANCE_KV\n2. Calculates duration in minutes\n3. Creates ATTENDANCE_DURATION event (scored per 15-min block)\n\nOrphan handling:\n- CHECK_OUT without matching CHECK_IN → logged as warning, no ATTENDANCE_DURATION generated\n- Duration < 0 → set to 0 with warning\n\nRequired fields:\n- developerId (string)\n- checkout_time (ISO 8601, optional - defaults to now)\n\nOptional:\n- meeting_id (string)\n- location (string)"
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK (with duration)",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"eventId\": \"checkout:dev-01:2026-03-12T10:30:00.000Z\",\n  \"inserted\": true,\n  \"durationMinutes\": 90\n}"
+                        },
+                        {
+                            "name": "200 OK (orphan - no matching check-in)",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"eventId\": \"checkout:dev-01:2026-03-12T10:30:00.000Z\",\n  \"inserted\": true,\n  \"warning\": \"No matching CHECK_IN found — CHECK_OUT recorded but no ATTENDANCE_DURATION generated\"\n}"
+                        }
+                    ]
+                },
+                {
+                    "name": "Attendance History",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/attendance/history",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "attendance",
+                                "history"
+                            ],
+                            "query": [
+                                {
+                                    "key": "developerId",
+                                    "value": "dev-01",
+                                    "description": "Filter by developer (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "since",
+                                    "value": "2026-03-01T00:00:00Z",
+                                    "description": "ISO 8601 start date (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "until",
+                                    "value": "2026-03-31T23:59:59Z",
+                                    "description": "ISO 8601 end date (optional)",
+                                    "disabled": true
+                                },
+                                {
+                                    "key": "limit",
+                                    "value": "50",
+                                    "description": "Max number of events (default: 50)",
+                                    "disabled": true
+                                }
+                            ]
+                        },
+                        "description": "Get attendance event history from D1.\n\nReturns CHECK_IN, CHECK_OUT, and ATTENDANCE_DURATION events.\nAll timestamps are UTC ISO 8601."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"count\": 3,\n  \"events\": [\n    {\n      \"id\": \"duration:dev-01:2026-03-12T10:30:00.000Z\",\n      \"developer_id\": \"dev-01\",\n      \"event_type\": \"ATTENDANCE_DURATION\",\n      \"source\": \"attendance\",\n      \"event_timestamp\": \"2026-03-12T10:30:00.000Z\",\n      \"metadata\": \"{\\\"checkin_time\\\":\\\"2026-03-12T09:00:00.000Z\\\",\\\"checkout_time\\\":\\\"2026-03-12T10:30:00.000Z\\\",\\\"duration_minutes\\\":90,\\\"duration_blocks\\\":6,\\\"block_size_minutes\\\":15}\"\n    },\n    {\n      \"id\": \"checkout:dev-01:2026-03-12T10:30:00.000Z\",\n      \"developer_id\": \"dev-01\",\n      \"event_type\": \"CHECK_OUT\",\n      \"source\": \"attendance\",\n      \"event_timestamp\": \"2026-03-12T10:30:00.000Z\"\n    },\n    {\n      \"id\": \"checkin:dev-01:2026-03-12T09:00:00.000Z\",\n      \"developer_id\": \"dev-01\",\n      \"event_type\": \"CHECK_IN\",\n      \"source\": \"attendance\",\n      \"event_timestamp\": \"2026-03-12T09:00:00.000Z\"\n    }\n  ]\n}"
                         }
                     ]
                 }
@@ -312,7 +658,7 @@
                         ],
                         "body": {
                             "mode": "raw",
-                            "raw": "{\n  \"action\": \"opened\",\n  \"pull_request\": {\n    \"number\": 42,\n    \"title\": \"feat: new feature\"\n  },\n  \"repository\": {\n    \"full_name\": \"Sellio-Squad/sellio_mobile\"\n  }\n}"
+                            "raw": "{\n  \"action\": \"opened\",\n  \"pull_request\": {\n    \"number\": 42,\n    \"title\": \"feat: new feature\",\n    \"html_url\": \"https://github.com/Sellio-Squad/sellio_mobile/pull/42\",\n    \"created_at\": \"2026-03-12T10:00:00Z\",\n    \"user\": {\n      \"login\": \"dev-01\"\n    }\n  },\n  \"repository\": {\n    \"full_name\": \"Sellio-Squad/sellio_mobile\"\n  }\n}"
                         },
                         "url": {
                             "raw": "{{baseUrl}}/api/webhooks/github",
@@ -325,11 +671,11 @@
                                 "github"
                             ]
                         },
-                        "description": "GitHub webhook endpoint for real-time cache invalidation.\n\nWhen GitHub sends a PR event (opened, closed, merged, reviewed), this endpoint invalidates the cached metrics for the affected repository.\n\nRelevant events handled:\n- pull_request (opened, closed, merged, reopened)\n- pull_request_review\n- issue_comment\n- pull_request_review_comment\n\nCache keys invalidated per repo:\n- result:metrics:{owner}/{repo}:all\n- result:metrics:{owner}/{repo}:open\n- result:metrics:{owner}/{repo}:closed"
+                        "description": "GitHub webhook endpoint for event-driven scoring.\n\nWhen GitHub sends a PR event, this endpoint:\n1. Invalidates cached PR metrics\n2. Ingests events into D1 with deterministic IDs (idempotent)\n3. Invalidates affected developer's score cache\n\nEvent types ingested:\n- pull_request (opened) → PR_CREATED (timestamp = pr.created_at)\n- pull_request (closed+merged) → PR_MERGED (timestamp = pr.merged_at)\n- pull_request_review → PR_REVIEW (timestamp = review.submitted_at)\n- issue_comment / review_comment → COMMENT (timestamp = comment.created_at)\n\nDuplicate webhooks are automatically de-duplicated via deterministic event IDs."
                     },
                     "response": [
                         {
-                            "name": "200 OK (invalidated)",
+                            "name": "200 OK (events ingested)",
                             "status": "OK",
                             "code": 200,
                             "header": [
@@ -338,10 +684,22 @@
                                     "value": "application/json"
                                 }
                             ],
-                            "body": "{\n  \"ok\": true,\n  \"event\": \"pull_request\",\n  \"repo\": \"Sellio-Squad/sellio_mobile\",\n  \"cacheKeysInvalidated\": 3\n}"
+                            "body": "{\n  \"ok\": true,\n  \"event\": \"pull_request\",\n  \"repo\": \"Sellio-Squad/sellio_mobile\",\n  \"invalidated\": true,\n  \"eventsIngested\": 1,\n  \"duplicates\": 0\n}"
                         },
                         {
-                            "name": "200 OK (ignored)",
+                            "name": "200 OK (duplicate - idempotent)",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [
+                                {
+                                    "key": "Content-Type",
+                                    "value": "application/json"
+                                }
+                            ],
+                            "body": "{\n  \"ok\": true,\n  \"event\": \"pull_request\",\n  \"repo\": \"Sellio-Squad/sellio_mobile\",\n  \"invalidated\": true,\n  \"eventsIngested\": 0,\n  \"duplicates\": 1\n}"
+                        },
+                        {
+                            "name": "200 OK (ignored event type)",
                             "status": "OK",
                             "code": 200,
                             "header": [
@@ -600,6 +958,50 @@
                             ]
                         },
                         "description": "Determines member activity (Active/Inactive) based on PR data and organization membership."
+                    },
+                    "response": []
+                }
+            ]
+        },
+        {
+            "name": "Debug",
+            "item": [
+                {
+                    "name": "Debug Auth",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/debug/auth",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "debug",
+                                "auth"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Debug Cache Quota",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/debug/cache-quota",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "debug",
+                                "cache-quota"
+                            ]
+                        },
+                        "description": "Shows KV cache status, D1 availability, and write quota information."
                     },
                     "response": []
                 }
