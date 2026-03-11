@@ -18,6 +18,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   go_router: ^17.1.0
+  dio: ^5.9.2
 
 dev_dependencies:
   flutter_test:

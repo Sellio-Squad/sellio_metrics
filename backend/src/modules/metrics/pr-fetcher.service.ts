@@ -12,6 +12,7 @@ import type { CachedGitHubClient } from "../../infra/github/cached-github.client
 import type { RateLimitGuard } from "../../infra/github/rate-limit-guard";
 import type { Logger } from "../../core/logger";
 import type { Env } from "../../config/env";
+import type { LogsService } from "../logs/logs.service";
 import type { PrMetric } from "../../core/types";
 import { GitHubApiError } from "../../core/errors";
 import { mapToPrMetric } from "./metrics.mapper";
@@ -23,22 +24,26 @@ export class PrFetcherService {
     private readonly github: CachedGitHubClient;
     private readonly guard: RateLimitGuard;
     private readonly logger: Logger;
+    private readonly logsService: LogsService;
     private readonly requiredApprovals: number;
 
     constructor({
         cachedGithubClient,
         rateLimitGuard,
         logger,
+        logsService,
         env,
     }: {
         cachedGithubClient: CachedGitHubClient;
         rateLimitGuard: RateLimitGuard;
         logger: Logger;
+        logsService: LogsService;
         env: Env;
     }) {
         this.github = cachedGithubClient;
         this.guard = rateLimitGuard;
         this.logger = logger.child({ module: "pr-fetcher" });
+        this.logsService = logsService;
         this.requiredApprovals = env.requiredApprovals;
     }
 
@@ -58,6 +63,14 @@ export class PrFetcherService {
         try {
             const pulls = await this.github.listPulls(owner, repo, state, perPage);
             this.logger.info({ count: pulls.length }, "PRs fetched, enriching…");
+            
+            this.logsService.log(
+                `Fetched ${pulls.length} PRs from GitHub (${state})`,
+                "info",
+                "github",
+                { owner, repo, state, count: pulls.length }
+            );
+
             return await this.enrichInBatches(owner, repo, pulls);
         } catch (err: any) {
             if (err instanceof GitHubApiError) throw err;

@@ -10,6 +10,7 @@ import '../../presentation/pages/prs/open_prs_page.dart';
 import '../../presentation/pages/about/about_page.dart';
 import '../../presentation/pages/meetings/meetings_page.dart';
 import '../../presentation/pages/setting/settings_page.dart';
+import '../../presentation/pages/logs/logs_page.dart';
 import '../../presentation/pages/dashboard_page.dart';
 import '../../presentation/providers/leaderboard_provider.dart';
 import '../../presentation/providers/member_provider.dart';
@@ -18,6 +19,7 @@ import '../../presentation/providers/analytics_provider.dart';
 import '../../presentation/providers/meetings_provider.dart';
 import '../../presentation/providers/meet_events_provider.dart';
 import '../../presentation/providers/health_status_provider.dart';
+import '../../presentation/providers/logs_provider.dart';
 
 class AppRoute {
   final String id;
@@ -102,6 +104,17 @@ class AppNavigation {
       pageBuilder: (_) => ChangeNotifierProvider.value(
         value: sl.get<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
         child: const SettingsPage(),
+      ),
+      showDateFilter: false,
+    ),
+    AppRoute(
+      id: 'logs',
+      path: '/logs',
+      icon: LucideIcons.fileText,
+      labelBuilder: (l10n) => l10n.navLogs,
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: sl.get<LogsProvider>()..fetchLogs(),
+        child: const LogsPage(),
       ),
       showDateFilter: false,
     ),

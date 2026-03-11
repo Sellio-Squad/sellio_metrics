@@ -85,6 +85,7 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
             const { MeetingsService } = await import("./modules/meetings/meetings.service");
             const { WorkspaceEventsClient } = await import("./infra/google/workspace-events.client");
             const { MeetEventsService } = await import("./modules/meet-events/meet-events.service");
+            const { LogsService } = await import("./modules/logs/logs.service");
 
             const logger = createConsoleLogger();
 
@@ -113,6 +114,9 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
                 ).singleton(),
 
                 reposService: asClass(ReposService).singleton(),
+
+                // Logs
+                logsService: asClass(LogsService).singleton(),
 
                 // Metrics: three focused services
                 prFetcherService: asClass(PrFetcherService).singleton(),
@@ -543,6 +547,7 @@ function matchRoute(p: string): { handler: string; params?: Record<string, strin
     if (p === "/api/debug/auth") return { handler: "debugAuth" };
     if (p === "/api/debug/meet-subscribe") return { handler: "debugMeetSubscribe" };
     if (p === "/api/debug/cache-quota") return { handler: "debugCacheQuota" };
+    if (p === "/api/logs") return { handler: "logs" };
 
     if (p.startsWith("/api/meetings")) return { handler: "meetings", params: { path: p.replace("/api/meetings", "") } };
     if (p.startsWith("/api/meet-events")) return { handler: "meetEvents", params: { path: p.replace("/api/meet-events", "") } };
@@ -609,6 +614,10 @@ export default {
                     return handleWebhook(cradle, request);
                 case "meetings": return handleMeetings(cradle, request, route.params!.path, url);
                 case "meetEvents": return handleMeetEvents(cradle, request, route.params!.path, url);
+                case "logs":
+                    if (request.method !== "GET") return err("Method Not Allowed", 405);
+                    const limit = parseInt(url.searchParams.get("limit") || "50", 10);
+                    return json(await cradle.logsService.getLogs(limit));
                 case "debugAuth": return handleDebugAuth(cradle);
                 case "debugMeetSubscribe": return handleDebugMeetSubscribe(cradle, url);
                 case "debugCacheQuota": return handleDebugCacheQuota(cradle);
