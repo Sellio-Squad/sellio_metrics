@@ -1,0 +1,67 @@
+import 'package:dio/dio.dart';
+import '../models/exceptions.dart';
+import '../../data/datasources/fake/fake_logs.dart'; // Retaining the types
+
+class LogsDataSource {
+  final Dio _dio;
+
+  LogsDataSource({required Dio dio}) : _dio = dio;
+
+  Future<List<LogEntry>> fetchLogs({int limit = 50}) async {
+    try {
+      final response = await _dio.get('/api/logs', queryParameters: {'limit': limit});
+      
+      final data = response.data;
+      if (data is List) {
+        return data.map((json) => _parseLogEntry(json)).toList();
+      }
+      return [];
+    } on DioException catch (e) {
+      throw ServerException(
+        message: e.response?.data?['error'] ?? 'Failed to fetch logs',
+        statusCode: e.response?.statusCode,
+      );
+    } catch (e) {
+      throw ServerException(message: 'An unexpected error occurred: $e');
+    }
+  }
+
+  LogEntry _parseLogEntry(Map<String, dynamic> json) {
+    return LogEntry(
+      id: json['id'] as String,
+      timestamp: DateTime.parse(json['timestamp'] as String),
+      message: json['message'] as String,
+      severity: _parseSeverity(json['severity']),
+      category: _parseCategory(json['category']),
+      metadata: json['metadata'] as Map<String, dynamic>?,
+    );
+  }
+
+  LogSeverity _parseSeverity(String? severity) {
+    switch (severity) {
+      case 'info':
+        return LogSeverity.info;
+      case 'warning':
+        return LogSeverity.warning;
+      case 'error':
+        return LogSeverity.error;
+      case 'success':
+        return LogSeverity.success;
+      default:
+        return LogSeverity.info;
+    }
+  }
+
+  LogCategory _parseCategory(String? category) {
+    switch (category) {
+      case 'github':
+        return LogCategory.github;
+      case 'googleMeet':
+        return LogCategory.googleMeet;
+      case 'system':
+        return LogCategory.system;
+      default:
+        return LogCategory.system;
+    }
+  }
+}

@@ -9,6 +9,7 @@
   "navAbout": "About",
   "navMeetings": "Meetings",
   "navSettings": "Settings",
+  "navLogs": "Logs",
   "kpiTotalPrs": "Total PRs",
   "kpiMergedPrs": "Merged PRs",
   "kpiClosedPrs": "Closed PRs",
