@@ -29,6 +29,7 @@ import { GoogleMeetClient } from "../infra/google/google-meet.client";
 import { WorkspaceEventsClient } from "../infra/google/workspace-events.client";
 import { MeetingsService } from "../modules/meetings/meetings.service";
 import { MeetEventsService } from "../modules/meet-events/meet-events.service";
+import { LogsService } from "../modules/logs/logs.service";
 import { env } from "../config/env";
 import { logger } from "./logger";
 
@@ -57,6 +58,9 @@ export interface Cradle {
     workspaceEventsClient: WorkspaceEventsClient;
     meetingsService: MeetingsService;
     meetEventsService: MeetEventsService;
+
+    // Logs
+    logsService: LogsService;
 }
 
 // ─── Builder ────────────────────────────────────────────────
@@ -120,6 +124,9 @@ export function buildContainer(kvNamespace: KVNamespace | null = null): AwilixCo
                 pubsubTopic: env.googlePubsubTopic,
             }),
         ).singleton(),
+
+        // ── Logs ──────────────────────────────────────────
+        logsService: asClass(LogsService).singleton(),
     });
 
     return container;
