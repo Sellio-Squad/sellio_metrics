@@ -1,57 +1,62 @@
 /**
- * Sellio Metrics Backend — DI Container
+ * Sellio Metrics Backend — DI Container (Cradle interface only)
  *
- * Registers all services following Single Responsibility Principle.
- *
- * Metrics module services:
- *   PrFetcherService   — fetches & enriches PRs from GitHub (no caching)
- *   ResultCacheService — typed KV get/set for computed results (no compute)
- *   leaderboard.calculator / members.calculator — pure fns, not registered
- *     (imported directly in handlers — they have no injectable dependencies)
+ * Registration is now done in worker.ts where env bindings are available.
+ * This file defines the Cradle shape for type-safe dependency injection.
  */
 
-import {
-    createContainer,
-    asClass,
-    asFunction,
-    InjectionMode,
-    type AwilixContainer,
-} from "awilix";
-
-import { createGitHubClient, type GitHubClient } from "../infra/github/github.client";
-import { CacheService, type KVNamespace } from "../infra/cache/cache.service";
-import { RateLimitGuard } from "../infra/github/rate-limit-guard";
-import { CachedGitHubClient } from "../infra/github/cached-github.client";
-import { ReposService } from "../modules/repos/repos.service";
-import { PrFetcherService } from "../modules/metrics/pr-fetcher.service";
-import { ResultCacheService } from "../modules/metrics/result-cache.service";
-import { GoogleMeetClient } from "../infra/google/google-meet.client";
-import { WorkspaceEventsClient } from "../infra/google/workspace-events.client";
-import { MeetingsService } from "../modules/meetings/meetings.service";
-import { MeetEventsService } from "../modules/meet-events/meet-events.service";
-import { LogsService } from "../modules/logs/logs.service";
-import { env } from "../config/env";
-import { logger } from "./logger";
+import type { CacheService, KVNamespace } from "../infra/cache/cache.service";
+import type { D1Service } from "../infra/database/d1.service";
+import type { RateLimitGuard } from "../infra/github/rate-limit-guard";
+import type { CachedGitHubClient } from "../infra/github/cached-github.client";
+import type { ReposService } from "../modules/repos/repos.service";
+import type { PrFetcherService } from "../modules/metrics/pr-fetcher.service";
+import type { ResultCacheService } from "../modules/metrics/result-cache.service";
+import type { GoogleMeetClient } from "../infra/google/google-meet.client";
+import type { WorkspaceEventsClient } from "../infra/google/workspace-events.client";
+import type { MeetingsService } from "../modules/meetings/meetings.service";
+import type { MeetEventsService } from "../modules/meet-events/meet-events.service";
+import type { LogsService } from "../modules/logs/logs.service";
+import type { EventsService } from "../modules/events/events.service";
+import type { PointsRulesService } from "../modules/points/points-rules.service";
+import type { ScoreAggregationService } from "../modules/scores/score-aggregation.service";
+import type { AttendanceService } from "../modules/attendance/attendance.service";
+import type { env } from "../config/env";
+import type { Logger } from "./logger";
 
 // ─── Container Shape ────────────────────────────────────────
 
 export interface Cradle {
     env: typeof env;
-    logger: typeof logger;
+    logger: Logger;
 
-    // Infrastructure
-    githubClient: GitHubClient;
+    // Infrastructure — core
+    githubClient: any;
     kvNamespace: KVNamespace | null;
     cacheService: CacheService;
     rateLimitGuard: RateLimitGuard;
     cachedGithubClient: CachedGitHubClient;
 
+    // Infrastructure — new KV namespaces
+    scoresKvCache: CacheService;
+    developersKvCache: CacheService;
+    attendanceKvCache: CacheService;
+
+    // Infrastructure — D1
+    d1Service: D1Service;
+
     // Repos
     reposService: ReposService;
 
-    // Metrics — three focused services (calculators are pure fns, not registered)
+    // Metrics
     prFetcherService: PrFetcherService;
     resultCacheService: ResultCacheService;
+
+    // Event-Driven Scoring
+    eventsService: EventsService;
+    pointsRulesService: PointsRulesService;
+    scoreAggregationService: ScoreAggregationService;
+    attendanceService: AttendanceService;
 
     // Google Meet
     googleMeetClient: GoogleMeetClient;
@@ -61,73 +66,4 @@ export interface Cradle {
 
     // Logs
     logsService: LogsService;
-}
-
-// ─── Builder ────────────────────────────────────────────────
-
-export function buildContainer(kvNamespace: KVNamespace | null = null): AwilixContainer<Cradle> {
-    const container = createContainer<Cradle>({ injectionMode: InjectionMode.PROXY });
-
-    container.register({
-        // ── Config & Logging ──────────────────────────────
-        env: asFunction(() => env).singleton(),
-        logger: asFunction(() => logger).singleton(),
-
-        // ── Infrastructure ────────────────────────────────
-        githubClient: asFunction(({ env }) =>
-            createGitHubClient({ env }),
-        ).singleton(),
-
-        kvNamespace: asFunction(() => kvNamespace).singleton(),
-
-        cacheService: asFunction(({ kvNamespace, logger }) =>
-            new CacheService({ kvNamespace, logger }),
-        ).singleton(),
-
-        rateLimitGuard: asFunction(({ logger, env }) =>
-            new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold }),
-        ).singleton(),
-
-        cachedGithubClient: asFunction(({ githubClient, cacheService, rateLimitGuard, logger }) =>
-            new CachedGitHubClient({ githubClient, cacheService, rateLimitGuard, logger }),
-        ).singleton(),
-
-        // ── Repos ─────────────────────────────────────────
-        reposService: asClass(ReposService).singleton(),
-
-        // ── Metrics (SRP: each class has one job) ─────────
-        prFetcherService: asClass(PrFetcherService).singleton(),
-        resultCacheService: asClass(ResultCacheService).singleton(),
-
-        // ── Google Meet ───────────────────────────────────
-        googleMeetClient: asFunction(({ logger, env, cacheService }) =>
-            new GoogleMeetClient({
-                logger,
-                clientId: env.googleClientId,
-                clientSecret: env.googleClientSecret,
-                redirectUri: env.googleRedirectUri,
-                cacheService,
-            }),
-        ).singleton(),
-
-        meetingsService: asClass(MeetingsService).singleton(),
-
-        workspaceEventsClient: asFunction(({ logger, cacheService }) =>
-            new WorkspaceEventsClient({ logger, cacheService }),
-        ).singleton(),
-
-        meetEventsService: asFunction(({ logger, workspaceEventsClient, cacheService, env }) =>
-            new MeetEventsService({
-                logger,
-                workspaceEventsClient,
-                cacheService,
-                pubsubTopic: env.googlePubsubTopic,
-            }),
-        ).singleton(),
-
-        // ── Logs ──────────────────────────────────────────
-        logsService: asClass(LogsService).singleton(),
-    });
-
-    return container;
 }

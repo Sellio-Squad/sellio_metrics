@@ -18,10 +18,42 @@ NODE_ENV = "production"
 GOOGLE_REDIRECT_URI = "https://sellio-metrics.abdoessam743.workers.dev/api/meetings/oauth2callback"
 GOOGLE_PUBSUB_TOPIC = "projects/meet-test-488313/topics/meet-events-topic"
 
-# Workers KV for caching (replaces Redis)
-# After first deploy, create the namespace via:
+# ─── Workers KV Namespaces ───────────────────────────────────
+# After first deploy, create namespaces via:
 #   npx wrangler kv namespace create CACHE
-# Then paste the generated id below.
+#   npx wrangler kv namespace create SCORES_KV
+#   npx wrangler kv namespace create DEVELOPERS_KV
+#   npx wrangler kv namespace create ATTENDANCE_KV
+# Then paste the generated IDs below.
+
 [[kv_namespaces]]
 binding = "CACHE"
 id = "843d801d5cb14986995bf6f15f914002"
+
+[[kv_namespaces]]
+binding = "SCORES_KV"
+id = "57a28a5405444d7f90f96450936f0252"
+
+[[kv_namespaces]]
+binding = "DEVELOPERS_KV"
+id = "1b6a477ed9874ac4be286cef282829b8"
+
+[[kv_namespaces]]
+binding = "ATTENDANCE_KV"
+id = "334dd81b0a1748d8a9cf307018eee24e"
+
+# ─── D1 Database ─────────────────────────────────────────────
+# Create via: npx wrangler d1 create sellio-metrics-db
+# Apply migration: npx wrangler d1 migrations apply sellio-metrics-db
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sellio-metrics-db"
+database_id = "a7ae3b9f-87c7-4696-be19-8660777703c7"
+migrations_dir = "migrations"
+
+# ─── Cron Triggers ───────────────────────────────────────────
+# Precompute leaderboard snapshots every 6 hours
+
+[triggers]
+crons = ["0 */6 * * *"]
