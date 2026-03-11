@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import '../models/exceptions.dart';
 import '../../data/datasources/fake/fake_logs.dart'; // Retaining the types
 
 class LogsDataSource {
@@ -17,12 +16,11 @@ class LogsDataSource {
       }
       return [];
     } on DioException catch (e) {
-      throw ServerException(
-        message: e.response?.data?['error'] ?? 'Failed to fetch logs',
-        statusCode: e.response?.statusCode,
+      throw Exception(
+        e.response?.data?['error'] ?? 'Failed to fetch logs',
       );
     } catch (e) {
-      throw ServerException(message: 'An unexpected error occurred: $e');
+      throw Exception('An unexpected error occurred: $e');
     }
   }
 

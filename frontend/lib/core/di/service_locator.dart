@@ -33,6 +33,7 @@ import '../../data/repositories/members_repository_impl.dart';
 import '../../data/repositories/pr_repository_impl.dart';
 import '../../data/repositories/health_repository_impl.dart';
 import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 
 // ── Domain Services ──────────────────────────────────────────
 import '../../domain/services/kpi_service.dart';
