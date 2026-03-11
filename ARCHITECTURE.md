@@ -14,6 +14,7 @@ graph TB
     GitHub["🐙 GitHub API<br/>REST v3"]
     GHApp["🔑 GitHub App<br/>(Auth + Tokens)"]
     Google["🎬 Google Meet API<br/>REST v2"]
+    D1["🗄️ Cloudflare D1<br/>(SQLite Events)"]
 
     Dev -->|"views metrics"| Frontend
     Frontend -->|"HTTPS /api/*"| Backend
@@ -21,6 +22,7 @@ graph TB
     Backend -->|"JWT → token"| GHApp
     GHApp -->|"access token (1hr)"| GitHub
     Backend -->|"OAuth2 → create/end"| Google
+    Backend <-->|"events, scores"| D1
 ```
 
 ---
@@ -323,27 +325,97 @@ graph LR
 
 ---
 
-## 9. Caching Strategy
+## 9. Caching Strategy & KV Namespace Layout
+
+| Namespace | Data | TTL |
+|---|---|---|
+| `CACHE` | GitHub API cache (re-fetched fresh) | Varies |
+| `SCORES_KV` | Point rules, leaderboard snapshots, rule change log, score locks | No TTL for rules; 6h for snapshots |
+| `DEVELOPERS_KV` | Developer profiles | No TTL |
+| `ATTENDANCE_KV` | Active attendance sessions (current check-ins) | No TTL |
 
 ```mermaid
 graph TD
-    REQ["Incoming Request"] --> CHECK{"KV Cache hit?<br/>(sellio:*)?"}
+    REQ["Incoming Request"] --> CHECK{"SCORES_KV hit?"}
     CHECK -->|"YES"| RETURN["Return from KV<br/>(~5-20ms)"]
-    CHECK -->|"NO"| FETCH["Fetch from GitHub API<br/>(Network Latency)"]
-    FETCH --> STORE["Store in Workers KV<br/>with expirationTtl"]
+    CHECK -->|"NO"| D1Q["D1: events JOIN point_rules<br/>(SQL aggregation)"]
+    D1Q --> STORE["Store in SCORES_KV<br/>with 6h TTL"]
     STORE --> RETURN2["Return fresh data"]
 
-    subgraph Cache["Cloudflare Workers KV"]
-        K1["sellio:repos:{org} → 5min"]
-        K2["sellio:metrics:{repo} → 1hr"]
-        K3["sellio:google_oauth_tokens → 30d"]
-        K4["sellio:meetings_list → 30d"]
+    subgraph Namespaces["Cloudflare Workers KV"]
+        K1["CACHE: GitHub API cache"]
+        K2["SCORES_KV: leaderboard snapshots"]
+        K3["DEVELOPERS_KV: profiles"]
+        K4["ATTENDANCE_KV: active sessions"]
     end
 
-    STORE --> Cache
+    subgraph Database["Cloudflare D1 (SQLite)"]
+        T1["events: immutable log"]
+        T2["point_rules: scoring weights"]
+        T3["events_archive: old events"]
+    end
+
+    D1Q --> Database
+    STORE --> Namespaces
 ```
 
-> **Note:** Cache is in-memory per Node.js process. On multi-instance deployments, consider replacing with Redis. For single-instance (current), this is optimal.
+---
+
+## 10. Event-Driven Scoring Architecture
+
+```mermaid
+sequenceDiagram
+    participant GH as GitHub Webhook
+    participant W as Worker
+    participant ES as EventsService
+    participant D1 as D1 Database
+    participant KV as SCORES_KV
+    participant F as Frontend
+
+    GH->>W: POST /api/webhooks/github
+    W->>ES: ingestEvent(PR_CREATED)
+    ES->>D1: INSERT OR IGNORE (idempotent)
+    D1-->>ES: inserted: true
+    ES->>KV: Invalidate developer cache
+
+    Note over W: No points stored in events!<br/>Points derived via JOIN at query time.
+
+    F->>W: GET /api/scores/leaderboard
+    W->>KV: Check cache
+    alt Cache Hit
+        KV-->>W: cached result
+    else Cache Miss
+        W->>D1: SELECT developer_id, SUM(r.points)<br/>FROM events e JOIN point_rules r ...
+        D1-->>W: aggregated scores
+        W->>KV: Cache result (6h TTL)
+    end
+    W-->>F: leaderboard JSON
+```
+
+### Attendance Duration Flow
+
+```mermaid
+sequenceDiagram
+    participant C as Client
+    participant W as Worker
+    participant AKV as ATTENDANCE_KV
+    participant D1 as D1 Database
+
+    C->>W: POST /api/attendance/check-in
+    W->>D1: INSERT CHECK_IN event
+    W->>AKV: Store active session
+    W-->>C: { eventId, inserted: true }
+
+    Note over C: Time passes...
+
+    C->>W: POST /api/attendance/check-out
+    W->>AKV: Find matching CHECK_IN
+    W->>W: Calculate duration (90 min)
+    W->>D1: INSERT CHECK_OUT event
+    W->>D1: INSERT ATTENDANCE_DURATION event<br/>(6 blocks × 15 min)
+    W->>AKV: Clear active session
+    W-->>C: { eventId, durationMinutes: 90 }
+```
 
 ---
 
@@ -363,14 +435,19 @@ graph TB
     subgraph Deployment["🚀 Production (Cloudflare Edge)"]
         WEB["Cloudflare Pages<br/>(Flutter Web)"]
         API["Cloudflare Workers<br/>(Serverless API)"]
-        KV["Cloudflare KV<br/>(Distributed Data)"]
+        KV["Cloudflare KV<br/>(4 Namespaces)"]
+        DB["Cloudflare D1<br/>(SQLite Events)"]
+        CRON["Cron Trigger<br/>(every 6 hours)"]
     end
 
     BOT --> API
     API <--> KV
+    API <--> DB
+    CRON --> API
     WEB <--> API
 ```
 
 ---
 
-*Last updated: February 2026 | Sellio Squad*
+*Last updated: March 2026 | Sellio Squad*
+

@@ -1,14 +1,16 @@
 /**
  * Sellio Metrics — Cloudflare Worker Entry Point
  *
- * Thin HTTP router. Each handler has a single job: parse input,
- * call the right service, return a response.
+ * Thin HTTP router + Cron handler.
  *
- * Architecture:
- *   PrFetcherService    — fetches & enriches PRs from GitHub
- *   ResultCacheService  — typed KV get/set for computed results
- *   calculateLeaderboard() — pure fn: PrMetric[] → LeaderboardEntry[]
- *   calculateMemberStatus() — pure fn: PrMetric[] + orgMembers → MemberStatus[]
+ * Architecture (Event-Driven Scoring):
+ *   D1Service          — persistent event storage + SQL aggregation
+ *   EventsService      — idempotent event ingestion
+ *   PointsRulesService — dynamic point rules (KV + D1)
+ *   ScoreAggregation   — leaderboard from events JOIN point_rules
+ *   AttendanceService  — CHECK_IN / CHECK_OUT with duration scoring
+ *   PrFetcherService   — fetches & enriches PRs from GitHub
+ *   ResultCacheService — typed KV get/set for computed results
  *
  * Routes:
  *   GET  /api/ping
@@ -17,7 +19,13 @@
  *   GET  /api/metrics/:owner/:repo/prs
  *   GET  /api/metrics/:owner/:repo/leaderboard
  *   GET  /api/metrics/:owner/:repo/members
- *   POST /api/webhooks/github      (cache invalidation)
+ *   POST /api/webhooks/github      (event ingestion + cache invalidation)
+ *   GET|PUT /api/points/rules
+ *   GET  /api/scores/leaderboard
+ *   GET  /api/events
+ *   POST /api/attendance/check-in
+ *   POST /api/attendance/check-out
+ *   GET  /api/attendance/history
  *   GET|POST|DELETE /api/meetings/*
  *   GET|POST|DELETE /api/meet-events/*
  *   GET  /api/debug/auth
@@ -28,6 +36,9 @@
 import type { AwilixContainer } from "awilix";
 import type { Cradle } from "./core/container";
 import type { KVNamespace } from "./infra/cache/cache.service";
+import type { D1Database } from "./infra/database/d1.service";
+import { EventType } from "./core/event-types";
+import type { ScoringEvent } from "./core/event-types";
 
 // ─── Worker Env Bindings ────────────────────────────────────
 
@@ -43,6 +54,10 @@ interface WorkerEnv {
     GOOGLE_REDIRECT_URI?: string;
     GOOGLE_PUBSUB_TOPIC?: string;
     CACHE: KVNamespace;
+    SCORES_KV: KVNamespace;
+    DEVELOPERS_KV: KVNamespace;
+    ATTENDANCE_KV: KVNamespace;
+    DB: D1Database;
 }
 
 // ─── Console Logger ─────────────────────────────────────────
@@ -69,13 +84,20 @@ function createConsoleLogger(bindings: Record<string, unknown> = {}): any {
 
 let containerPromise: Promise<AwilixContainer<Cradle>> | null = null;
 
-function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<Cradle>> {
+function getContainer(
+    kvNamespace: KVNamespace | null,
+    scoresKv: KVNamespace | null,
+    developersKv: KVNamespace | null,
+    attendanceKv: KVNamespace | null,
+    d1Database: D1Database | null,
+): Promise<AwilixContainer<Cradle>> {
     if (!containerPromise) {
         containerPromise = (async () => {
             const { createContainer, asFunction, asClass, InjectionMode } = await import("awilix");
             const { env } = await import("./config/env");
             const { createGitHubClient } = await import("./infra/github/github.client");
             const { CacheService } = await import("./infra/cache/cache.service");
+            const { D1Service } = await import("./infra/database/d1.service");
             const { RateLimitGuard } = await import("./infra/github/rate-limit-guard");
             const { CachedGitHubClient } = await import("./infra/github/cached-github.client");
             const { ReposService } = await import("./modules/repos/repos.service");
@@ -86,6 +108,10 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
             const { WorkspaceEventsClient } = await import("./infra/google/workspace-events.client");
             const { MeetEventsService } = await import("./modules/meet-events/meet-events.service");
             const { LogsService } = await import("./modules/logs/logs.service");
+            const { EventsService } = await import("./modules/events/events.service");
+            const { PointsRulesService } = await import("./modules/points/points-rules.service");
+            const { ScoreAggregationService } = await import("./modules/scores/score-aggregation.service");
+            const { AttendanceService } = await import("./modules/attendance/attendance.service");
 
             const logger = createConsoleLogger();
 
@@ -105,6 +131,24 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
                     new CacheService({ kvNamespace, logger }),
                 ).singleton(),
 
+                // New namespace-specific cache services
+                scoresKvCache: asFunction(({ logger }: Cradle) =>
+                    new CacheService({ kvNamespace: scoresKv, logger }),
+                ).singleton(),
+
+                developersKvCache: asFunction(({ logger }: Cradle) =>
+                    new CacheService({ kvNamespace: developersKv, logger }),
+                ).singleton(),
+
+                attendanceKvCache: asFunction(({ logger }: Cradle) =>
+                    new CacheService({ kvNamespace: attendanceKv, logger }),
+                ).singleton(),
+
+                // D1 Database
+                d1Service: asFunction(({ logger }: Cradle) =>
+                    new D1Service({ d1Database, logger }),
+                ).singleton(),
+
                 rateLimitGuard: asFunction(({ logger, env }: Cradle) =>
                     new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold }),
                 ).singleton(),
@@ -121,6 +165,23 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
                 // Metrics: three focused services
                 prFetcherService: asClass(PrFetcherService).singleton(),
                 resultCacheService: asClass(ResultCacheService).singleton(),
+
+                // Event-Driven Scoring
+                eventsService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
+                    new EventsService({ d1Service, scoresKvCache, logger }),
+                ).singleton(),
+
+                pointsRulesService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
+                    new PointsRulesService({ d1Service, scoresKvCache, logger }),
+                ).singleton(),
+
+                scoreAggregationService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
+                    new ScoreAggregationService({ d1Service, scoresKvCache, logger }),
+                ).singleton(),
+
+                attendanceService: asFunction(({ d1Service, attendanceKvCache, eventsService, logger }: Cradle) =>
+                    new AttendanceService({ d1Service, attendanceKvCache, eventsService, logger }),
+                ).singleton(),
 
                 // Google Meet
                 googleMeetClient: asFunction(({ logger, env, cacheService }: Cradle) =>
@@ -156,7 +217,7 @@ function getContainer(kvNamespace: KVNamespace | null): Promise<AwilixContainer<
 
 const CORS = {
     "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
 };
 
@@ -179,6 +240,7 @@ async function handleHealth(cradle: Cradle): Promise<Response> {
         org: cradle.env.org,
         timestamp: new Date().toISOString(),
         githubRateLimit: cradle.rateLimitGuard.getStatus(),
+        d1Available: cradle.d1Service.isAvailable,
     });
 }
 
@@ -188,60 +250,37 @@ async function handleRepos(cradle: Cradle, url: URL): Promise<Response> {
     return json({ org, count: repos.length, repos });
 }
 
-/**
- * GET /api/metrics/:owner/:repo/leaderboard
- *
- * Orchestration (handler's only job):
- *   1. Check cache        → ResultCacheService
- *   2. If miss: fetch PRs → PrFetcherService
- *   3. Compute            → calculateLeaderboard() (pure fn)
- *   4. Cache result       → ResultCacheService
- *   5. Return JSON
- */
 async function handleLeaderboard(cradle: Cradle, owner: string, repo: string, url: URL): Promise<Response> {
     const { prFetcherService, resultCacheService } = cradle;
     const { calculateLeaderboard } = await import("./modules/metrics/leaderboard.calculator");
     const since = url.searchParams.get("since");
     const until = url.searchParams.get("until");
 
-    // Only use cache when no date filters are applied
     if (!since && !until) {
         const cached = await resultCacheService.getLeaderboard(owner, repo);
         if (cached) return json(cached);
     }
 
     const allPrs = await prFetcherService.fetch(owner, repo);
-
-    // Apply optional date filter in-memory
     const prs = filterPrsByDate(allPrs, since, until);
-    const entries = calculateLeaderboard(prs);
+
+    // Get dynamic rules for scoring
+    const rules = await cradle.pointsRulesService.getRules();
+    const entries = calculateLeaderboard(prs, rules);
     const cachedAt = new Date().toISOString();
 
-    // Only cache unfiltered results
     if (!since && !until) {
         await resultCacheService.setLeaderboard(owner, repo, entries);
     }
     return json({ owner, repo, cachedAt, since: since ?? null, until: until ?? null, data: entries });
 }
 
-/**
- * GET /api/metrics/:owner/:repo/members
- *
- * Orchestration:
- *   1. Check cache         → ResultCacheService
- *   2. If miss: fetch PRs  → PrFetcherService
- *              fetch org members → CachedGitHubClient (cached 24h)
- *   3. Compute             → calculateMemberStatus() (pure fn)
- *   4. Cache result        → ResultCacheService
- *   5. Return JSON
- */
 async function handleMembers(cradle: Cradle, owner: string, repo: string, url: URL): Promise<Response> {
     const { prFetcherService, resultCacheService, cachedGithubClient, env } = cradle;
     const { calculateMemberStatus } = await import("./modules/metrics/members.calculator");
     const since = url.searchParams.get("since");
     const until = url.searchParams.get("until");
 
-    // Only use cache when no date filters are applied
     if (!since && !until) {
         const cached = await resultCacheService.getMembers(owner, repo);
         if (cached) return json(cached);
@@ -251,24 +290,16 @@ async function handleMembers(cradle: Cradle, owner: string, repo: string, url: U
         prFetcherService.fetch(owner, repo),
         cachedGithubClient.listOrgMembers(env.org),
     ]);
-    // Apply optional date filter in-memory
     const prs = filterPrsByDate(allPrs, since, until);
     const members = calculateMemberStatus(prs, orgMembers);
     const cachedAt = new Date().toISOString();
 
-    // Only cache unfiltered results
     if (!since && !until) {
         await resultCacheService.setMembers(owner, repo, members);
     }
     return json({ owner, repo, cachedAt, since: since ?? null, until: until ?? null, data: members });
 }
 
-/**
- * GET /api/metrics/:owner/:repo/prs?state=open|all
- * Returns enriched PR metrics for the frontend.
- * state=open   → only open/pending/approved PRs (fast, cached separately)
- * state=all    → all PRs (default)
- */
 async function handlePrs(cradle: Cradle, owner: string, repo: string, url: URL): Promise<Response> {
     const { prFetcherService, resultCacheService } = cradle;
     const state = (url.searchParams.get("state") || "all") as "all" | "open" | "closed";
@@ -277,13 +308,11 @@ async function handlePrs(cradle: Cradle, owner: string, repo: string, url: URL):
 
     let prs: any[];
     if (!since && !until) {
-        // Try cache for unfiltered requests
         const cached = await resultCacheService.getPrMetrics(owner, repo, state);
         if (cached) return json({ owner, repo, cachedAt: "cached", state, data: cached });
         prs = await prFetcherService.fetch(owner, repo, state);
         await resultCacheService.setPrMetrics(owner, repo, state, prs as any);
     } else {
-        // Always fetch + filter when date range specified
         prs = await prFetcherService.fetch(owner, repo, state);
         prs = filterPrsByDate(prs as any, since, until);
     }
@@ -292,7 +321,6 @@ async function handlePrs(cradle: Cradle, owner: string, repo: string, url: URL):
     return json({ owner, repo, cachedAt, state, since: since ?? null, until: until ?? null, data: prs });
 }
 
-/** Filter PrMetric[] by optional since/until (ISO date strings). */
 function filterPrsByDate(prs: any[], since: string | null, until: string | null): any[] {
     if (!since && !until) return prs;
     const sinceTs = since ? new Date(since).getTime() : 0;
@@ -303,10 +331,8 @@ function filterPrsByDate(prs: any[], since: string | null, until: string | null)
     });
 }
 
-/**
- * POST /api/webhooks/github
- * Invalidates result cache when GitHub pushes a PR event.
- */
+// ─── Webhook Handler (Event-Driven) ─────────────────────────
+
 async function handleWebhook(cradle: Cradle, request: Request): Promise<Response> {
     const event = request.headers.get("x-github-event");
     const RELEVANT = new Set(["pull_request", "pull_request_review", "issue_comment", "pull_request_review_comment"]);
@@ -318,9 +344,179 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
     if (!repo?.full_name) return json({ ignored: true, reason: "no repo" });
 
     const [owner, repoName] = repo.full_name.split("/");
+
+    // Invalidate old-style result cache
     await cradle.resultCacheService.invalidatePrMetrics(owner, repoName);
 
-    return json({ ok: true, event, repo: repo.full_name, invalidated: true });
+    // Ingest events into D1 (event-driven scoring)
+    const events: ScoringEvent[] = [];
+    const action = payload?.action;
+
+    if (event === "pull_request" && payload.pull_request) {
+        const pr = payload.pull_request;
+        const creator = pr.user?.login;
+        if (!creator) return json({ ok: true, event, reason: "no user" });
+
+        if (action === "opened" || action === "reopened") {
+            events.push({
+                id: `github:pr_created:${repo.full_name}:${pr.number}:${creator}`,
+                developerId: creator,
+                eventType: EventType.PR_CREATED,
+                source: "github",
+                sourceId: pr.html_url,
+                eventTimestamp: pr.created_at, // Event-native timestamp
+                metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
+            });
+        }
+
+        if (action === "closed" && pr.merged) {
+            events.push({
+                id: `github:pr_merged:${repo.full_name}:${pr.number}:${creator}`,
+                developerId: creator,
+                eventType: EventType.PR_MERGED,
+                source: "github",
+                sourceId: pr.html_url,
+                eventTimestamp: pr.merged_at || pr.closed_at, // Event-native timestamp
+                metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
+            });
+        }
+    }
+
+    if (event === "pull_request_review" && payload.review) {
+        const review = payload.review;
+        const reviewer = review.user?.login;
+        const prNumber = payload.pull_request?.number;
+        if (reviewer && prNumber) {
+            events.push({
+                id: `github:pr_review:${repo.full_name}:${prNumber}:${review.id}:${reviewer}`,
+                developerId: reviewer,
+                eventType: EventType.PR_REVIEW,
+                source: "github",
+                sourceId: review.html_url,
+                eventTimestamp: review.submitted_at,
+                metadata: { pr_number: prNumber, state: review.state, repo: repo.full_name },
+            });
+        }
+    }
+
+    if ((event === "issue_comment" || event === "pull_request_review_comment") && payload.comment) {
+        const comment = payload.comment;
+        const author = comment.user?.login;
+        if (author && action === "created") {
+            const prNumber = payload.issue?.number || payload.pull_request?.number;
+            events.push({
+                id: `github:comment:${repo.full_name}:${comment.id}:${author}`,
+                developerId: author,
+                eventType: EventType.COMMENT,
+                source: "github",
+                sourceId: comment.html_url,
+                eventTimestamp: comment.created_at,
+                metadata: { pr_number: prNumber, repo: repo.full_name },
+            });
+        }
+    }
+
+    // Ingest all events
+    let ingested = 0;
+    let duplicates = 0;
+    if (events.length > 0) {
+        const result = await cradle.eventsService.ingestBatch(events);
+        ingested = result.inserted;
+        duplicates = result.duplicates;
+    }
+
+    return json({ ok: true, event, repo: repo.full_name, invalidated: true, eventsIngested: ingested, duplicates });
+}
+
+// ─── Points Rules Handlers ──────────────────────────────────
+
+async function handleGetPointsRules(cradle: Cradle): Promise<Response> {
+    const rules = await cradle.pointsRulesService.getRules();
+    return json({ rules });
+}
+
+async function handleUpdatePointRule(cradle: Cradle, request: Request): Promise<Response> {
+    const body = await request.json() as any;
+    const { eventType, points, description } = body;
+
+    if (!eventType || typeof points !== "number") {
+        return err("Body must contain 'eventType' (string) and 'points' (number)", 400);
+    }
+
+    const rule = await cradle.pointsRulesService.updateRule(eventType, points, description);
+    return json({ ok: true, rule });
+}
+
+// ─── Scores Leaderboard Handler ─────────────────────────────
+
+async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Response> {
+    const since = url.searchParams.get("since") || undefined;
+    const until = url.searchParams.get("until") || undefined;
+    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+
+    const result = await cradle.scoreAggregationService.getLeaderboard(since, until, limit);
+    return json(result);
+}
+
+// ─── Events Handler ─────────────────────────────────────────
+
+async function handleListEvents(cradle: Cradle, url: URL): Promise<Response> {
+    const developerId = url.searchParams.get("developerId") || undefined;
+    const eventType = url.searchParams.get("eventType") || undefined;
+    const since = url.searchParams.get("since") || undefined;
+    const until = url.searchParams.get("until") || undefined;
+    const limit = parseInt(url.searchParams.get("limit") || "50", 10);
+
+    const events = await cradle.eventsService.listEvents({ developerId, eventType, since, until, limit });
+    return json({ count: events.length, events });
+}
+
+// ─── Attendance Handlers ────────────────────────────────────
+
+async function handleCheckIn(cradle: Cradle, request: Request): Promise<Response> {
+    const body = await request.json() as any;
+    const { developerId, checkin_time, meeting_id, location } = body;
+
+    if (!developerId) return err("Body must contain 'developerId'", 400);
+
+    try {
+        const result = await cradle.attendanceService.checkIn(developerId, {
+            checkin_time: checkin_time || new Date().toISOString(),
+            meeting_id,
+            location,
+        });
+        return json(result);
+    } catch (e: any) {
+        return err(e.message, 400);
+    }
+}
+
+async function handleCheckOut(cradle: Cradle, request: Request): Promise<Response> {
+    const body = await request.json() as any;
+    const { developerId, checkout_time, meeting_id, location } = body;
+
+    if (!developerId) return err("Body must contain 'developerId'", 400);
+
+    try {
+        const result = await cradle.attendanceService.checkOut(developerId, {
+            checkout_time: checkout_time || new Date().toISOString(),
+            meeting_id,
+            location,
+        });
+        return json(result);
+    } catch (e: any) {
+        return err(e.message, 400);
+    }
+}
+
+async function handleAttendanceHistory(cradle: Cradle, url: URL): Promise<Response> {
+    const developerId = url.searchParams.get("developerId") || undefined;
+    const since = url.searchParams.get("since") || undefined;
+    const until = url.searchParams.get("until") || undefined;
+    const limit = parseInt(url.searchParams.get("limit") || "50", 10);
+
+    const events = await cradle.attendanceService.getHistory({ developerId, since, until, limit });
+    return json({ count: events.length, events });
 }
 
 // ─── Debug Handlers ─────────────────────────────────────────
@@ -403,6 +599,7 @@ async function handleDebugCacheQuota(cradle: Cradle): Promise<Response> {
         kvResetNote: "Cloudflare KV free tier resets daily at midnight UTC",
         maxWritesPerRequest: 3,
         strategy: "Only computed results are cached (leaderboard + members + metrics). No per-PR writes.",
+        d1Available: cradle.d1Service.isAvailable,
         cachedResults: {
             [`result:metrics:${defaultRepo}:all`]: { hit: cacheStatus.metrics, cachedAt: cacheStatus.metricsAge },
             [`result:leaderboard:${defaultRepo}`]: { hit: cacheStatus.leaderboard, cachedAt: cacheStatus.leaderboardAge },
@@ -539,7 +736,6 @@ async function handleMeetEvents(cradle: Cradle, request: Request, path: string, 
 // ─── Router ─────────────────────────────────────────────────
 
 function matchRoute(p: string): { handler: string; params?: Record<string, string> } | null {
-    // Static routes first (fastest)
     if (p === "/api/ping") return { handler: "ping" };
     if (p === "/api/health") return { handler: "health" };
     if (p === "/api/repos") return { handler: "repos" };
@@ -549,10 +745,17 @@ function matchRoute(p: string): { handler: string; params?: Record<string, strin
     if (p === "/api/debug/cache-quota") return { handler: "debugCacheQuota" };
     if (p === "/api/logs") return { handler: "logs" };
 
+    // New event-driven routes
+    if (p === "/api/points/rules") return { handler: "pointsRules" };
+    if (p === "/api/scores/leaderboard") return { handler: "scoresLeaderboard" };
+    if (p === "/api/events") return { handler: "events" };
+    if (p === "/api/attendance/check-in") return { handler: "checkIn" };
+    if (p === "/api/attendance/check-out") return { handler: "checkOut" };
+    if (p === "/api/attendance/history") return { handler: "attendanceHistory" };
+
     if (p.startsWith("/api/meetings")) return { handler: "meetings", params: { path: p.replace("/api/meetings", "") } };
     if (p.startsWith("/api/meet-events")) return { handler: "meetEvents", params: { path: p.replace("/api/meet-events", "") } };
 
-    // Parameterised metric sub-routes (order matters: specifc before generic)
     const lb = p.match(/^\/api\/metrics\/([^/]+)\/([^/]+)\/leaderboard$/);
     if (lb) return { handler: "leaderboard", params: { owner: lb[1], repo: lb[2] } };
 
@@ -591,7 +794,13 @@ export default {
                 if (workerEnv.GOOGLE_PUBSUB_TOPIC) process.env.GOOGLE_PUBSUB_TOPIC = workerEnv.GOOGLE_PUBSUB_TOPIC;
             }
 
-            const container = await getContainer(workerEnv.CACHE || null);
+            const container = await getContainer(
+                workerEnv.CACHE || null,
+                workerEnv.SCORES_KV || null,
+                workerEnv.DEVELOPERS_KV || null,
+                workerEnv.ATTENDANCE_KV || null,
+                workerEnv.DB || null,
+            );
             const cradle = container.cradle;
             const route = matchRoute(url.pathname);
 
@@ -612,6 +821,25 @@ export default {
                 case "webhook":
                     if (request.method !== "POST") return err("Method Not Allowed", 405);
                     return handleWebhook(cradle, request);
+                case "pointsRules":
+                    if (request.method === "GET") return handleGetPointsRules(cradle);
+                    if (request.method === "PUT") return handleUpdatePointRule(cradle, request);
+                    return err("Method Not Allowed", 405);
+                case "scoresLeaderboard":
+                    if (request.method !== "GET") return err("Method Not Allowed", 405);
+                    return handleScoresLeaderboard(cradle, url);
+                case "events":
+                    if (request.method !== "GET") return err("Method Not Allowed", 405);
+                    return handleListEvents(cradle, url);
+                case "checkIn":
+                    if (request.method !== "POST") return err("Method Not Allowed", 405);
+                    return handleCheckIn(cradle, request);
+                case "checkOut":
+                    if (request.method !== "POST") return err("Method Not Allowed", 405);
+                    return handleCheckOut(cradle, request);
+                case "attendanceHistory":
+                    if (request.method !== "GET") return err("Method Not Allowed", 405);
+                    return handleAttendanceHistory(cradle, url);
                 case "meetings": return handleMeetings(cradle, request, route.params!.path, url);
                 case "meetEvents": return handleMeetEvents(cradle, request, route.params!.path, url);
                 case "logs":
@@ -631,4 +859,47 @@ export default {
             });
         }
     },
+
+    // ─── Cron Trigger (Scheduled) ───────────────────────────
+
+    async scheduled(event: ScheduledEvent, workerEnv: WorkerEnv, ctx: ExecutionContext): Promise<void> {
+        console.log("Cron trigger fired:", new Date().toISOString());
+
+        try {
+            if (!process.env.APP_ID && workerEnv.APP_ID) {
+                process.env.APP_ID = workerEnv.APP_ID;
+                process.env.INSTALLATION_ID = workerEnv.INSTALLATION_ID;
+                process.env.APP_PRIVATE_KEY = workerEnv.APP_PRIVATE_KEY;
+                if (workerEnv.GITHUB_ORG) process.env.GITHUB_ORG = workerEnv.GITHUB_ORG;
+            }
+
+            const container = await getContainer(
+                workerEnv.CACHE || null,
+                workerEnv.SCORES_KV || null,
+                workerEnv.DEVELOPERS_KV || null,
+                workerEnv.ATTENDANCE_KV || null,
+                workerEnv.DB || null,
+            );
+            const cradle = container.cradle;
+
+            // Precompute leaderboard snapshots
+            await cradle.scoreAggregationService.precomputeSnapshots();
+
+            console.log("Cron completed: leaderboard snapshots precomputed");
+        } catch (e: any) {
+            console.error("Cron error:", e?.message || e, e?.stack);
+        }
+    },
 };
+
+// ─── Cloudflare Types ───────────────────────────────────────
+
+interface ScheduledEvent {
+    scheduledTime: number;
+    cron: string;
+}
+
+interface ExecutionContext {
+    waitUntil(promise: Promise<any>): void;
+    passThroughOnException(): void;
+}

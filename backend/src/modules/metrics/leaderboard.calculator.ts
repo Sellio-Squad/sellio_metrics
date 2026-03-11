@@ -5,12 +5,16 @@
  *
  * Pure function — no I/O, no dependencies, fully testable.
  * Does NOT know about GitHub, KV, or HTTP.
+ *
+ * Scoring weights are now dynamic — passed as PointRule[] parameter.
+ * Falls back to sensible defaults if no rules provided.
  */
 
 import type { PrMetric, LeaderboardEntry } from "../../core/types";
+import type { PointRule } from "../../core/event-types";
 
-/** Scoring weights — tune here without touching business logic. */
-const WEIGHTS = {
+/** Default weights — used only when no dynamic rules are provided. */
+const DEFAULT_WEIGHTS = {
     prsCreated: 3,
     prsMerged: 2,
     reviewsGiven: 0,
@@ -19,7 +23,23 @@ const WEIGHTS = {
     deletions: 0.01,
 } as const;
 
-export function calculateLeaderboard(prs: PrMetric[]): LeaderboardEntry[] {
+function resolveWeights(rules?: PointRule[]) {
+    if (!rules || rules.length === 0) return DEFAULT_WEIGHTS;
+
+    const lookup = new Map(rules.map((r) => [r.eventType, r.points]));
+    return {
+        prsCreated: lookup.get("PR_CREATED") ?? DEFAULT_WEIGHTS.prsCreated,
+        prsMerged: lookup.get("PR_MERGED") ?? DEFAULT_WEIGHTS.prsMerged,
+        reviewsGiven: lookup.get("PR_REVIEW") ?? DEFAULT_WEIGHTS.reviewsGiven,
+        commentsGiven: lookup.get("COMMENT") ?? DEFAULT_WEIGHTS.commentsGiven,
+        additions: DEFAULT_WEIGHTS.additions, // Not configurable via point rules
+        deletions: DEFAULT_WEIGHTS.deletions,
+    };
+}
+
+export function calculateLeaderboard(prs: PrMetric[], rules?: PointRule[]): LeaderboardEntry[] {
+    const WEIGHTS = resolveWeights(rules);
+
     type Accumulator = {
         avatarUrl: string | null;
         prsCreated: number;
