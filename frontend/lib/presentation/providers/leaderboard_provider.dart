@@ -27,48 +27,15 @@ class LeaderboardProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  /// Fetch leaderboard for [repoFullNames] (e.g. ["Sellio-Squad/sellio_mobile"]).
-  /// Entries are merged across repos (scores summed per developer).
-  Future<void> fetchLeaderboard(List<String> repoFullNames) async {
-    if (repoFullNames.isEmpty) {
-      _leaderboard = [];
-      notifyListeners();
-      return;
-    }
-
+  /// Fetch global leaderboard across all repositories.
+  Future<void> fetchLeaderboard() async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      final merged = <String, LeaderboardEntry>{};
-
-      for (final fullName in repoFullNames) {
-        final parts = fullName.split('/');
-        if (parts.length != 2) continue;
-
-        final entries = await _repository.getLeaderboard(parts[0], parts[1]);
-
-        for (final e in entries) {
-          final existing = merged[e.developer];
-          merged[e.developer] = existing == null
-              ? e
-              : LeaderboardEntry(
-                  developer: e.developer,
-                  avatarUrl: e.avatarUrl ?? existing.avatarUrl,
-                  prsCreated: existing.prsCreated + e.prsCreated,
-                  prsMerged: existing.prsMerged + e.prsMerged,
-                  reviewsGiven: existing.reviewsGiven + e.reviewsGiven,
-                  commentsGiven: existing.commentsGiven + e.commentsGiven,
-                  additions: existing.additions + e.additions,
-                  deletions: existing.deletions + e.deletions,
-                  totalScore: existing.totalScore + e.totalScore,
-                );
-        }
-      }
-
-      _leaderboard = merged.values.toList()
-        ..sort((a, b) => b.totalScore.compareTo(a.totalScore));
+      final entries = await _repository.getLeaderboard();
+      _leaderboard = entries..sort((a, b) => b.totalScore.compareTo(a.totalScore));
     } catch (e, stack) {
       sl.get<AppLogger>().error('LeaderboardProvider', 'Error: $e', stack);
       _error = e.toString();

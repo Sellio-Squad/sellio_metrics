@@ -16,26 +16,24 @@ class LeaderboardRepositoryImpl implements LeaderboardRepository {
     : _dataSource = dataSource;
 
   @override
-  Future<List<LeaderboardEntry>> getLeaderboard(
-    String owner,
-    String repo,
-  ) async {
-    final raw = await _dataSource.fetchLeaderboard(owner, repo);
+  Future<List<LeaderboardEntry>> getLeaderboard() async {
+    final raw = await _dataSource.fetchLeaderboard();
     return raw.map(_toEntity).toList();
   }
 
   LeaderboardEntry _toEntity(dynamic json) {
     final m = json as Map<String, dynamic>;
+    final counts = m['event_counts'] as Map<String, dynamic>? ?? {};
+    
     return LeaderboardEntry(
-      developer: m['developer'] as String? ?? 'Unknown',
+      developer: m['developer_id'] as String? ?? m['developer'] as String? ?? 'Unknown',
       avatarUrl: m['avatarUrl'] as String?,
-      prsCreated: m['prsCreated'] as int? ?? 0,
-      prsMerged: m['prsMerged'] as int? ?? 0,
-      reviewsGiven: m['reviewsGiven'] as int? ?? 0,
-      commentsGiven: m['commentsGiven'] as int? ?? 0,
-      additions: m['additions'] as int? ?? 0,
-      deletions: m['deletions'] as int? ?? 0,
-      totalScore: (m['totalScore'] as num?)?.toDouble() ?? 0.0,
+      prsCreated: counts['PR_CREATED'] as int? ?? m['prsCreated'] as int? ?? 0,
+      prsMerged: counts['PR_MERGED'] as int? ?? m['prsMerged'] as int? ?? 0,
+      commentsGiven: counts['COMMENT'] as int? ?? m['commentsGiven'] as int? ?? 0,
+      additions: counts['CODE_ADDITION'] as int? ?? m['additions'] as int? ?? 0,
+      deletions: counts['CODE_DELETION'] as int? ?? m['deletions'] as int? ?? 0,
+      totalScore: (m['total_points'] as num?)?.toDouble() ?? (m['totalScore'] as num?)?.toDouble() ?? 0.0,
     );
   }
 }

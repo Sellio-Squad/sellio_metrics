@@ -83,7 +83,8 @@ export interface LeaderboardEntry {
     avatarUrl: string | null;
     prsCreated: number;
     prsMerged: number;
-    reviewsGiven: number;
     commentsGiven: number;
+    additions: number;
+    deletions: number;
     totalScore: number;
 }

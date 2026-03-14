@@ -7,6 +7,6 @@ library;
 import '../entities/leaderboard_entry.dart';
 
 abstract class LeaderboardRepository {
-  /// Fetch server-computed leaderboard for [owner]/[repo].
-  Future<List<LeaderboardEntry>> getLeaderboard(String owner, String repo);
+  /// Fetch server-computed leaderboard.
+  Future<List<LeaderboardEntry>> getLeaderboard();
 }

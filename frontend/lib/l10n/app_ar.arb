@@ -131,6 +131,8 @@
   "unitReviews": "مراجعات",
   "unitPrs": "طلبات",
   "unitComments": "تعليقات",
+  "unitAdditions": "إضافات",
+  "unitDeletions": "حذوفات",
   "aboutMeetings": "جدول الاجتماعات",
   "meetingDownloadIcs": "أضف للتقويم",
   "meetingWeekly": "أسبوعياً",
