@@ -442,6 +442,50 @@
                     "response": []
                 }
             ]
+        },
+        {
+            "name": "Debug",
+            "item": [
+                {
+                    "name": "Debug Auth",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/debug/auth",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "debug",
+                                "auth"
+                            ]
+                        }
+                    },
+                    "response": []
+                },
+                {
+                    "name": "Debug Cache Quota",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/debug/cache-quota",
+                            "host": [
+                                "{{baseUrl}}"
+                            ],
+                            "path": [
+                                "api",
+                                "debug",
+                                "cache-quota"
+                            ]
+                        },
+                        "description": "Shows KV cache status, D1 availability, and write quota information."
+                    },
+                    "response": []
+                }
+            ]
         }
     ]
 }
