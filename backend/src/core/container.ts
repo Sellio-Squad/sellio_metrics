@@ -56,11 +56,7 @@ export interface Cradle {
     scoreAggregationService: ScoreAggregationService;
     attendanceService: AttendanceService;
 
-    // Event-Driven Scoring
-    eventsService: EventsService;
-    pointsRulesService: PointsRulesService;
-    scoreAggregationService: ScoreAggregationService;
-    attendanceService: AttendanceService;
+
 
     // Google Meet
     googleMeetClient: GoogleMeetClient;
