@@ -56,7 +56,7 @@ class _AppInitializationWrapperState extends State<_AppInitializationWrapper> {
     if (settings.selectedRepos.isEmpty) return;
 
     final repoNames = settings.selectedRepos.map((r) => r.fullName).toList();
-    sl.get<LeaderboardProvider>().fetchLeaderboard(repoNames);
+    sl.get<LeaderboardProvider>().fetchLeaderboard();
     sl.get<MemberProvider>().fetchStatuses(repoNames);
   }
 

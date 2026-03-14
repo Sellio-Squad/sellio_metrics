@@ -102,7 +102,6 @@ function getContainer(
             const { CachedGitHubClient } = await import("./infra/github/cached-github.client");
             const { ReposService } = await import("./modules/repos/repos.service");
             const { PrFetcherService } = await import("./modules/metrics/pr-fetcher.service");
-            const { ResultCacheService } = await import("./modules/metrics/result-cache.service");
             const { GoogleMeetClient } = await import("./infra/google/google-meet.client");
             const { MeetingsService } = await import("./modules/meetings/meetings.service");
             const { WorkspaceEventsClient } = await import("./infra/google/workspace-events.client");
@@ -164,7 +163,23 @@ function getContainer(
 
                 // Metrics: three focused services
                 prFetcherService: asClass(PrFetcherService).singleton(),
-                resultCacheService: asClass(ResultCacheService).singleton(),
+
+                // Event-Driven Scoring
+                eventsService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
+                    new EventsService({ d1Service, scoresKvCache, logger }),
+                ).singleton(),
+
+                pointsRulesService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
+                    new PointsRulesService({ d1Service, scoresKvCache, logger }),
+                ).singleton(),
+
+                scoreAggregationService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
+                    new ScoreAggregationService({ d1Service, scoresKvCache, logger }),
+                ).singleton(),
+
+                attendanceService: asFunction(({ d1Service, attendanceKvCache, eventsService, logger }: Cradle) =>
+                    new AttendanceService({ d1Service, attendanceKvCache, eventsService, logger }),
+                ).singleton(),
 
                 // Event-Driven Scoring
                 eventsService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
@@ -250,85 +265,120 @@ async function handleRepos(cradle: Cradle, url: URL): Promise<Response> {
     return json({ org, count: repos.length, repos });
 }
 
-async function handleLeaderboard(cradle: Cradle, owner: string, repo: string, url: URL): Promise<Response> {
-    const { prFetcherService, resultCacheService } = cradle;
-    const { calculateLeaderboard } = await import("./modules/metrics/leaderboard.calculator");
-    const since = url.searchParams.get("since");
-    const until = url.searchParams.get("until");
+// ─── GitHub Sync (Backfill) ───────────────────────────────
 
-    if (!since && !until) {
-        const cached = await resultCacheService.getLeaderboard(owner, repo);
-        if (cached) return json(cached);
+async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Response> {
+    const { prFetcherService, eventsService, scoreAggregationService, reposService, env } = cradle;
+    const body = await request.json().catch(() => ({})) as any;
+    const owner = body.owner || env.org;
+    const requestedRepo = body.repo;
+
+    try {
+        let repoNames: string[] = [];
+        if (requestedRepo) {
+            repoNames = [requestedRepo];
+        } else {
+            const orgRepos = await reposService.listByOrg(owner);
+            repoNames = orgRepos.map((r: any) => r.name);
+        }
+
+        let totalInserted = 0;
+        let totalDuplicates = 0;
+        let totalEvents = 0;
+        let totalPrs = 0;
+
+        for (const repoName of repoNames) {
+            const prs = await prFetcherService.fetch(owner, repoName);
+            totalPrs += prs.length;
+            const events: ScoringEvent[] = [];
+
+            for (const pr of prs) {
+                events.push({
+                    id: `github:pr_created:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
+                    developerId: pr.creator.login,
+                    eventType: EventType.PR_CREATED,
+                    source: "github",
+                    sourceId: pr.url,
+                    eventTimestamp: pr.opened_at,
+                    metadata: { pr_number: pr.pr_number, title: pr.title, repo: `${owner}/${repoName}` },
+                });
+
+                if (pr.status === "merged") {
+                    events.push({
+                        id: `github:pr_merged:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
+                        developerId: pr.creator.login,
+                        eventType: EventType.PR_MERGED,
+                        source: "github",
+                        sourceId: pr.url,
+                        eventTimestamp: pr.merged_at || pr.closed_at || pr.opened_at,
+                        metadata: { pr_number: pr.pr_number, title: pr.title, repo: `${owner}/${repoName}` },
+                    });
+                }
+
+                if (pr.diff_stats) {
+                    if (pr.diff_stats.additions > 0) {
+                        events.push({
+                            id: `github:code_additions:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
+                            developerId: pr.creator.login,
+                            eventType: EventType.CODE_ADDITION,
+                            source: "github",
+                            sourceId: pr.url,
+                            eventTimestamp: pr.opened_at,
+                            metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}`, score_multiplier: pr.diff_stats.additions },
+                        });
+                    }
+                    if (pr.diff_stats.deletions > 0) {
+                        events.push({
+                            id: `github:code_deletions:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
+                            developerId: pr.creator.login,
+                            eventType: EventType.CODE_DELETION,
+                            source: "github",
+                            sourceId: pr.url,
+                            eventTimestamp: pr.opened_at,
+                            metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}`, score_multiplier: pr.diff_stats.deletions },
+                        });
+                    }
+                }
+
+                for (const commentGroup of pr.comments || []) {
+                    for (let i = 0; i < commentGroup.count; i++) {
+                        events.push({
+                            id: `github:comment_group:${owner}/${repoName}:${pr.pr_number}:${commentGroup.author.login}:${i}`,
+                            developerId: commentGroup.author.login,
+                            eventType: EventType.COMMENT,
+                            source: "github",
+                            sourceId: pr.url,
+                            eventTimestamp: commentGroup.first_comment_at || pr.opened_at,
+                            metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}` },
+                        });
+                    }
+                }
+            }
+
+            if (events.length > 0) {
+                totalEvents += events.length;
+                const result = await eventsService.ingestBatch(events);
+                totalInserted += result.inserted;
+                totalDuplicates += result.duplicates;
+            }
+        }
+
+        // Refresh snapshots immediately
+        await scoreAggregationService.precomputeSnapshots();
+
+        return json({
+            ok: true,
+            reposSynced: repoNames,
+            prsFound: totalPrs,
+            eventsGenerated: totalEvents,
+            eventsInserted: totalInserted,
+            duplicates: totalDuplicates,
+            metricsStatus: "Moved to D1 + KV scores namespace",
+        });
+
+    } catch (e: any) {
+        return err(`Sync failed: ${e.message}`, 500);
     }
-
-    const allPrs = await prFetcherService.fetch(owner, repo);
-    const prs = filterPrsByDate(allPrs, since, until);
-
-    // Get dynamic rules for scoring
-    const rules = await cradle.pointsRulesService.getRules();
-    const entries = calculateLeaderboard(prs, rules);
-    const cachedAt = new Date().toISOString();
-
-    if (!since && !until) {
-        await resultCacheService.setLeaderboard(owner, repo, entries);
-    }
-    return json({ owner, repo, cachedAt, since: since ?? null, until: until ?? null, data: entries });
-}
-
-async function handleMembers(cradle: Cradle, owner: string, repo: string, url: URL): Promise<Response> {
-    const { prFetcherService, resultCacheService, cachedGithubClient, env } = cradle;
-    const { calculateMemberStatus } = await import("./modules/metrics/members.calculator");
-    const since = url.searchParams.get("since");
-    const until = url.searchParams.get("until");
-
-    if (!since && !until) {
-        const cached = await resultCacheService.getMembers(owner, repo);
-        if (cached) return json(cached);
-    }
-
-    const [allPrs, orgMembers] = await Promise.all([
-        prFetcherService.fetch(owner, repo),
-        cachedGithubClient.listOrgMembers(env.org),
-    ]);
-    const prs = filterPrsByDate(allPrs, since, until);
-    const members = calculateMemberStatus(prs, orgMembers);
-    const cachedAt = new Date().toISOString();
-
-    if (!since && !until) {
-        await resultCacheService.setMembers(owner, repo, members);
-    }
-    return json({ owner, repo, cachedAt, since: since ?? null, until: until ?? null, data: members });
-}
-
-async function handlePrs(cradle: Cradle, owner: string, repo: string, url: URL): Promise<Response> {
-    const { prFetcherService, resultCacheService } = cradle;
-    const state = (url.searchParams.get("state") || "all") as "all" | "open" | "closed";
-    const since = url.searchParams.get("since");
-    const until = url.searchParams.get("until");
-
-    let prs: any[];
-    if (!since && !until) {
-        const cached = await resultCacheService.getPrMetrics(owner, repo, state);
-        if (cached) return json({ owner, repo, cachedAt: "cached", state, data: cached });
-        prs = await prFetcherService.fetch(owner, repo, state);
-        await resultCacheService.setPrMetrics(owner, repo, state, prs as any);
-    } else {
-        prs = await prFetcherService.fetch(owner, repo, state);
-        prs = filterPrsByDate(prs as any, since, until);
-    }
-
-    const cachedAt = new Date().toISOString();
-    return json({ owner, repo, cachedAt, state, since: since ?? null, until: until ?? null, data: prs });
-}
-
-function filterPrsByDate(prs: any[], since: string | null, until: string | null): any[] {
-    if (!since && !until) return prs;
-    const sinceTs = since ? new Date(since).getTime() : 0;
-    const untilTs = until ? new Date(until).getTime() : Infinity;
-    return prs.filter((pr) => {
-        const openedAt = new Date(pr.opened_at).getTime();
-        return openedAt >= sinceTs && openedAt <= untilTs;
-    });
 }
 
 // ─── Webhook Handler (Event-Driven) ─────────────────────────
@@ -343,10 +393,8 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
     const repo = payload?.repository;
     if (!repo?.full_name) return json({ ignored: true, reason: "no repo" });
 
-    const [owner, repoName] = repo.full_name.split("/");
-
-    // Invalidate old-style result cache
-    await cradle.resultCacheService.invalidatePrMetrics(owner, repoName);
+    // Invalidate caches is now handled by processing the new events!
+    // ResultCacheService is no longer used, we process events in D1 instead.
 
     // Ingest events into D1 (event-driven scoring)
     const events: ScoringEvent[] = [];
@@ -357,16 +405,42 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
         const creator = pr.user?.login;
         if (!creator) return json({ ok: true, event, reason: "no user" });
 
-        if (action === "opened" || action === "reopened") {
-            events.push({
-                id: `github:pr_created:${repo.full_name}:${pr.number}:${creator}`,
-                developerId: creator,
-                eventType: EventType.PR_CREATED,
-                source: "github",
-                sourceId: pr.html_url,
-                eventTimestamp: pr.created_at, // Event-native timestamp
-                metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
-            });
+        if (action === "opened" || action === "reopened" || action === "synchronize" || action === "edited") {
+            if (action === "opened" || action === "reopened") {
+                events.push({
+                    id: `github:pr_created:${repo.full_name}:${pr.number}:${creator}`,
+                    developerId: creator,
+                    eventType: EventType.PR_CREATED,
+                    source: "github",
+                    sourceId: pr.html_url,
+                    eventTimestamp: pr.created_at, // Event-native timestamp
+                    metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
+                });
+            }
+
+            // Always upsert additions and deletions on open or update
+            if (typeof pr.additions === "number" && pr.additions > 0) {
+                events.push({
+                    id: `github:code_additions:${repo.full_name}:${pr.number}:${creator}`,
+                    developerId: creator,
+                    eventType: EventType.CODE_ADDITION,
+                    source: "github",
+                    sourceId: pr.html_url,
+                    eventTimestamp: pr.created_at,
+                    metadata: { pr_number: pr.number, repo: repo.full_name, score_multiplier: pr.additions },
+                });
+            }
+            if (typeof pr.deletions === "number" && pr.deletions > 0) {
+                events.push({
+                    id: `github:code_deletions:${repo.full_name}:${pr.number}:${creator}`,
+                    developerId: creator,
+                    eventType: EventType.CODE_DELETION,
+                    source: "github",
+                    sourceId: pr.html_url,
+                    eventTimestamp: pr.created_at,
+                    metadata: { pr_number: pr.number, repo: repo.full_name, score_multiplier: pr.deletions },
+                });
+            }
         }
 
         if (action === "closed" && pr.merged) {
@@ -382,22 +456,7 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
         }
     }
 
-    if (event === "pull_request_review" && payload.review) {
-        const review = payload.review;
-        const reviewer = review.user?.login;
-        const prNumber = payload.pull_request?.number;
-        if (reviewer && prNumber) {
-            events.push({
-                id: `github:pr_review:${repo.full_name}:${prNumber}:${review.id}:${reviewer}`,
-                developerId: reviewer,
-                eventType: EventType.PR_REVIEW,
-                source: "github",
-                sourceId: review.html_url,
-                eventTimestamp: review.submitted_at,
-                metadata: { pr_number: prNumber, state: review.state, repo: repo.full_name },
-            });
-        }
-    }
+    // pull_request_review events have been explicitly requested to be removed.
 
     if ((event === "issue_comment" || event === "pull_request_review_comment") && payload.comment) {
         const comment = payload.comment;
@@ -585,8 +644,7 @@ async function handleDebugCacheQuota(cradle: Cradle): Promise<Response> {
 
     const defaultRepo = `${cradle.env.org}/sellio_mobile`;
     const [owner, repoName] = defaultRepo.split("/");
-    const [cacheStatus, repos, orgMembers, token] = await Promise.all([
-        cradle.resultCacheService.getStatus(owner, repoName),
+    const [repos, orgMembers, token] = await Promise.all([
         cradle.cacheService.get<any>(`github:repos:${cradle.env.org}`),
         cradle.cacheService.get<any>(`github:org-members:${cradle.env.org}`),
         cradle.cacheService.get<any>("google_oauth_tokens"),
@@ -601,9 +659,7 @@ async function handleDebugCacheQuota(cradle: Cradle): Promise<Response> {
         strategy: "Only computed results are cached (leaderboard + members + metrics). No per-PR writes.",
         d1Available: cradle.d1Service.isAvailable,
         cachedResults: {
-            [`result:metrics:${defaultRepo}:all`]: { hit: cacheStatus.metrics, cachedAt: cacheStatus.metricsAge },
-            [`result:leaderboard:${defaultRepo}`]: { hit: cacheStatus.leaderboard, cachedAt: cacheStatus.leaderboardAge },
-            [`result:members:${defaultRepo}`]: { hit: cacheStatus.members, cachedAt: cacheStatus.membersAge },
+            "SCORES_KV": "Now managed automatically",
             [`github:repos:${cradle.env.org}`]: { hit: !!repos },
             [`github:org-members:${cradle.env.org}`]: { hit: !!orgMembers },
             "google_oauth_tokens": { hit: !!token },
@@ -752,18 +808,10 @@ function matchRoute(p: string): { handler: string; params?: Record<string, strin
     if (p === "/api/attendance/check-in") return { handler: "checkIn" };
     if (p === "/api/attendance/check-out") return { handler: "checkOut" };
     if (p === "/api/attendance/history") return { handler: "attendanceHistory" };
+    if (p === "/api/sync/github") return { handler: "syncGithub" };
 
     if (p.startsWith("/api/meetings")) return { handler: "meetings", params: { path: p.replace("/api/meetings", "") } };
     if (p.startsWith("/api/meet-events")) return { handler: "meetEvents", params: { path: p.replace("/api/meet-events", "") } };
-
-    const lb = p.match(/^\/api\/metrics\/([^/]+)\/([^/]+)\/leaderboard$/);
-    if (lb) return { handler: "leaderboard", params: { owner: lb[1], repo: lb[2] } };
-
-    const mb = p.match(/^\/api\/metrics\/([^/]+)\/([^/]+)\/members$/);
-    if (mb) return { handler: "members", params: { owner: mb[1], repo: mb[2] } };
-
-    const prs = p.match(/^\/api\/metrics\/([^/]+)\/([^/]+)\/prs$/);
-    if (prs) return { handler: "prs", params: { owner: prs[1], repo: prs[2] } };
 
     return null;
 }
@@ -809,15 +857,9 @@ export default {
             switch (route.handler) {
                 case "health": return handleHealth(cradle);
                 case "repos": return handleRepos(cradle, url);
-                case "leaderboard":
-                    if (request.method !== "GET") return err("Method Not Allowed", 405);
-                    return handleLeaderboard(cradle, route.params!.owner, route.params!.repo, url);
-                case "members":
-                    if (request.method !== "GET") return err("Method Not Allowed", 405);
-                    return handleMembers(cradle, route.params!.owner, route.params!.repo, url);
-                case "prs":
-                    if (request.method !== "GET") return err("Method Not Allowed", 405);
-                    return handlePrs(cradle, route.params!.owner, route.params!.repo, url);
+                case "syncGithub":
+                    if (request.method !== "POST") return err("Method Not Allowed", 405);
+                    return handleGitHubSync(cradle, request);
                 case "webhook":
                     if (request.method !== "POST") return err("Method Not Allowed", 405);
                     return handleWebhook(cradle, request);

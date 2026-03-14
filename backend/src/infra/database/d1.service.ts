@@ -99,6 +99,53 @@ export class D1Service {
         }
     }
 
+    /**
+     * Insert multiple events using D1's batch API to avoid subrequest limits.
+     * Processes in chunks of 50.
+     */
+    async insertEventsBatch(events: ScoringEvent[]): Promise<{ inserted: number; duplicates: number }> {
+        if (!this.db || events.length === 0) return { inserted: 0, duplicates: 0 };
+
+        let totalInserted = 0;
+        let totalDuplicates = 0;
+
+        const statement = this.db.prepare(
+            `INSERT OR IGNORE INTO events (id, developer_id, event_type, source, source_id, event_timestamp, metadata)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+        );
+
+        // Max D1 batch limit is 100 statements. We use 50 to be safe.
+        for (let i = 0; i < events.length; i += 50) {
+            const chunk = events.slice(i, i + 50);
+            const stmts = chunk.map((event) =>
+                statement.bind(
+                    event.id,
+                    event.developerId,
+                    event.eventType,
+                    event.source,
+                    event.sourceId || null,
+                    event.eventTimestamp,
+                    event.metadata ? JSON.stringify(event.metadata) : null,
+                ),
+            );
+
+            try {
+                const results = await this.db.batch(stmts);
+                let chunkInserted = 0;
+                for (const res of results) {
+                    chunkInserted += res.meta.changes || 0;
+                }
+                totalInserted += chunkInserted;
+                totalDuplicates += chunk.length - chunkInserted;
+            } catch (err: any) {
+                this.logger.error({ err: err.message, chunk_size: chunk.length }, "Failed to execute batch insert");
+                throw err;
+            }
+        }
+
+        return { inserted: totalInserted, duplicates: totalDuplicates };
+    }
+
     // ─── Event Queries ──────────────────────────────────────
 
     /**
@@ -169,7 +216,7 @@ export class D1Service {
 
         if (since && until) {
             query = `
-                SELECT e.developer_id, SUM(r.points) as total_points
+                SELECT e.developer_id, ROUND(SUM(r.points * COALESCE(CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL), 1.0)), 2) as total_points
                 FROM events e
                 JOIN point_rules r ON e.event_type = r.event_type
                 WHERE e.event_timestamp BETWEEN ?${paramIdx++} AND ?${paramIdx++}
@@ -180,7 +227,7 @@ export class D1Service {
             params.push(since, until, limit);
         } else if (since) {
             query = `
-                SELECT e.developer_id, SUM(r.points) as total_points
+                SELECT e.developer_id, ROUND(SUM(r.points * COALESCE(CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL), 1.0)), 2) as total_points
                 FROM events e
                 JOIN point_rules r ON e.event_type = r.event_type
                 WHERE e.event_timestamp >= ?${paramIdx++}
@@ -191,7 +238,7 @@ export class D1Service {
             params.push(since, limit);
         } else if (until) {
             query = `
-                SELECT e.developer_id, SUM(r.points) as total_points
+                SELECT e.developer_id, ROUND(SUM(r.points * COALESCE(CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL), 1.0)), 2) as total_points
                 FROM events e
                 JOIN point_rules r ON e.event_type = r.event_type
                 WHERE e.event_timestamp <= ?${paramIdx++}
@@ -202,7 +249,7 @@ export class D1Service {
             params.push(until, limit);
         } else {
             query = `
-                SELECT e.developer_id, SUM(r.points) as total_points
+                SELECT e.developer_id, ROUND(SUM(r.points * COALESCE(CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL), 1.0)), 2) as total_points
                 FROM events e
                 JOIN point_rules r ON e.event_type = r.event_type
                 GROUP BY e.developer_id
