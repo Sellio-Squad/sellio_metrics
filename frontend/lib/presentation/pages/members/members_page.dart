@@ -172,7 +172,7 @@ class _MemberRow extends StatelessWidget {
                   borderRadius: AppRadius.smAll,
                 ),
                 child: Text(
-                  member.isActive ? 'Active' : 'Inactive',
+                  member.isActive ? 'Active (≤ 30 Days)' : 'Inactive (> 30 Days)',
                   style: AppTypography.caption.copyWith(
                     color: member.isActive ? scheme.primary : scheme.hint,
                     fontWeight: FontWeight.w600,

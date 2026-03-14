@@ -129,6 +129,34 @@
             ]
         },
         {
+            "name": "Members",
+            "description": "Interact with organization members, retrieving their active status and details.",
+            "item": [
+                {
+                    "name": "Get Members Status",
+                    "request": {
+                        "method": "GET",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/members",
+                            "host": ["{{baseUrl}}"],
+                            "path": ["api", "members"]
+                        },
+                        "description": "Returns all members of the GitHub organization with their current activity status and precise last active date. Uses MEMBERS_KV caching."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [{"key": "Content-Type", "value": "application/json"}],
+                            "body": "{\n  \"data\": [\n    {\n      \"developer\": \"dev-01\",\n      \"avatarUrl\": \"https://avatars.githubusercontent.com/u/12345?v=4\",\n      \"isActive\": true,\n      \"lastActiveDate\": \"2026-03-10T14:30:00.000Z\"\n    }\n  ],\n  \"members\": [\n    {\n      \"developer\": \"dev-01\",\n      \"avatarUrl\": \"https://avatars.githubusercontent.com/u/12345?v=4\",\n      \"isActive\": true,\n      \"lastActiveDate\": \"2026-03-10T14:30:00.000Z\"\n    }\n  ]\n}"
+                        }
+                    ]
+                }
+            ]
+        },
+        {
             "name": "Scores",
             "description": "Event-driven leaderboard from D1. Uses SQL JOIN with point_rules for dynamic scoring.",
             "item": [
