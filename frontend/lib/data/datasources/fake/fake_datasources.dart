@@ -39,7 +39,6 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
       avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4',
       prsCreated: 12,
       prsMerged: 10,
-      reviewsGiven: 8,
       commentsGiven: 15,
       additions: 1200,
       deletions: 400,
@@ -50,7 +49,6 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
       avatarUrl: 'https://avatars.githubusercontent.com/u/2?v=4',
       prsCreated: 8,
       prsMerged: 6,
-      reviewsGiven: 12,
       commentsGiven: 9,
       additions: 800,
       deletions: 200,
@@ -61,7 +59,6 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
       avatarUrl: 'https://avatars.githubusercontent.com/u/3?v=4',
       prsCreated: 5,
       prsMerged: 5,
-      reviewsGiven: 20,
       commentsGiven: 5,
       additions: 300,
       deletions: 100,
@@ -70,7 +67,7 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
   ];
 
   @override
-  Future<List<dynamic>> fetchLeaderboard(String owner, String repo) async {
+  Future<List<dynamic>> fetchLeaderboard() async {
     await Future.delayed(const Duration(milliseconds: 300));
     return _entries
         .map(
@@ -79,7 +76,6 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
             'avatarUrl': e.avatarUrl,
             'prsCreated': e.prsCreated,
             'prsMerged': e.prsMerged,
-            'reviewsGiven': e.reviewsGiven,
             'commentsGiven': e.commentsGiven,
             'additions': e.additions,
             'deletions': e.deletions,

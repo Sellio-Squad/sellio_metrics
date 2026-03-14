@@ -10,11 +10,12 @@
 export const EventType = {
     PR_CREATED: "PR_CREATED",
     PR_MERGED: "PR_MERGED",
-    PR_REVIEW: "PR_REVIEW",
     COMMENT: "COMMENT",
     CHECK_IN: "CHECK_IN",
     CHECK_OUT: "CHECK_OUT",
     ATTENDANCE_DURATION: "ATTENDANCE_DURATION",
+    CODE_ADDITION: "CODE_ADDITION",
+    CODE_DELETION: "CODE_DELETION",
 } as const;
 
 export type EventTypeValue = (typeof EventType)[keyof typeof EventType];

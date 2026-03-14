@@ -13,7 +13,7 @@ import '../../core/logging/app_logger.dart';
 // ─── Abstract Interface ──────────────────────────────────────
 
 abstract class LeaderboardDataSource {
-  Future<List<dynamic>> fetchLeaderboard(String owner, String repo);
+  Future<List<dynamic>> fetchLeaderboard();
 }
 
 // ─── Remote Implementation ───────────────────────────────────
@@ -25,10 +25,10 @@ class RemoteLeaderboardDataSource implements LeaderboardDataSource {
   RemoteLeaderboardDataSource({required this.baseUrl, http.Client? client})
     : _client = client ?? http.Client();
 
-  /// GET /api/metrics/:owner/:repo/leaderboard
+  /// GET /api/scores/leaderboard
   @override
-  Future<List<dynamic>> fetchLeaderboard(String owner, String repo) async {
-    final url = Uri.parse('$baseUrl/api/metrics/$owner/$repo/leaderboard');
+  Future<List<dynamic>> fetchLeaderboard() async {
+    final url = Uri.parse('$baseUrl/api/scores/leaderboard');
     sl.get<AppLogger>().network('LeaderboardDataSource', 'GET', url);
 
     final response = await _client.get(url);
@@ -39,7 +39,12 @@ class RemoteLeaderboardDataSource implements LeaderboardDataSource {
       );
     }
 
-    final body = json.decode(response.body) as Map<String, dynamic>;
-    return body['data'] as List<dynamic>? ?? body['entries'] as List<dynamic>? ?? [];
+    final body = json.decode(response.body);
+    if (body is List) {
+        return body;
+    } else if (body is Map) {
+        return body['data'] as List<dynamic>? ?? body['entries'] as List<dynamic>? ?? [];
+    }
+    return [];
   }
 }

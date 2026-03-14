@@ -60,21 +60,32 @@ export class EventsService {
      * Ingest multiple events (e.g. from a webhook with multiple actions).
      */
     async ingestBatch(events: ScoringEvent[]): Promise<{ inserted: number; duplicates: number }> {
-        let inserted = 0;
-        let duplicates = 0;
-        const affectedDevs = new Set<string>();
+        if (events.length === 0) return { inserted: 0, duplicates: 0 };
 
-        for (const event of events) {
-            const result = await this.ingest(event);
-            if (result.inserted) {
-                inserted++;
-                affectedDevs.add(event.developerId);
-            } else {
-                duplicates++;
-            }
+        // Normalize timestamps to UTC
+        const normalized = events.map((event) => ({
+            ...event,
+            eventTimestamp: new Date(event.eventTimestamp).toISOString(),
+        }));
+
+        const result = await this.d1.insertEventsBatch(normalized);
+
+        if (result.inserted > 0) {
+            // Find unique affected developers
+            const affectedDevs = new Set(events.map((e) => e.developerId));
+            
+            // Wait to invalidate caches
+            await Promise.all(
+                Array.from(affectedDevs).map((devId) => this.invalidateDeveloperCache(devId))
+            );
+            
+            this.logger.info(
+                { eventsCount: events.length, inserted: result.inserted, devCount: affectedDevs.size },
+                "Batch ingested, caches invalidated",
+            );
         }
 
-        return { inserted, duplicates };
+        return result;
     }
 
     /**

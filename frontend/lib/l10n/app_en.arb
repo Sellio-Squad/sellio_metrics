@@ -131,6 +131,8 @@
   "unitReviews": "reviews",
   "unitPrs": "PRs",
   "unitComments": "comments",
+  "unitAdditions": "added",
+  "unitDeletions": "deleted",
   "aboutMeetings": "Meeting Schedule",
   "meetingDownloadIcs": "Add to Calendar",
   "meetingWeekly": "Weekly",
