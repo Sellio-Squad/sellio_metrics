@@ -55,7 +55,7 @@ interface WorkerEnv {
     GOOGLE_PUBSUB_TOPIC?: string;
     CACHE: KVNamespace;
     SCORES_KV: KVNamespace;
-    DEVELOPERS_KV: KVNamespace;
+    MEMBERS_KV: KVNamespace;
     ATTENDANCE_KV: KVNamespace;
     DB: D1Database;
 }
@@ -87,7 +87,7 @@ let containerPromise: Promise<AwilixContainer<Cradle>> | null = null;
 function getContainer(
     kvNamespace: KVNamespace | null,
     scoresKv: KVNamespace | null,
-    developersKv: KVNamespace | null,
+    membersKv: KVNamespace | null,
     attendanceKv: KVNamespace | null,
     d1Database: D1Database | null,
 ): Promise<AwilixContainer<Cradle>> {
@@ -135,8 +135,8 @@ function getContainer(
                     new CacheService({ kvNamespace: scoresKv, logger }),
                 ).singleton(),
 
-                developersKvCache: asFunction(({ logger }: Cradle) =>
-                    new CacheService({ kvNamespace: developersKv, logger }),
+                membersKvCache: asFunction(({ logger }: Cradle) =>
+                    new CacheService({ kvNamespace: membersKv, logger }),
                 ).singleton(),
 
                 attendanceKvCache: asFunction(({ logger }: Cradle) =>
@@ -152,8 +152,8 @@ function getContainer(
                     new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold }),
                 ).singleton(),
 
-                cachedGithubClient: asFunction(({ githubClient, cacheService, rateLimitGuard, logger }: Cradle) =>
-                    new CachedGitHubClient({ githubClient, cacheService, rateLimitGuard, logger }),
+                cachedGithubClient: asFunction(({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }: Cradle) =>
+                    new CachedGitHubClient({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }),
                 ).singleton(),
 
                 reposService: asClass(ReposService).singleton(),
@@ -378,7 +378,7 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
 
     if (["organization", "member", "membership"].includes(event)) {
         const org = payload.organization?.login || cradle.env.org;
-        await cradle.cacheService.del(`github:org-members:${org}`);
+        await cradle.membersKvCache.del(`github:org-members:${org}`);
         cradle.logger.info({ org, event }, "Invalidated org-members cache due to webhook");
         return json({ ok: true, event, cache_invalidated: true });
     }
@@ -528,29 +528,24 @@ async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Respon
 async function handleMembers(cradle: Cradle): Promise<Response> {
     try {
         const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
-        
-        // 30 day window for activity
+        // 30 day window for strictly active vs inactive flag
         const sinceDate = new Date();
         sinceDate.setDate(sinceDate.getDate() - 30);
-        const since = sinceDate.toISOString();
+        const thirtyDaysAgo = sinceDate.getTime();
 
-        // Get recent events for activity statuses
-        const events = await cradle.eventsService.listEvents({ since, limit: 10000 });
-        
-        const activityMap = new Map<string, string>();
-        for (const e of events) {
-            const existing = activityMap.get(e.developer_id);
-            if (!existing || new Date(e.event_timestamp) > new Date(existing)) {
-                activityMap.set(e.developer_id, e.event_timestamp);
-            }
-        }
+        // Get absolute last active dates directly from D1 using optimized query
+        const activityMap = await cradle.eventsService.getLastActiveDates();
 
         const mappedMembers = orgMembers.map((m: any) => {
-            const lastActive = activityMap.get(m.login) || null;
+            // Be case-insensitive during lookups just in case
+            const developerIdMatch = Object.keys(activityMap).find((k) => k.toLowerCase() === m.login.toLowerCase());
+            const lastActive = developerIdMatch ? activityMap[developerIdMatch] : null;
+            const isActive = !!lastActive && new Date(lastActive).getTime() >= thirtyDaysAgo;
+            
             return {
                 developer: m.login,
                 avatarUrl: m.avatar_url,
-                isActive: !!lastActive,
+                isActive,
                 lastActiveDate: lastActive
             };
         });
@@ -701,7 +696,7 @@ async function handleDebugCacheQuota(cradle: Cradle): Promise<Response> {
     const [owner, repoName] = defaultRepo.split("/");
     const [repos, orgMembers, token] = await Promise.all([
         cradle.cacheService.get<any>(`github:repos:${cradle.env.org}`),
-        cradle.cacheService.get<any>(`github:org-members:${cradle.env.org}`),
+        cradle.membersKvCache.get<any>(`github:org-members:${cradle.env.org}`),
         cradle.cacheService.get<any>("google_oauth_tokens"),
     ]);
 
@@ -901,7 +896,7 @@ export default {
             const container = await getContainer(
                 workerEnv.CACHE || null,
                 workerEnv.SCORES_KV || null,
-                workerEnv.DEVELOPERS_KV || null,
+                workerEnv.MEMBERS_KV || null,
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB || null,
             );
@@ -977,7 +972,7 @@ export default {
             const container = await getContainer(
                 workerEnv.CACHE || null,
                 workerEnv.SCORES_KV || null,
-                workerEnv.DEVELOPERS_KV || null,
+                workerEnv.MEMBERS_KV || null,
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB || null,
             );

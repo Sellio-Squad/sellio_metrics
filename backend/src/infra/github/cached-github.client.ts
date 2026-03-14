@@ -18,22 +18,26 @@ import type { Logger } from "../../core/logger";
 export class CachedGitHubClient {
     private readonly github: GitHubClient;
     private readonly cache: CacheService;
+    private readonly membersKv: CacheService;
     private readonly guard: RateLimitGuard;
     private readonly logger: Logger;
 
     constructor({
         githubClient,
         cacheService,
+        membersKvCache,
         rateLimitGuard,
         logger,
     }: {
         githubClient: GitHubClient;
         cacheService: CacheService;
+        membersKvCache: CacheService;
         rateLimitGuard: RateLimitGuard;
         logger: Logger;
     }) {
         this.github = githubClient;
         this.cache = cacheService;
+        this.membersKv = membersKvCache;
         this.guard = rateLimitGuard;
         this.logger = logger.child({ module: "cached-github" });
     }
@@ -63,7 +67,7 @@ export class CachedGitHubClient {
      */
     async listOrgMembers(org: string): Promise<any[]> {
         const cacheKey = `github:org-members:${org}`;
-        const cached = await this.cache.get<any[]>(cacheKey);
+        const cached = await this.membersKv.get<any[]>(cacheKey);
         if (cached) return cached.data;
 
         await this.guard.checkAndWait();
@@ -71,7 +75,7 @@ export class CachedGitHubClient {
             this.github.rest.orgs.listMembers,
             { org, filter: "all", role: "all", per_page: 100 }
         );
-        await this.cache.set(cacheKey, members);
+        await this.membersKv.set(cacheKey, members);
         return members;
     }
 

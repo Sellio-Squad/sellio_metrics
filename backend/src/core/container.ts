@@ -38,7 +38,7 @@ export interface Cradle {
 
     // Infrastructure — new KV namespaces
     scoresKvCache: CacheService;
-    developersKvCache: CacheService;
+    membersKvCache: CacheService;
     attendanceKvCache: CacheService;
 
     // Infrastructure — D1
