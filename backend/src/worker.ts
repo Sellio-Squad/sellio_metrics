@@ -37,8 +37,11 @@ import type { AwilixContainer } from "awilix";
 import type { Cradle } from "./core/container";
 import type { KVNamespace } from "./infra/cache/cache.service";
 import type { D1Database } from "./infra/database/d1.service";
-import { EventType } from "./core/event-types";
-import type { ScoringEvent } from "./core/event-types";
+import { EventType, type ScoringEvent } from "./core/event-types";
+import { ReposService } from "./modules/repos/repos.service";
+import { PrFetcherService } from "./modules/metrics/pr-fetcher.service";
+import { OpenPrsService } from "./modules/prs/open-prs.service";
+import { EventsService } from "./modules/events/events.service";
 
 // ─── Worker Env Bindings ────────────────────────────────────
 
@@ -163,6 +166,7 @@ function getContainer(
 
                 // Metrics: three focused services
                 prFetcherService: asClass(PrFetcherService).singleton(),
+                openPrsService: asClass(OpenPrsService).singleton(),
 
                 // Event-Driven Scoring
                 eventsService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
@@ -248,6 +252,17 @@ async function handleRepos(cradle: Cradle, url: URL): Promise<Response> {
     const org = url.searchParams.get("org") || cradle.env.org;
     const repos = await cradle.reposService.listByOrg(org);
     return json({ org, count: repos.length, repos });
+}
+
+async function handleOpenPrs(cradle: Cradle): Promise<Response> {
+    const org = cradle.env.org;
+    try {
+        const prs = await cradle.openPrsService.fetchOpenPrs(org);
+        return json({ data: prs });
+    } catch (e: any) {
+        cradle.logger.error({ err: e }, "Failed to fetch open PRs");
+        return err(e.message, 500);
+    }
 }
 
 // ─── GitHub Sync (Backfill) ───────────────────────────────
@@ -845,6 +860,7 @@ function matchRoute(p: string): { handler: string; params?: Record<string, strin
     if (p === "/api/ping") return { handler: "ping" };
     if (p === "/api/health") return { handler: "health" };
     if (p === "/api/repos") return { handler: "repos" };
+    if (p === "/api/prs") return { handler: "openPrs" };
     if (p === "/api/webhooks/github") return { handler: "webhook" };
     if (p === "/api/debug/auth") return { handler: "debugAuth" };
     if (p === "/api/debug/meet-subscribe") return { handler: "debugMeetSubscribe" };
@@ -908,6 +924,7 @@ export default {
             switch (route.handler) {
                 case "health": return handleHealth(cradle);
                 case "repos": return handleRepos(cradle, url);
+                case "openPrs": return handleOpenPrs(cradle);
                 case "syncGithub":
                     if (request.method !== "POST") return err("Method Not Allowed", 405);
                     return handleGitHubSync(cradle, request);

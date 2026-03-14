@@ -8,4 +8,6 @@ abstract class PrRepository {
     required String repo,
     String state = 'all',
   });
+
+  Future<List<PrEntity>> fetchOpenPrs({required String org});
 }
