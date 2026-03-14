@@ -11,7 +11,7 @@ import '../../core/logging/app_logger.dart';
 // ─── Abstract Interface ──────────────────────────────────────
 
 abstract class MembersDataSource {
-  Future<List<dynamic>> fetchMembersStatus(String owner, String repo);
+  Future<List<dynamic>> fetchMembersStatus();
 }
 
 // ─── Remote Implementation ───────────────────────────────────
@@ -23,10 +23,10 @@ class RemoteMembersDataSource implements MembersDataSource {
   RemoteMembersDataSource({required this.baseUrl, http.Client? client})
     : _client = client ?? http.Client();
 
-  /// GET /api/metrics/:owner/:repo/members
+  /// GET /api/members
   @override
-  Future<List<dynamic>> fetchMembersStatus(String owner, String repo) async {
-    final url = Uri.parse('$baseUrl/api/metrics/$owner/$repo/members');
+  Future<List<dynamic>> fetchMembersStatus() async {
+    final url = Uri.parse('$baseUrl/api/members');
     sl.get<AppLogger>().network('MembersDataSource', 'GET', url);
 
     final response = await _client.get(url);

@@ -370,11 +370,19 @@ async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Respo
 
 async function handleWebhook(cradle: Cradle, request: Request): Promise<Response> {
     const event = request.headers.get("x-github-event");
-    const RELEVANT = new Set(["pull_request", "pull_request_review", "issue_comment", "pull_request_review_comment"]);
+    const RELEVANT = new Set(["pull_request", "pull_request_review", "issue_comment", "pull_request_review_comment", "organization", "member", "membership"]);
 
     if (!event || !RELEVANT.has(event)) return json({ ignored: true, event });
 
     const payload = await request.json() as any;
+
+    if (["organization", "member", "membership"].includes(event)) {
+        const org = payload.organization?.login || cradle.env.org;
+        await cradle.cacheService.del(`github:org-members:${org}`);
+        cradle.logger.info({ org, event }, "Invalidated org-members cache due to webhook");
+        return json({ ok: true, event, cache_invalidated: true });
+    }
+
     const repo = payload?.repository;
     if (!repo?.full_name) return json({ ignored: true, reason: "no repo" });
 
@@ -499,7 +507,69 @@ async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Respon
     const limit = parseInt(url.searchParams.get("limit") || "10", 10);
 
     const result = await cradle.scoreAggregationService.getLeaderboard(since, until, limit);
+
+    try {
+        const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
+        const avatarMap = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
+        
+        result.entries = result.entries.map((entry: any) => ({
+            ...entry,
+            avatarUrl: avatarMap.get(entry.developer_id) || `https://github.com/${entry.developer_id}.png`
+        }));
+    } catch (e: any) {
+        cradle.logger.warn({ err: e.message }, "Failed to fetch avatarUrls for leaderboard");
+    }
+
     return json(result);
+}
+
+// ─── Members Handler ────────────────────────────────────────
+
+async function handleMembers(cradle: Cradle): Promise<Response> {
+    try {
+        const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
+        
+        // 30 day window for activity
+        const sinceDate = new Date();
+        sinceDate.setDate(sinceDate.getDate() - 30);
+        const since = sinceDate.toISOString();
+
+        // Get recent events for activity statuses
+        const events = await cradle.eventsService.listEvents({ since, limit: 10000 });
+        
+        const activityMap = new Map<string, string>();
+        for (const e of events) {
+            const existing = activityMap.get(e.developer_id);
+            if (!existing || new Date(e.event_timestamp) > new Date(existing)) {
+                activityMap.set(e.developer_id, e.event_timestamp);
+            }
+        }
+
+        const mappedMembers = orgMembers.map((m: any) => {
+            const lastActive = activityMap.get(m.login) || null;
+            return {
+                developer: m.login,
+                avatarUrl: m.avatar_url,
+                isActive: !!lastActive,
+                lastActiveDate: lastActive
+            };
+        });
+
+        // Sort: Active first, then by last active date desc, then by name
+        mappedMembers.sort((a: any, b: any) => {
+            if (a.isActive && !b.isActive) return -1;
+            if (!a.isActive && b.isActive) return 1;
+            if (a.isActive && b.isActive) {
+                return new Date(b.lastActiveDate!).getTime() - new Date(a.lastActiveDate!).getTime();
+            }
+            return a.developer.localeCompare(b.developer);
+        });
+
+        return json({ data: mappedMembers, members: mappedMembers });
+    } catch (e: any) {
+        cradle.logger.error({ err: e.message }, "Failed to fetch members status");
+        return err("Failed to fetch developers.", 500);
+    }
 }
 
 // ─── Events Handler ─────────────────────────────────────────
@@ -789,6 +859,7 @@ function matchRoute(p: string): { handler: string; params?: Record<string, strin
     // New event-driven routes
     if (p === "/api/points/rules") return { handler: "pointsRules" };
     if (p === "/api/scores/leaderboard") return { handler: "scoresLeaderboard" };
+    if (p === "/api/members") return { handler: "members" };
     if (p === "/api/events") return { handler: "events" };
     if (p === "/api/attendance/check-in") return { handler: "checkIn" };
     if (p === "/api/attendance/check-out") return { handler: "checkOut" };
@@ -855,6 +926,9 @@ export default {
                 case "scoresLeaderboard":
                     if (request.method !== "GET") return err("Method Not Allowed", 405);
                     return handleScoresLeaderboard(cradle, url);
+                case "members":
+                    if (request.method !== "GET") return err("Method Not Allowed", 405);
+                    return handleMembers(cradle);
                 case "events":
                     if (request.method !== "GET") return err("Method Not Allowed", 405);
                     return handleListEvents(cradle, url);

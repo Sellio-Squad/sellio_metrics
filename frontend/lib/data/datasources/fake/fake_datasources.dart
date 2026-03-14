@@ -111,7 +111,7 @@ class FakeMembersDataSource implements MembersDataSource {
   ];
 
   @override
-  Future<List<dynamic>> fetchMembersStatus(String owner, String repo) async {
+  Future<List<dynamic>> fetchMembersStatus() async {
     await Future.delayed(const Duration(milliseconds: 250));
     return _members
         .map(

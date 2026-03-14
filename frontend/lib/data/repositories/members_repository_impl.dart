@@ -16,11 +16,8 @@ class MembersRepositoryImpl implements MembersRepository {
     : _dataSource = dataSource;
 
   @override
-  Future<List<MemberStatusEntity>> getMembersStatus(
-    String owner,
-    String repo,
-  ) async {
-    final raw = await _dataSource.fetchMembersStatus(owner, repo);
+  Future<List<MemberStatusEntity>> getMembersStatus() async {
+    final raw = await _dataSource.fetchMembersStatus();
     return raw.map(_toEntity).toList();
   }
 

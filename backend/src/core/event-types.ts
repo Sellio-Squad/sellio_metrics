@@ -69,6 +69,7 @@ export interface AggregatedLeaderboardEntry {
     developer_id: string;
     total_points: number;
     event_counts: Record<string, number>;
+    avatarUrl?: string;
 }
 
 // ─── Rule Change Log Entry ──────────────────────────────────
