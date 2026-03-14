@@ -181,22 +181,7 @@ function getContainer(
                     new AttendanceService({ d1Service, attendanceKvCache, eventsService, logger }),
                 ).singleton(),
 
-                // Event-Driven Scoring
-                eventsService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
-                    new EventsService({ d1Service, scoresKvCache, logger }),
-                ).singleton(),
 
-                pointsRulesService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
-                    new PointsRulesService({ d1Service, scoresKvCache, logger }),
-                ).singleton(),
-
-                scoreAggregationService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
-                    new ScoreAggregationService({ d1Service, scoresKvCache, logger }),
-                ).singleton(),
-
-                attendanceService: asFunction(({ d1Service, attendanceKvCache, eventsService, logger }: Cradle) =>
-                    new AttendanceService({ d1Service, attendanceKvCache, eventsService, logger }),
-                ).singleton(),
 
                 // Google Meet
                 googleMeetClient: asFunction(({ logger, env, cacheService }: Cradle) =>
