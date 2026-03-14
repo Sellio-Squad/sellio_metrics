@@ -40,12 +40,7 @@ class MemberProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final parts = repoFullNames.first.split('/');
-      if (parts.length != 2) {
-        _error = 'Invalid repo format: ${repoFullNames.first}';
-        return;
-      }
-      _memberStatuses = await _repository.getMembersStatus(parts[0], parts[1]);
+      _memberStatuses = await _repository.getMembersStatus();
     } catch (e, stack) {
       sl.get<AppLogger>().error('MemberProvider', 'Error: $e', stack);
       _error = e.toString();

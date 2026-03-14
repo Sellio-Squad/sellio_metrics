@@ -58,7 +58,8 @@ export class CachedGitHubClient {
     }
 
     /**
-     * List all members of an organization — cached for 24 hours (single write).
+     * List all members of an organization — cached permanently.
+     * Webhook handler flushes this cache on changes.
      */
     async listOrgMembers(org: string): Promise<any[]> {
         const cacheKey = `github:org-members:${org}`;
@@ -68,9 +69,9 @@ export class CachedGitHubClient {
         await this.guard.checkAndWait();
         const members = await this.github.paginate(
             this.github.rest.orgs.listMembers,
-            { org, per_page: 100 }
+            { org, filter: "all", role: "all", per_page: 100 }
         );
-        await this.cache.set(cacheKey, members, 24 * 60 * 60);
+        await this.cache.set(cacheKey, members);
         return members;
     }
 
