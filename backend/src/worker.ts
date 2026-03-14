@@ -528,29 +528,24 @@ async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Respon
 async function handleMembers(cradle: Cradle): Promise<Response> {
     try {
         const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
-        
-        // 30 day window for activity
+        // 30 day window for strictly active vs inactive flag
         const sinceDate = new Date();
         sinceDate.setDate(sinceDate.getDate() - 30);
-        const since = sinceDate.toISOString();
+        const thirtyDaysAgo = sinceDate.getTime();
 
-        // Get recent events for activity statuses
-        const events = await cradle.eventsService.listEvents({ since, limit: 10000 });
-        
-        const activityMap = new Map<string, string>();
-        for (const e of events) {
-            const existing = activityMap.get(e.developer_id);
-            if (!existing || new Date(e.event_timestamp) > new Date(existing)) {
-                activityMap.set(e.developer_id, e.event_timestamp);
-            }
-        }
+        // Get absolute last active dates directly from D1 using optimized query
+        const activityMap = await cradle.eventsService.getLastActiveDates();
 
         const mappedMembers = orgMembers.map((m: any) => {
-            const lastActive = activityMap.get(m.login) || null;
+            // Be case-insensitive during lookups just in case
+            const developerIdMatch = Object.keys(activityMap).find((k) => k.toLowerCase() === m.login.toLowerCase());
+            const lastActive = developerIdMatch ? activityMap[developerIdMatch] : null;
+            const isActive = !!lastActive && new Date(lastActive).getTime() >= thirtyDaysAgo;
+            
             return {
                 developer: m.login,
                 avatarUrl: m.avatar_url,
-                isActive: !!lastActive,
+                isActive,
                 lastActiveDate: lastActive
             };
         });

@@ -101,6 +101,13 @@ export class EventsService {
         return this.d1.queryEvents(filters);
     }
 
+    /**
+     * Get real last active dates for all developers from D1.
+     */
+    async getLastActiveDates(): Promise<Record<string, string>> {
+        return this.d1.getLastActiveDates();
+    }
+
     // ─── Private ────────────────────────────────────────────
 
     /**

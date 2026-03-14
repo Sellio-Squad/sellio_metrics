@@ -197,6 +197,26 @@ export class D1Service {
         return result.results;
     }
 
+    /**
+     * Get the most recent event timestamp for all developers.
+     */
+    async getLastActiveDates(): Promise<Record<string, string>> {
+        if (!this.db) return {};
+
+        const result = await this.db.prepare(
+            `SELECT developer_id, MAX(event_timestamp) as last_active
+             FROM events
+             GROUP BY developer_id`
+        ).all();
+
+        const map: Record<string, string> = {};
+        for (const row of result.results) {
+            const r = row as any;
+            map[r.developer_id as string] = r.last_active as string;
+        }
+        return map;
+    }
+
     // ─── Leaderboard Aggregation ────────────────────────────
 
     /**
