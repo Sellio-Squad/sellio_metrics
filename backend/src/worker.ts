@@ -55,7 +55,7 @@ interface WorkerEnv {
     GOOGLE_PUBSUB_TOPIC?: string;
     CACHE: KVNamespace;
     SCORES_KV: KVNamespace;
-    DEVELOPERS_KV: KVNamespace;
+    MEMBERS_KV: KVNamespace;
     ATTENDANCE_KV: KVNamespace;
     DB: D1Database;
 }
@@ -87,7 +87,7 @@ let containerPromise: Promise<AwilixContainer<Cradle>> | null = null;
 function getContainer(
     kvNamespace: KVNamespace | null,
     scoresKv: KVNamespace | null,
-    developersKv: KVNamespace | null,
+    membersKv: KVNamespace | null,
     attendanceKv: KVNamespace | null,
     d1Database: D1Database | null,
 ): Promise<AwilixContainer<Cradle>> {
@@ -135,8 +135,8 @@ function getContainer(
                     new CacheService({ kvNamespace: scoresKv, logger }),
                 ).singleton(),
 
-                developersKvCache: asFunction(({ logger }: Cradle) =>
-                    new CacheService({ kvNamespace: developersKv, logger }),
+                membersKvCache: asFunction(({ logger }: Cradle) =>
+                    new CacheService({ kvNamespace: membersKv, logger }),
                 ).singleton(),
 
                 attendanceKvCache: asFunction(({ logger }: Cradle) =>
@@ -152,8 +152,8 @@ function getContainer(
                     new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold }),
                 ).singleton(),
 
-                cachedGithubClient: asFunction(({ githubClient, cacheService, rateLimitGuard, logger }: Cradle) =>
-                    new CachedGitHubClient({ githubClient, cacheService, rateLimitGuard, logger }),
+                cachedGithubClient: asFunction(({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }: Cradle) =>
+                    new CachedGitHubClient({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }),
                 ).singleton(),
 
                 reposService: asClass(ReposService).singleton(),
@@ -378,7 +378,7 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
 
     if (["organization", "member", "membership"].includes(event)) {
         const org = payload.organization?.login || cradle.env.org;
-        await cradle.cacheService.del(`github:org-members:${org}`);
+        await cradle.membersKvCache.del(`github:org-members:${org}`);
         cradle.logger.info({ org, event }, "Invalidated org-members cache due to webhook");
         return json({ ok: true, event, cache_invalidated: true });
     }
@@ -696,7 +696,7 @@ async function handleDebugCacheQuota(cradle: Cradle): Promise<Response> {
     const [owner, repoName] = defaultRepo.split("/");
     const [repos, orgMembers, token] = await Promise.all([
         cradle.cacheService.get<any>(`github:repos:${cradle.env.org}`),
-        cradle.cacheService.get<any>(`github:org-members:${cradle.env.org}`),
+        cradle.membersKvCache.get<any>(`github:org-members:${cradle.env.org}`),
         cradle.cacheService.get<any>("google_oauth_tokens"),
     ]);
 
@@ -896,7 +896,7 @@ export default {
             const container = await getContainer(
                 workerEnv.CACHE || null,
                 workerEnv.SCORES_KV || null,
-                workerEnv.DEVELOPERS_KV || null,
+                workerEnv.MEMBERS_KV || null,
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB || null,
             );
@@ -972,7 +972,7 @@ export default {
             const container = await getContainer(
                 workerEnv.CACHE || null,
                 workerEnv.SCORES_KV || null,
-                workerEnv.DEVELOPERS_KV || null,
+                workerEnv.MEMBERS_KV || null,
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB || null,
             );

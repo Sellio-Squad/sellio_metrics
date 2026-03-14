@@ -22,7 +22,7 @@ GOOGLE_PUBSUB_TOPIC = "projects/meet-test-488313/topics/meet-events-topic"
 # After first deploy, create namespaces via:
 #   npx wrangler kv namespace create CACHE
 #   npx wrangler kv namespace create SCORES_KV
-#   npx wrangler kv namespace create DEVELOPERS_KV
+#   npx wrangler kv namespace create MEMBERS_KV
 #   npx wrangler kv namespace create ATTENDANCE_KV
 # Then paste the generated IDs below.
 
@@ -35,7 +35,7 @@ binding = "SCORES_KV"
 id = "57a28a5405444d7f90f96450936f0252"
 
 [[kv_namespaces]]
-binding = "DEVELOPERS_KV"
+binding = "MEMBERS_KV"
 id = "1b6a477ed9874ac4be286cef282829b8"
 
 [[kv_namespaces]]
