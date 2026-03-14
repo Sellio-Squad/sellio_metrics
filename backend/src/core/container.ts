@@ -11,6 +11,7 @@ import type { RateLimitGuard } from "../infra/github/rate-limit-guard";
 import type { CachedGitHubClient } from "../infra/github/cached-github.client";
 import type { ReposService } from "../modules/repos/repos.service";
 import type { PrFetcherService } from "../modules/metrics/pr-fetcher.service";
+import type { OpenPrsService } from "../modules/prs/open-prs.service";
 import type { GoogleMeetClient } from "../infra/google/google-meet.client";
 import type { WorkspaceEventsClient } from "../infra/google/workspace-events.client";
 import type { MeetingsService } from "../modules/meetings/meetings.service";
@@ -49,6 +50,9 @@ export interface Cradle {
 
     // Metrics
     prFetcherService: PrFetcherService;
+
+    // PRs
+    openPrsService: OpenPrsService;
 
     // Event-Driven Scoring
     eventsService: EventsService;

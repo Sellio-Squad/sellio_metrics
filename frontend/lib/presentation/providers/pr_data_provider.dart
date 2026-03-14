@@ -92,7 +92,7 @@ class PrDataProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Load only open PRs (state=open) for the Open PRs page.
+  /// Load only open PRs (state=open) directly from the org-wide Open PRs endpoint.
   Future<void> loadOpenPrs({List<RepoInfo>? repos}) async {
     final rs = repos ?? _loadedRepos;
     if (rs.isEmpty) return;
@@ -101,15 +101,14 @@ class PrDataProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final List<PrEntity> aggregated = [];
-      for (final repo in rs) {
-        final parts = repo.fullName.split('/');
-        final owner = parts.isNotEmpty ? parts.first : '';
-        final repoName = repo.name;
-        final prs = await _repository.fetchPrs(org: owner, repo: repoName, state: 'open');
-        aggregated.addAll(prs);
-      }
-      _openPrs = aggregated;
+      final parts = rs.first.fullName.split('/');
+      final owner = parts.isNotEmpty ? parts.first : '';
+      if (owner.isEmpty) throw Exception("Could not determine organization name.");
+
+      // Fetch org-wide open PRs directly, no iteration needed.
+      final prs = await _repository.fetchOpenPrs(org: owner);
+      
+      _openPrs = prs;
       _openPrsStatus = DataLoadingStatus.loaded;
     } catch (e, stack) {
       _openPrsStatus = DataLoadingStatus.error;
