@@ -29,4 +29,19 @@ class PrRepositoryImpl implements PrRepository {
         .whereType<PrEntity>()
         .toList();
   }
+
+  @override
+  Future<List<PrEntity>> fetchOpenPrs({required String org}) async {
+    final rawData = await remoteDataSource.fetchOpenPrs(org: org);
+    return rawData
+        .map((json) {
+      try {
+        return PrEntity.fromJson(json as Map<String, dynamic>);
+      } catch (e) {
+        return null; // Skip invalid entries
+      }
+    })
+        .whereType<PrEntity>()
+        .toList();
+  }
 }

@@ -97,6 +97,18 @@ export class CachedGitHubClient {
     }
 
     /**
+     * Search all open PRs for an entire organization.
+     */
+    async searchOpenPrsForOrg(org: string, perPage: number = 100): Promise<any[]> {
+        await this.guard.checkAndWait();
+        const results = await this.github.paginate(
+            this.github.rest.search.issuesAndPullRequests,
+            { q: `is:pr is:open org:${org}`, per_page: perPage }
+        );
+        return results;
+    }
+
+    /**
      * Get full PR details — NO intermediate cache.
      */
     async getPull(owner: string, repo: string, pullNumber: number, _isOpen: boolean): Promise<any> {
