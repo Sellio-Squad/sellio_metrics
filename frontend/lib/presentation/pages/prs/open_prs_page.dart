@@ -32,12 +32,9 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final settings = context.read<AppSettingsProvider>();
       final prData = context.read<PrDataProvider>();
       // Load open PRs for the list (state=open — org-wide, fast API)
-      prData.loadOpenPrs(repos: settings.availableRepos.isNotEmpty
-          ? settings.availableRepos
-          : settings.selectedRepos);
+      prData.loadOpenPrs();
     });
   }
 
@@ -76,10 +73,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
         if (prData.openPrsStatus == DataLoadingStatus.error && openPrs.isEmpty) {
           return ErrorScreen(
             onRetry: () {
-              final settings = context.read<AppSettingsProvider>();
-              prData.loadOpenPrs(repos: settings.availableRepos.isNotEmpty
-                  ? settings.availableRepos
-                  : settings.selectedRepos);
+              prData.loadOpenPrs();
             },
           );
         }

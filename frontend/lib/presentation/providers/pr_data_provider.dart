@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/entities/pr_entity.dart';
-import '../../domain/entities/repo_info.dart';
 import '../../domain/repositories/pr_repository.dart';
+import '../../core/constants/app_constants.dart';
 import '../../core/di/service_locator.dart';
 import '../../core/logging/app_logger.dart';
 
@@ -13,9 +13,6 @@ class PrDataProvider extends ChangeNotifier {
 
   PrDataProvider({required PrRepository repository})
     : _repository = repository;
-
-  // Current repos that have been selected
-  List<RepoInfo> _selectedRepos = [];
   
   // Open PRs specifically fetched from the new endpoint
   List<PrEntity> _openPrs = [];
@@ -25,22 +22,12 @@ class PrDataProvider extends ChangeNotifier {
   DataLoadingStatus get openPrsStatus => _openPrsStatus;
 
   /// Load only open PRs (state=open) directly from the org-wide Open PRs endpoint.
-  Future<void> loadOpenPrs({List<RepoInfo>? repos}) async {
-    final rs = repos ?? _selectedRepos;
-    if (rs.isEmpty) {
-      sl.get<AppLogger>().info('PrDataProvider', 'No repos set. Waiting for selection.');
-      return;
-    }
-
-    _selectedRepos = List.from(rs);
-
+  Future<void> loadOpenPrs() async {
     _openPrsStatus = DataLoadingStatus.loading;
     notifyListeners();
 
     try {
-      final parts = rs.first.fullName.split('/');
-      final owner = parts.isNotEmpty ? parts.first : '';
-      if (owner.isEmpty) throw Exception("Could not determine organization name.");
+      final owner = ApiConfig.defaultOrg;
 
       // Fetch org-wide open PRs directly, no iteration needed.
       final prs = await _repository.fetchOpenPrs(org: owner);
