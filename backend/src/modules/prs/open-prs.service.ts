@@ -10,6 +10,7 @@ import type { RateLimitGuard } from "../../infra/github/rate-limit-guard";
 import type { Logger } from "../../core/logger";
 import type { Env } from "../../config/env";
 import type { LogsService } from "../logs/logs.service";
+import type { CacheService } from "../../infra/cache/cache.service";
 import type { PrMetric } from "../../core/types";
 import { GitHubApiError } from "../../core/errors";
 import { mapToPrMetric } from "../metrics/metrics.mapper";
@@ -22,6 +23,7 @@ export class OpenPrsService {
     private readonly guard: RateLimitGuard;
     private readonly logger: Logger;
     private readonly logsService: LogsService;
+    private readonly cacheService: CacheService;
     private readonly requiredApprovals: number;
 
     constructor({
@@ -29,18 +31,21 @@ export class OpenPrsService {
         rateLimitGuard,
         logger,
         logsService,
+        cacheService,
         env,
     }: {
         cachedGithubClient: CachedGitHubClient;
         rateLimitGuard: RateLimitGuard;
         logger: Logger;
         logsService: LogsService;
+        cacheService: CacheService;
         env: Env;
     }) {
         this.github = cachedGithubClient;
         this.guard = rateLimitGuard;
         this.logger = logger.child({ module: "open-prs" });
         this.logsService = logsService;
+        this.cacheService = cacheService;
         this.requiredApprovals = env.requiredApprovals;
     }
 
@@ -48,9 +53,17 @@ export class OpenPrsService {
      * Search all open PRs in the organization and return fully-enriched metrics.
      */
     async fetchOpenPrs(org: string, perPage = 100): Promise<PrMetric[]> {
-        this.logger.info({ org }, "Searching open PRs from GitHub");
-
+        const cacheKey = `github:open_prs:${org}`;
+        
         try {
+            const cached = await this.cacheService.get<PrMetric[]>(cacheKey);
+            if (cached) {
+                this.logger.info({ org }, "Returning open PRs from cache");
+                return cached.data;
+            }
+
+            this.logger.info({ org }, "Searching open PRs from GitHub");
+
             const searchResults = await this.github.searchOpenPrsForOrg(org, perPage);
             this.logger.info({ count: searchResults.length }, "Open PRs found, enriching…");
 
@@ -61,11 +74,23 @@ export class OpenPrsService {
                 { org, count: searchResults.length }
             );
 
-            return await this.enrichInBatches(searchResults);
+            const enriched = await this.enrichInBatches(searchResults);
+            
+            // Cache for a long duration, let webhooks invalidate it
+            await this.cacheService.set(cacheKey, enriched, 24 * 60 * 60); // 24 hours
+            return enriched;
         } catch (err: any) {
             if (err instanceof GitHubApiError) throw err;
             throw new GitHubApiError(`Failed to fetch open PRs for ${org}: ${err.message}`);
         }
+    }
+
+    /**
+     * Invalidate the open PRs cache for the organization.
+     */
+    async invalidateCache(org: string): Promise<void> {
+        await this.cacheService.del(`github:open_prs:${org}`);
+        this.logger.info({ org }, "Invalidated open PRs cache");
     }
 
     // ─── Private ─────────────────────────────────────────────
