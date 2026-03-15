@@ -34,11 +34,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
       if (!mounted) return;
       final settings = context.read<AppSettingsProvider>();
       final prData = context.read<PrDataProvider>();
-      // Load all PRs for analytics KPIs (state=all)
-      prData.ensureDataLoaded(settings.availableRepos.isNotEmpty
-          ? settings.availableRepos
-          : settings.selectedRepos);
-      // Load open PRs for the list (state=open — small, fast)
+      // Load open PRs for the list (state=open — org-wide, fast API)
       prData.loadOpenPrs(repos: settings.availableRepos.isNotEmpty
           ? settings.availableRepos
           : settings.selectedRepos);
@@ -53,10 +49,10 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
       builder: (context, prData, filter, analytics, _) {
         final filterService = sl.get<FilterService>();
 
-        // All PRs pipeline (for analytics KPIs)
+        // Analytics pipeline uses open PRs only
         final weekFiltered = filterService.filterByWeek(
           filterService.filterByDateRange(
-            prData.allPrs,
+            prData.openPrs,
             filter.startDate,
             filter.endDate,
           ),
@@ -72,10 +68,9 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
               pr.creator.login.toLowerCase().contains(term);
         }).toList();
 
-        // Show loading only if both are still loading and no data yet
-        if (prData.status == DataLoadingStatus.loading &&
-            prData.openPrsStatus == DataLoadingStatus.loading &&
-            prData.allPrs.isEmpty) {
+        // Show loading only if open PRs are still loading
+        if (prData.openPrsStatus == DataLoadingStatus.loading &&
+            prData.openPrs.isEmpty) {
           return const LoadingScreen();
         }
         if (prData.openPrsStatus == DataLoadingStatus.error && openPrs.isEmpty) {
