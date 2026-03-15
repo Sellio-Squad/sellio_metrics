@@ -472,44 +472,20 @@
             ]
         },
         {
-            "name": "Debug",
+            "name": "Pull Requests",
+            "description": "Interact with organization pull requests directly from GitHub.",
             "item": [
                 {
-                    "name": "Debug Auth",
+                    "name": "Get Open PRs",
                     "request": {
                         "method": "GET",
                         "header": [],
                         "url": {
-                            "raw": "{{baseUrl}}/api/debug/auth",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "debug",
-                                "auth"
-                            ]
-                        }
-                    },
-                    "response": []
-                },
-                {
-                    "name": "Debug Cache Quota",
-                    "request": {
-                        "method": "GET",
-                        "header": [],
-                        "url": {
-                            "raw": "{{baseUrl}}/api/debug/cache-quota",
-                            "host": [
-                                "{{baseUrl}}"
-                            ],
-                            "path": [
-                                "api",
-                                "debug",
-                                "cache-quota"
-                            ]
+                            "raw": "{{baseUrl}}/api/prs",
+                            "host": ["{{baseUrl}}"],
+                            "path": ["api", "prs"]
                         },
-                        "description": "Shows KV cache status, D1 availability, and write quota information."
+                        "description": "Returns all open pull requests across the entire organization using the GitHub Search API."
                     },
                     "response": []
                 }

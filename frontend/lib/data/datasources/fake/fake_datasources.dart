@@ -214,18 +214,6 @@ class FakePrDataSource implements PrDataSource {
   ];
 
   @override
-  Future<List<dynamic>> fetchPrs({required String org, required String repo, String state = 'all'}) async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (state == 'open') {
-      return _prs.where((pr) => pr['status'] == 'pending' || pr['status'] == 'approved').toList();
-    }
-    if (state == 'closed') {
-      return _prs.where((pr) => pr['status'] == 'merged' || pr['status'] == 'closed').toList();
-    }
-    return _prs;
-  }
-
-  @override
   Future<List<dynamic>> fetchOpenPrs({required String org}) async {
     await Future.delayed(const Duration(milliseconds: 300));
     return _prs.where((pr) => pr['status'] == 'pending' || pr['status'] == 'approved').toList();

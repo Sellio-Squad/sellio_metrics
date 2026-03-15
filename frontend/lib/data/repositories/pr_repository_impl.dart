@@ -11,24 +11,7 @@ class PrRepositoryImpl implements PrRepository {
     required this.remoteDataSource,
   });
 
-  @override
-  Future<List<PrEntity>> fetchPrs({
-    required String org,
-    required String repo,
-    String state = 'all',
-  }) async {
-    final rawData = await remoteDataSource.fetchPrs(org: org, repo: repo, state: state);
-    return rawData
-        .map((json) {
-      try {
-        return PrEntity.fromJson(json as Map<String, dynamic>);
-      } catch (e) {
-        return null; // Skip invalid entries
-      }
-    })
-        .whereType<PrEntity>()
-        .toList();
-  }
+
 
   @override
   Future<List<PrEntity>> fetchOpenPrs({required String org}) async {
