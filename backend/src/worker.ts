@@ -401,8 +401,11 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
     const repo = payload?.repository;
     if (!repo?.full_name) return json({ ignored: true, reason: "no repo" });
 
-    // Invalidate caches is now handled by processing the new events!
-    // ResultCacheService is no longer used, we process events in D1 instead.
+    // Invalidate open PRs cache immediately (it's completely dynamic)
+    const org = repo.owner?.login || repo.full_name.split("/")[0] || cradle.env.org;
+    cradle.openPrsService.invalidateCache(org).catch((e: any) => 
+        cradle.logger.error({ err: e.message, org }, "Failed to invalidate open-prs cache in webhook")
+    );
 
     // Ingest events into D1 (event-driven scoring)
     const events: ScoringEvent[] = [];
