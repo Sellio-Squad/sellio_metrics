@@ -6,7 +6,8 @@ library;
 
 import 'dart:async';
 import 'dart:convert';
-import 'dart:html' as html;
+import 'dart:js_interop';
+import 'package:web/web.dart' as web;
 import 'package:http/http.dart' as http;
 import '../../core/di/service_locator.dart';
 import '../../core/logging/app_logger.dart';
@@ -36,7 +37,7 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
   final String baseUrl;
   final http.Client _client;
 
-  html.EventSource? _eventSource;
+  web.EventSource? _eventSource;
   StreamController<Map<String, dynamic>>? _streamController;
 
   RemoteMeetEventsDataSource({required this.baseUrl, http.Client? client})
@@ -112,18 +113,21 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
     final sseUri = Uri.parse(sseUrl);
     sl.get<AppLogger>().network('MeetEventsDataSource', 'SSE-CONNECT', sseUri);
 
-    _eventSource = html.EventSource(sseUrl);
+    _eventSource = web.EventSource(sseUrl);
 
-    _eventSource!.addEventListener('meet-event', (html.Event event) {
-      final messageEvent = event as html.MessageEvent;
-      try {
-        final data = json.decode(messageEvent.data as String)
-            as Map<String, dynamic>;
-        _streamController?.add(data);
-      } catch (e, stack) {
-        sl.get<AppLogger>().error('MeetEventsDataSource', 'SSE parse error: $e', stack);
-      }
-    });
+    _eventSource!.addEventListener(
+      'meet-event',
+      ((web.Event event) {
+        final messageEvent = event as web.MessageEvent;
+        try {
+          final dataStr = (messageEvent.data as JSString).toDart;
+          final data = json.decode(dataStr) as Map<String, dynamic>;
+          _streamController?.add(data);
+        } catch (e, stack) {
+          sl.get<AppLogger>().error('MeetEventsDataSource', 'SSE parse error: $e', stack);
+        }
+      }).toJS,
+    );
 
     _eventSource!.onOpen.listen((_) {
       sl.get<AppLogger>().info('MeetEventsDataSource', 'SSE connected');

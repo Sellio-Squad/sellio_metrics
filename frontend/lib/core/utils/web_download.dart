@@ -5,7 +5,7 @@ library;
 
 import 'dart:convert';
 // ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter
-import 'dart:html' as html;
+import 'package:web/web.dart' as web;
 
 class WebDownload {
   /// Triggers a browser file download using an invisible HTML anchor element.
@@ -15,12 +15,13 @@ class WebDownload {
     final uri = 'data:$mimeType;base64,$base64Content';
 
     // Create invisible anchor tag to trigger download
-    final anchor = html.AnchorElement(href: uri)
+    final anchor = web.HTMLAnchorElement()
+      ..href = uri
       ..target = 'blank'
       ..download = filename;
 
     // Add, click, remove to avoid DOM pollution
-    html.document.body?.append(anchor);
+    web.document.body?.append(anchor);
     anchor.click();
     anchor.remove();
   }

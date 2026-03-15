@@ -224,5 +224,11 @@ class FakePrDataSource implements PrDataSource {
     }
     return _prs;
   }
+
+  @override
+  Future<List<dynamic>> fetchOpenPrs({required String org}) async {
+    await Future.delayed(const Duration(milliseconds: 300));
+    return _prs.where((pr) => pr['status'] == 'pending' || pr['status'] == 'approved').toList();
+  }
 }
 
