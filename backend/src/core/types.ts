@@ -18,6 +18,7 @@ export interface UserInfo {
 
 export interface CommentGroup {
     author: UserInfo;
+    comments: { id: number; created_at: string }[];
     first_comment_at: string | null;
     last_comment_at: string | null;
     count: number;

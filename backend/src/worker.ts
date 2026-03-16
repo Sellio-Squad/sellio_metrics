@@ -341,14 +341,14 @@ async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Respo
                 }
 
                 for (const commentGroup of pr.comments || []) {
-                    for (let i = 0; i < commentGroup.count; i++) {
+                    for (const comment of commentGroup.comments) {
                         events.push({
-                            id: `github:comment_group:${owner}/${repoName}:${pr.pr_number}:${commentGroup.author.login}:${i}`,
+                            id: `github:comment:${repoName}:${comment.id}:${commentGroup.author.login}`,
                             developerId: commentGroup.author.login,
                             eventType: EventType.COMMENT,
                             source: "github",
                             sourceId: pr.url,
-                            eventTimestamp: commentGroup.first_comment_at || pr.opened_at,
+                            eventTimestamp: comment.created_at,
                             metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}` },
                         });
                     }
