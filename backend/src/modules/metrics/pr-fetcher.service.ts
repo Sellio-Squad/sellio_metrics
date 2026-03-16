@@ -18,7 +18,8 @@ import { GitHubApiError } from "../../core/errors";
 import { mapToPrMetric } from "./metrics.mapper";
 
 /** Batch size for parallel PR enrichment (avoids GitHub rate limits). */
-const BATCH_SIZE = 10;
+// BATCH_SIZE is no longer used, switching to sequential to avoid secondary limits
+
 
 export class PrFetcherService {
     private readonly github: CachedGitHubClient;
@@ -82,11 +83,12 @@ export class PrFetcherService {
 
     private async enrichInBatches(owner: string, repo: string, pulls: any[]): Promise<PrMetric[]> {
         const results: PrMetric[] = [];
-        for (let i = 0; i < pulls.length; i += BATCH_SIZE) {
+        for (const pr of pulls) {
             await this.guard.checkAndWait();
-            const batch = pulls.slice(i, i + BATCH_SIZE);
-            const enriched = await Promise.all(batch.map((pr) => this.enrichSingle(owner, repo, pr)));
-            results.push(...enriched);
+            const enriched = await this.enrichSingle(owner, repo, pr);
+            results.push(enriched);
+            // Small delay to prevent secondary rate limits from GitHub API
+            await new Promise((resolve) => setTimeout(resolve, 100));
         }
         return results;
     }
@@ -94,10 +96,10 @@ export class PrFetcherService {
     private async enrichSingle(owner: string, repo: string, pr: any): Promise<PrMetric> {
         const isOpen = !pr.merged_at && !pr.closed_at;
         const [fullPr, reviews, issueComments, reviewComments] = await Promise.all([
-            this.github.getPull(owner, repo, pr.number, isOpen).catch(() => pr),
-            this.github.listReviews(owner, repo, pr.number, isOpen).catch(() => []),
-            this.github.listIssueComments(owner, repo, pr.number, isOpen).catch(() => []),
-            this.github.listReviewComments(owner, repo, pr.number, isOpen).catch(() => []),
+            this.github.getPull(owner, repo, pr.number, isOpen).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "getPull failed"); return pr; }),
+            this.github.listReviews(owner, repo, pr.number, isOpen).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listReviews failed"); return []; }),
+            this.github.listIssueComments(owner, repo, pr.number, isOpen).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listIssueComments failed"); return []; }),
+            this.github.listReviewComments(owner, repo, pr.number, isOpen).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listReviewComments failed"); return []; }),
         ]);
 
         return mapToPrMetric({

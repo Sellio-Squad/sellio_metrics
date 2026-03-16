@@ -11,6 +11,7 @@ import '../../presentation/pages/about/about_page.dart';
 import '../../presentation/pages/meetings/meetings_page.dart';
 import '../../presentation/pages/setting/settings_page.dart';
 import '../../presentation/pages/logs/logs_page.dart';
+import '../../presentation/pages/observability/observability_page.dart';
 import '../../presentation/pages/dashboard_page.dart';
 import '../../presentation/providers/leaderboard_provider.dart';
 import '../../presentation/providers/member_provider.dart';
@@ -115,6 +116,17 @@ class AppNavigation {
       pageBuilder: (_) => ChangeNotifierProvider.value(
         value: sl.get<LogsProvider>()..fetchLogs(),
         child: const LogsPage(),
+      ),
+      showDateFilter: false,
+    ),
+    AppRoute(
+      id: 'observability',
+      path: '/observability',
+      icon: LucideIcons.activity,
+      labelBuilder: (l10n) => l10n.navObservability,
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: sl.get<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
+        child: const ObservabilityPage(),
       ),
       showDateFilter: false,
     ),
