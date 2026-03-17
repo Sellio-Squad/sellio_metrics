@@ -224,5 +224,21 @@
   "unableToFetchGitHubRateLimit": "Unable to fetch GitHub API rate limit.",
   "unableToFetchKvCacheQuota": "Unable to fetch KV cache quota.",
   "freeTier": "free tier",
-  "utcMidnight": "UTC midnight"
+  "utcMidnight": "UTC midnight",
+  "memberLastActive": "Last active: {date}",
+  "@memberLastActive": {
+    "placeholders": {
+      "date": { "type": "String" }
+    }
+  },
+  "memberNoActivity": "No recent activity",
+  "memberStatusActive": "Active (≤ 30 days)",
+  "memberStatusInactive": "Inactive (> 30 days)",
+  "membersSubtitle": "{active} active · {inactive} inactive",
+  "@membersSubtitle": {
+    "placeholders": {
+      "active": { "type": "int" },
+      "inactive": { "type": "int" }
+    }
+  }
 }

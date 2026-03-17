@@ -70,6 +70,7 @@ final sl = ServiceLocator();
 /// Minimal service locator / DI container.
 class ServiceLocator {
   final Map<Type, Object> _singletons = {};
+  final Map<Type, Object Function()> _lazySingletons = {};
   final Map<Type, Object Function()> _factories = {};
 
   void registerSingleton<T extends Object>(T instance) {
@@ -77,25 +78,37 @@ class ServiceLocator {
   }
 
   void registerLazySingleton<T extends Object>(T Function() factory) {
-    _factories[T] = factory;
+    _lazySingletons[T] = factory;
   }
 
+  /// Registers a factory that creates a NEW instance every time.
   void registerFactory<T extends Object>(T Function() factory) {
     _factories[T] = factory;
   }
 
   T get<T extends Object>() {
+    // 1. Eagerly registered singletons
     if (_singletons.containsKey(T)) return _singletons[T] as T;
-    if (_factories.containsKey(T)) {
-      final instance = _factories[T]!() as T;
-      _singletons[T] = instance; // cache as singleton after first creation
+
+    // 2. Lazy singletons — create once, cache forever
+    if (_lazySingletons.containsKey(T)) {
+      final instance = _lazySingletons[T]!() as T;
+      _singletons[T] = instance;
+      _lazySingletons.remove(T);
       return instance;
     }
+
+    // 3. Factories — new instance every call
+    if (_factories.containsKey(T)) {
+      return _factories[T]!() as T;
+    }
+
     throw StateError('No registration for type $T');
   }
 
   void reset() {
     _singletons.clear();
+    _lazySingletons.clear();
     _factories.clear();
   }
 }
