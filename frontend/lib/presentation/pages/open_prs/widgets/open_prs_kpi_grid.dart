@@ -46,33 +46,27 @@ class OpenPrsKpiGrid extends StatelessWidget {
               ),
               KpiCard(
                 label: l10n.kpiAvgPrSize,
-                value: kpis.avgPrSize,
                 icon: Icons.code,
                 accentColor: SellioColors.purple,
-                // Colored additions/deletions as subtitle
-                richSubtitle: TextSpan(
+                // No plain value — use richValue instead
+                richValue: TextSpan(
                   children: [
                     TextSpan(
                       text: '+${kpis.avgAdditions}',
-                      style: AppTypography.caption.copyWith(
+                      style: AppTypography.kpiValue.copyWith(
                         color: scheme.green,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
                       ),
                     ),
                     TextSpan(
                       text: ' / ',
-                      style: AppTypography.caption.copyWith(
+                      style: AppTypography.kpiValue.copyWith(
                         color: scheme.hint,
-                        fontSize: 12,
                       ),
                     ),
                     TextSpan(
                       text: '-${kpis.avgDeletions}',
-                      style: AppTypography.caption.copyWith(
+                      style: AppTypography.kpiValue.copyWith(
                         color: scheme.red,
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
                       ),
                     ),
                   ],
