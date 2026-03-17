@@ -8,7 +8,6 @@ import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../widgets/section_header.dart';
 import '../../widgets/kpi_card.dart';
 import 'bottleneck_item.dart';
-import '../../providers/app_settings_provider.dart';
 import '../../providers/pr_data_provider.dart';
 import '../../providers/filter_provider.dart';
 import '../../providers/analytics_provider.dart';

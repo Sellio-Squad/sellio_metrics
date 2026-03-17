@@ -6,7 +6,6 @@ library;
 
 import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/leaderboard_entry.dart';
-import '../../../domain/entities/member_status_entity.dart';
 import '../../../domain/entities/repo_info.dart';
 import '../leaderboard_data_source.dart';
 import '../members_data_source.dart';
@@ -90,39 +89,30 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
 
 class FakeMembersDataSource implements MembersDataSource {
   static final _members = [
-    MemberStatusEntity(
-      developer: 'alice',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/1?v=4',
-      isActive: true,
-      lastActiveDate: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-    MemberStatusEntity(
-      developer: 'bob',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/2?v=4',
-      isActive: true,
-      lastActiveDate: DateTime.now().subtract(const Duration(days: 3)),
-    ),
-    MemberStatusEntity(
-      developer: 'carol',
-      avatarUrl: 'https://avatars.githubusercontent.com/u/3?v=4',
-      isActive: false,
-      lastActiveDate: DateTime.now().subtract(const Duration(days: 35)),
-    ),
+    {
+      'developer': 'alice',
+      'avatarUrl': 'https://avatars.githubusercontent.com/u/1?v=4',
+      'isActive': true,
+      'lastActiveDate': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+    },
+    {
+      'developer': 'bob',
+      'avatarUrl': 'https://avatars.githubusercontent.com/u/2?v=4',
+      'isActive': true,
+      'lastActiveDate': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
+    },
+    {
+      'developer': 'carol',
+      'avatarUrl': 'https://avatars.githubusercontent.com/u/3?v=4',
+      'isActive': false,
+      'lastActiveDate': DateTime.now().subtract(const Duration(days: 35)).toIso8601String(),
+    },
   ];
 
   @override
   Future<List<dynamic>> fetchMembersStatus() async {
     await Future.delayed(const Duration(milliseconds: 250));
-    return _members
-        .map(
-          (m) => {
-            'developer': m.developer,
-            'avatarUrl': m.avatarUrl,
-            'isActive': m.isActive,
-            'lastActiveDate': m.lastActiveDate?.toIso8601String(),
-          },
-        )
-        .toList();
+    return _members;
   }
 }
 

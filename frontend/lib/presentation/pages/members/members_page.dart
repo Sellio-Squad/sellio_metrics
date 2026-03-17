@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../core/extensions/theme_extensions.dart';
+
 import '../../../core/theme/app_theme.dart';
-import '../../../design_system/components/s_avatar.dart';
 import '../../providers/app_settings_provider.dart';
 import '../../providers/member_provider.dart';
-import '../../../domain/entities/member_status_entity.dart';
-import 'package:intl/intl.dart';
-import '../../widgets/common/loading_screen.dart';
 import '../../widgets/common/error_screen.dart';
+import '../../widgets/common/loading_screen.dart';
+import 'widgets/members_empty_state.dart';
+import 'widgets/members_grid.dart';
+import 'widgets/members_header.dart';
 
 class MembersPage extends StatefulWidget {
   const MembersPage({super.key});
@@ -19,7 +18,10 @@ class MembersPage extends StatefulWidget {
 }
 
 class _MembersPageState extends State<MembersPage> {
-  late AppSettingsProvider _settings;
+  late final AppSettingsProvider _settings;
+
+  /// Track what repos were selected last time we loaded.
+  Set<String> _lastLoadedRepos = {};
 
   @override
   void initState() {
@@ -40,38 +42,43 @@ class _MembersPageState extends State<MembersPage> {
   }
 
   void _onSettingsChanged() {
-    if (mounted) _loadMembers();
+    if (!mounted) return;
+
+    final currentRepos = _settings.selectedRepos.map((r) => r.fullName).toSet();
+
+    // Only reload if repo selection actually changed
+    // Theme/Locale changes won't trigger network calls
+    if (!_setsEqual(currentRepos, _lastLoadedRepos)) {
+      _loadMembers();
+    }
   }
 
   void _loadMembers() {
     final repoNames = _settings.selectedRepos.map((r) => r.fullName).toList();
-    if (repoNames.isEmpty) return;
+    _lastLoadedRepos = repoNames.toSet();
+
     context.read<MemberProvider>().fetchStatuses(repoNames);
+  }
+
+  bool _setsEqual(Set<String> a, Set<String> b) {
+    if (a.length != b.length) return false;
+    return a.containsAll(b);
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<MemberProvider>(
-      builder: (context, memberProvider, _) {
-        if (memberProvider.isLoading) {
+      builder: (context, provider, _) {
+        if (provider.isLoading) {
           return const LoadingScreen();
         }
-        if (memberProvider.error != null &&
-            memberProvider.memberStatuses.isEmpty) {
+
+        if (provider.error != null && provider.memberStatuses.isEmpty) {
           return ErrorScreen(onRetry: _loadMembers);
         }
 
-        if (memberProvider.memberStatuses.isEmpty) {
-          final l10n = AppLocalizations.of(context);
-          return Center(
-            child: Text(
-              l10n.emptyData,
-              style: AppTypography.body.copyWith(
-                color: context.colors.hint,
-                fontSize: 18,
-              ),
-            ),
-          );
+        if (provider.memberStatuses.isEmpty) {
+          return const MembersEmptyState();
         }
 
         return Align(
@@ -79,110 +86,22 @@ class _MembersPageState extends State<MembersPage> {
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(AppSpacing.xl),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 800),
+              constraints: const BoxConstraints(maxWidth: 1200),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    AppLocalizations.of(context).navMembers,
-                    style: AppTypography.title.copyWith(
-                      color: context.colors.title,
-                      fontSize: 24,
-                    ),
+                  MembersHeader(
+                    activeCount: provider.activeCount,
+                    inactiveCount: provider.inactiveCount,
                   ),
                   const SizedBox(height: AppSpacing.xl),
-                  ...memberProvider.memberStatuses.map(
-                    (m) => _MemberRow(member: m),
-                  ),
+                  MembersGrid(members: provider.memberStatuses),
                 ],
               ),
             ),
           ),
         );
       },
-    );
-  }
-}
-
-class _MemberRow extends StatelessWidget {
-  final MemberStatusEntity member;
-
-  const _MemberRow({required this.member});
-
-  @override
-  Widget build(BuildContext context) {
-    final scheme = context.colors;
-
-    String dateStr = '';
-    if (member.lastActiveDate != null) {
-      final formatter = DateFormat('MMM d, yyyy');
-      dateStr = 'Last active: ${formatter.format(member.lastActiveDate!)}';
-    } else {
-      dateStr = 'No recent activity';
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.md),
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: AppRadius.mdAll,
-        ),
-        child: Opacity(
-          opacity: member.isActive ? 1.0 : 0.6,
-          child: Row(
-            children: [
-              SAvatar(
-                name: member.developer,
-                imageUrl: member.avatarUrl?.isNotEmpty == true
-                    ? member.avatarUrl
-                    : null,
-                size: SAvatarSize.medium,
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      member.developer,
-                      style: AppTypography.body.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: scheme.title,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      dateStr,
-                      style: AppTypography.caption.copyWith(color: scheme.hint),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.xs,
-                ),
-                decoration: BoxDecoration(
-                  color: member.isActive
-                      ? scheme.primaryVariant
-                      : Colors.grey.withValues(alpha: 0.2),
-                  borderRadius: AppRadius.smAll,
-                ),
-                child: Text(
-                  member.isActive ? 'Active (≤ 30 Days)' : 'Inactive (> 30 Days)',
-                  style: AppTypography.caption.copyWith(
-                    color: member.isActive ? scheme.primary : scheme.hint,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

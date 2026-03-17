@@ -5,18 +5,16 @@
 library;
 
 import 'package:flutter/material.dart';
-
 import '../../domain/entities/member_status_entity.dart';
 import '../../domain/repositories/members_repository.dart';
 import '../../core/di/service_locator.dart';
 import '../../core/logging/app_logger.dart';
 
 class MemberProvider extends ChangeNotifier {
-  /// Depends on INTERFACE — satisfies Dependency Inversion Principle.
   final MembersRepository _repository;
 
   MemberProvider({required MembersRepository repository})
-    : _repository = repository;
+      : _repository = repository;
 
   List<MemberStatusEntity> _memberStatuses = [];
   bool _isLoading = false;
@@ -26,8 +24,10 @@ class MemberProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
+  int get activeCount => _memberStatuses.where((m) => m.isActive).length;
+  int get inactiveCount => _memberStatuses.where((m) => !m.isActive).length;
+
   /// Fetch member statuses for [repoFullNames].
-  /// Uses first selected repo — member activity is org-wide.
   Future<void> fetchStatuses(List<String> repoFullNames) async {
     if (repoFullNames.isEmpty) {
       _memberStatuses = [];

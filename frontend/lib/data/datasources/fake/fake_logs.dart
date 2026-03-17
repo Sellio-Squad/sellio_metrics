@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 
 enum LogSeverity { info, warning, error, success }
 

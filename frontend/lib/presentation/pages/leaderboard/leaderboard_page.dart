@@ -3,7 +3,6 @@ library;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../design_system/design_system.dart';
-import '../../providers/app_settings_provider.dart';
 import '../../providers/leaderboard_provider.dart';
 import '../../widgets/common/loading_screen.dart';
 import '../../widgets/common/error_screen.dart';

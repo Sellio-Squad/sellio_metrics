@@ -224,5 +224,10 @@
   "unableToFetchGitHubRateLimit": "تعذر جلب حد واجهة برمجة تطبيقات GitHub.",
   "unableToFetchKvCacheQuota": "تعذر جلب حصة KV cache.",
   "freeTier": "الفئة المجانية",
-  "utcMidnight": "منتصف الليل UTC"
+  "utcMidnight": "منتصف الليل UTC",
+  "memberLastActive": "آخر نشاط: {date}",
+  "memberNoActivity": "لا يوجد نشاط حديث",
+  "memberStatusActive": "نشط (≤ ٣٠ يوم)",
+  "memberStatusInactive": "غير نشط (> ٣٠ يوم)",
+  "membersSubtitle": "{active} نشط · {inactive} غير نشط"
 }

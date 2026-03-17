@@ -1,3 +1,8 @@
+/// Domain Entity — MemberStatusEntity
+///
+/// Immutable value object with equality support.
+library;
+
 class MemberStatusEntity {
   final String developer;
   final String? avatarUrl;
@@ -10,4 +15,21 @@ class MemberStatusEntity {
     required this.isActive,
     this.lastActiveDate,
   });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MemberStatusEntity &&
+          runtimeType == other.runtimeType &&
+          developer == other.developer &&
+          avatarUrl == other.avatarUrl &&
+          isActive == other.isActive &&
+          lastActiveDate == other.lastActiveDate;
+
+  @override
+  int get hashCode => Object.hash(developer, avatarUrl, isActive, lastActiveDate);
+
+  @override
+  String toString() =>
+      'MemberStatusEntity(developer: $developer, isActive: $isActive)';
 }
