@@ -10,6 +10,7 @@ class KpiCard extends StatelessWidget {
   final IconData icon;
   final Color accentColor;
   final String? subtitle;
+  final InlineSpan? richSubtitle;
 
   const KpiCard({
     super.key,
@@ -18,6 +19,7 @@ class KpiCard extends StatelessWidget {
     required this.icon,
     required this.accentColor,
     this.subtitle,
+    this.richSubtitle,
   });
 
   @override
@@ -29,10 +31,15 @@ class KpiCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: scheme.surfaceLow,
         borderRadius: AppRadius.lgAll,
-        border: Border.all(color: accentColor.withValues(alpha: 0.2), width: 1),
+        border: Border.all(
+          color: accentColor.withValues(alpha: 0.2),
+          width: 1,
+        ),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withValues(alpha: context.isDark ? 0.1 : 0.05),
+            color: accentColor.withValues(
+              alpha: context.isDark ? 0.1 : 0.05,
+            ),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -42,6 +49,7 @@ class KpiCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
+          // Icon container
           Container(
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
@@ -51,15 +59,21 @@ class KpiCard extends StatelessWidget {
             child: Icon(icon, color: accentColor, size: 22),
           ),
           const SizedBox(height: AppSpacing.lg),
+
+          // Value
           Text(
             value,
             style: AppTypography.kpiValue.copyWith(color: scheme.title),
           ),
           const SizedBox(height: AppSpacing.xs),
+
+          // Label
           Text(
             label,
             style: AppTypography.caption.copyWith(color: scheme.body),
           ),
+
+          // Plain subtitle
           if (subtitle != null) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -69,6 +83,12 @@ class KpiCard extends StatelessWidget {
                 fontSize: 11,
               ),
             ),
+          ],
+
+          // Rich subtitle (colored spans)
+          if (richSubtitle != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text.rich(TextSpan(children: [richSubtitle!])),
           ],
         ],
       ),

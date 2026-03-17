@@ -6,7 +6,7 @@ import '../../design_system/design_system.dart';
 import '../../core/di/injection.dart';
 import '../../presentation/pages/leaderboard/leaderboard_page.dart';
 import '../../presentation/pages/members/members_page.dart';
-import '../../presentation/pages/prs/open_prs_page.dart';
+import '../../presentation/pages/open_prs/open_prs_page.dart';
 import '../../presentation/pages/about/about_page.dart';
 import '../../presentation/pages/meetings/meetings_page.dart';
 import '../../presentation/pages/setting/settings_page.dart';

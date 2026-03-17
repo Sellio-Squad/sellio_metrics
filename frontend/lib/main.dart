@@ -12,14 +12,13 @@ void main() {
   WidgetsFlutterBinding.ensureInitialized();
 
   configureDependencies(ApiConfig.useFakeData ? Environment.dev : Environment.prod);
-  final logger = appLogger;
 
   FlutterError.onError = (details) {
-    logger.error('Flutter', details.exception, details.stack);
+    appLogger.error('Flutter', details.exception, details.stack);
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
-    logger.error('Platform', error, stack);
+    appLogger.error('Platform', error, stack);
     return true;
   };
 

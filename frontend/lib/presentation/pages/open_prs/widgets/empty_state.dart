@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../core/theme/app_spacing.dart';
-import '../../../core/theme/app_typography.dart';
-import '../../../core/theme/sellio_colors.dart';
+import '../../../../core/theme/app_theme.dart';
 
 class EmptyState extends StatelessWidget {
   final SellioColorScheme scheme;
