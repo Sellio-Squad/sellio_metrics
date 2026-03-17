@@ -4,6 +4,7 @@
 /// Implement the same interfaces as remote datasources — zero runtime coupling.
 library;
 
+import 'package:injectable/injectable.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/leaderboard_entry.dart';
 import '../../../domain/entities/repo_info.dart';
@@ -15,6 +16,7 @@ import '../pr_data_source.dart';
 
 // ─── Fake Repos ──────────────────────────────────────────────
 
+@Injectable(as: ReposDataSource, env: [Environment.dev])
 class FakeReposDataSource implements ReposDataSource {
   @override
   Future<List<RepoInfo>> fetchRepositories() async {
@@ -31,6 +33,7 @@ class FakeReposDataSource implements ReposDataSource {
 
 // ─── Fake Leaderboard ────────────────────────────────────────
 
+@Injectable(as: LeaderboardDataSource, env: [Environment.dev])
 class FakeLeaderboardDataSource implements LeaderboardDataSource {
   static final _entries = [
     LeaderboardEntry(
@@ -87,6 +90,7 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
 
 // ─── Fake Members ─────────────────────────────────────────────
 
+@Injectable(as: MembersDataSource, env: [Environment.dev])
 class FakeMembersDataSource implements MembersDataSource {
   static final _members = [
     {
@@ -118,6 +122,7 @@ class FakeMembersDataSource implements MembersDataSource {
 
 // ─── Fake PRs ────────────────────────────────────────────────
 
+@Injectable(as: PrDataSource, env: [Environment.dev])
 class FakePrDataSource implements PrDataSource {
   static final _prs = [
     {

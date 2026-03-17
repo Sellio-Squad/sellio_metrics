@@ -5,16 +5,17 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../domain/entities/member_status_entity.dart';
 import '../../domain/repositories/members_repository.dart';
-import '../../core/di/service_locator.dart';
 import '../../core/logging/app_logger.dart';
 
+@injectable
 class MemberProvider extends ChangeNotifier {
   final MembersRepository _repository;
 
-  MemberProvider({required MembersRepository repository})
-      : _repository = repository;
+  MemberProvider(this._repository);
 
   List<MemberStatusEntity> _memberStatuses = [];
   bool _isLoading = false;
@@ -42,7 +43,7 @@ class MemberProvider extends ChangeNotifier {
     try {
       _memberStatuses = await _repository.getMembersStatus();
     } catch (e, stack) {
-      sl.get<AppLogger>().error('MemberProvider', 'Error: $e', stack);
+      appLogger.error('MemberProvider', 'Error: $e', stack);
       _error = e.toString();
       _memberStatuses = [];
     } finally {

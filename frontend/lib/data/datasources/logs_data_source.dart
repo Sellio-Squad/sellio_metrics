@@ -1,10 +1,13 @@
 import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../data/datasources/fake/fake_logs.dart'; // Retaining the types
 
+@injectable
 class LogsDataSource {
   final Dio _dio;
 
-  LogsDataSource({required Dio dio}) : _dio = dio;
+  LogsDataSource(this._dio);
 
   Future<List<LogEntry>> fetchLogs({int limit = 50}) async {
     try {

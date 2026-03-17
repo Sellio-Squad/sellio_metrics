@@ -3,9 +3,8 @@
 /// Abstract datasource interface + remote implementation.
 library;
 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../core/di/service_locator.dart';
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
 import '../../core/logging/app_logger.dart';
 
 // ─── Abstract Interface ──────────────────────────────────────
@@ -16,28 +15,27 @@ abstract class MembersDataSource {
 
 // ─── Remote Implementation ───────────────────────────────────
 
+@Injectable(as: MembersDataSource, env: [Environment.prod])
 class RemoteMembersDataSource implements MembersDataSource {
-  final String baseUrl;
-  final http.Client _client;
+  final Dio _dio;
 
-  RemoteMembersDataSource({required this.baseUrl, http.Client? client})
-    : _client = client ?? http.Client();
+  RemoteMembersDataSource(this._dio);
 
   /// GET /api/members
   @override
   Future<List<dynamic>> fetchMembersStatus() async {
-    final url = Uri.parse('$baseUrl/api/members');
-    sl.get<AppLogger>().network('MembersDataSource', 'GET', url);
+    final url = '/api/members';
+    appLogger.network('MembersDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Members fetch failed: ${response.statusCode} ${response.body}',
+        'Members fetch failed: ${response.statusCode} ${response.data}',
       );
     }
 
-    final body = json.decode(response.body) as Map<String, dynamic>;
+    final body = response.data as Map<String, dynamic>;
     return body['data'] as List<dynamic>? ?? body['members'] as List<dynamic>? ?? [];
   }
 }

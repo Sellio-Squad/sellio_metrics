@@ -3,11 +3,14 @@
 /// Identifies PRs stuck in review too long.
 library;
 
+import 'package:injectable/injectable.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../entities/pr_entity.dart';
 import '../entities/bottleneck_entity.dart';
 import '../enums/severity.dart';
 
+@lazySingleton
 class BottleneckService {
   const BottleneckService();
 

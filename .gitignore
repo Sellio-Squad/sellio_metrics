@@ -43,3 +43,4 @@ backend/.wrangler/
 /backend/meet-test.json
 # ─── Generated Localization ────────────────────────────────────
 frontend/lib/l10n/app_localizations*.dart
+/frontend/lib/core/di/injection.config.dart

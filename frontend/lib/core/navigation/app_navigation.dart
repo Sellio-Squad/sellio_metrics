@@ -3,7 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../design_system/design_system.dart';
-import '../../core/di/service_locator.dart';
+import '../../core/di/injection.dart';
 import '../../presentation/pages/leaderboard/leaderboard_page.dart';
 import '../../presentation/pages/members/members_page.dart';
 import '../../presentation/pages/prs/open_prs_page.dart';
@@ -48,7 +48,7 @@ class AppNavigation {
       icon: LucideIcons.users,
       labelBuilder: (l10n) => l10n.navLeaderboard,
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: sl.get<LeaderboardProvider>(),
+        value: getIt<LeaderboardProvider>(),
         child: const LeaderboardPage(),
       ),
     ),
@@ -58,7 +58,7 @@ class AppNavigation {
       icon: LucideIcons.users,
       labelBuilder: (l10n) => l10n.navMembers,
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: sl.get<MemberProvider>(),
+        value: getIt<MemberProvider>(),
         child: const MembersPage(),
       ),
     ),
@@ -69,8 +69,8 @@ class AppNavigation {
       labelBuilder: (l10n) => l10n.navOpenPrs,
       pageBuilder: (_) => MultiProvider(
         providers: [
-          ChangeNotifierProvider.value(value: sl.get<PrDataProvider>()),
-          ChangeNotifierProvider.value(value: sl.get<AnalyticsProvider>()),
+          ChangeNotifierProvider.value(value: getIt<PrDataProvider>()),
+          ChangeNotifierProvider.value(value: getIt<AnalyticsProvider>()),
         ],
         child: const OpenPrsPage(),
       ),
@@ -90,8 +90,8 @@ class AppNavigation {
       labelBuilder: (l10n) => l10n.navMeetings,
       pageBuilder: (_) => MultiProvider(
         providers: [
-          ChangeNotifierProvider.value(value: sl.get<MeetingsProvider>()),
-          ChangeNotifierProvider.value(value: sl.get<MeetEventsProvider>()),
+          ChangeNotifierProvider.value(value: getIt<MeetingsProvider>()),
+          ChangeNotifierProvider.value(value: getIt<MeetEventsProvider>()),
         ],
         child: const MeetingsPage(),
       ),
@@ -103,7 +103,7 @@ class AppNavigation {
       icon: LucideIcons.settings,
       labelBuilder: (l10n) => l10n.navSettings,
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: sl.get<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
+        value: getIt<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
         child: const SettingsPage(),
       ),
       showDateFilter: false,
@@ -114,7 +114,7 @@ class AppNavigation {
       icon: LucideIcons.fileText,
       labelBuilder: (l10n) => l10n.navLogs,
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: sl.get<LogsProvider>()..fetchLogs(),
+        value: getIt<LogsProvider>()..fetchLogs(),
         child: const LogsPage(),
       ),
       showDateFilter: false,
@@ -125,7 +125,7 @@ class AppNavigation {
       icon: LucideIcons.activity,
       labelBuilder: (l10n) => l10n.navObservability,
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: sl.get<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
+        value: getIt<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
         child: const ObservabilityPage(),
       ),
       showDateFilter: false,

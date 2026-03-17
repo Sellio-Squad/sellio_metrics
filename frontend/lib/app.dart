@@ -5,7 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
 import 'design_system/design_system.dart' show SellioThemes;
 import 'l10n/app_localizations.dart';
-import 'core/di/service_locator.dart';
+import 'core/di/injection.dart';
 import 'presentation/providers/app_settings_provider.dart';
 import 'presentation/providers/filter_provider.dart';
 import 'presentation/providers/leaderboard_provider.dart';
@@ -19,8 +19,8 @@ class SellioMetricsApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => sl.get<AppSettingsProvider>()),
-        ChangeNotifierProvider(create: (_) => sl.get<FilterProvider>()),
+        ChangeNotifierProvider(create: (_) => getIt<AppSettingsProvider>()),
+        ChangeNotifierProvider(create: (_) => getIt<FilterProvider>()),
       ],
       child: const _AppInitializationWrapper(),
     );
@@ -56,8 +56,8 @@ class _AppInitializationWrapperState extends State<_AppInitializationWrapper> {
     if (settings.selectedRepos.isEmpty) return;
 
     final repoNames = settings.selectedRepos.map((r) => r.fullName).toList();
-    sl.get<LeaderboardProvider>().fetchLeaderboard();
-    sl.get<MemberProvider>().fetchStatuses(repoNames);
+    getIt<LeaderboardProvider>().fetchLeaderboard();
+    getIt<MemberProvider>().fetchStatuses(repoNames);
   }
 
   @override

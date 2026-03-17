@@ -3,11 +3,14 @@
 /// Calculates KPI metrics and spotlight analytics from PR data.
 library;
 
+import 'package:injectable/injectable.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/formatters.dart';
 import '../entities/pr_entity.dart';
 import '../entities/kpi_entity.dart';
 
+@lazySingleton
 class KpiService {
   const KpiService();
 

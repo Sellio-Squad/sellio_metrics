@@ -1,16 +1,15 @@
 library;
 
+import 'package:injectable/injectable.dart';
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/repositories/pr_repository.dart';
 import '../datasources/pr_data_source.dart';
 
+@LazySingleton(as: PrRepository)
 class PrRepositoryImpl implements PrRepository {
   final PrDataSource remoteDataSource;
 
-  const PrRepositoryImpl({
-    required this.remoteDataSource,
-  });
-
+  const PrRepositoryImpl(this.remoteDataSource);
 
 
   @override

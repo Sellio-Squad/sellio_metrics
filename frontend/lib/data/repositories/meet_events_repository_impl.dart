@@ -5,15 +5,17 @@
 library;
 
 import 'dart:async';
+import 'package:injectable/injectable.dart';
+
 import '../../domain/entities/meet_event_entity.dart';
 import '../../domain/repositories/meet_events_repository.dart';
 import '../datasources/meet_events_data_source.dart';
 
+@LazySingleton(as: MeetEventsRepository)
 class MeetEventsRepositoryImpl implements MeetEventsRepository {
   final MeetEventsDataSource _dataSource;
 
-  MeetEventsRepositoryImpl({required MeetEventsDataSource dataSource})
-      : _dataSource = dataSource;
+  MeetEventsRepositoryImpl(this._dataSource);
 
   @override
   Future<Map<String, dynamic>> subscribe(String spaceName) async {

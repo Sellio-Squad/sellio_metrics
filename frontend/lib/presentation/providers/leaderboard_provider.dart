@@ -6,18 +6,18 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:injectable/injectable.dart';
 
 import '../../domain/entities/leaderboard_entry.dart';
 import '../../domain/repositories/leaderboard_repository.dart';
-import '../../core/di/service_locator.dart';
 import '../../core/logging/app_logger.dart';
 
+@injectable
 class LeaderboardProvider extends ChangeNotifier {
   /// Depends on INTERFACE — satisfies Dependency Inversion Principle.
   final LeaderboardRepository _repository;
 
-  LeaderboardProvider({required LeaderboardRepository repository})
-    : _repository = repository;
+  LeaderboardProvider(this._repository);
 
   List<LeaderboardEntry> _leaderboard = [];
   bool _isLoading = false;
@@ -37,7 +37,7 @@ class LeaderboardProvider extends ChangeNotifier {
       final entries = await _repository.getLeaderboard();
       _leaderboard = entries..sort((a, b) => b.totalScore.compareTo(a.totalScore));
     } catch (e, stack) {
-      sl.get<AppLogger>().error('LeaderboardProvider', 'Error: $e', stack);
+      appLogger.error('LeaderboardProvider', 'Error: $e', stack);
       _error = e.toString();
       _leaderboard = [];
     } finally {

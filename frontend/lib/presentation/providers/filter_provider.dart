@@ -1,6 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../core/constants/app_constants.dart';
 
+@injectable
 class FilterProvider extends ChangeNotifier {
   String _weekFilter = FilterOptions.all;
   String _developerFilter = FilterOptions.all;

@@ -5,15 +5,16 @@
 /// Maps raw JSON to domain LeaderboardEntry entities.
 library;
 
+import 'package:injectable/injectable.dart';
 import '../../domain/entities/leaderboard_entry.dart';
 import '../../domain/repositories/leaderboard_repository.dart';
 import '../datasources/leaderboard_data_source.dart';
 
+@LazySingleton(as: LeaderboardRepository)
 class LeaderboardRepositoryImpl implements LeaderboardRepository {
   final LeaderboardDataSource _dataSource;
 
-  LeaderboardRepositoryImpl({required LeaderboardDataSource dataSource})
-    : _dataSource = dataSource;
+  LeaderboardRepositoryImpl(this._dataSource);
 
   @override
   Future<List<LeaderboardEntry>> getLeaderboard() async {

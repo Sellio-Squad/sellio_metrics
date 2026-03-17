@@ -4,17 +4,19 @@
 /// Maps raw JSON from the data source into domain entities.
 library;
 
+import 'package:injectable/injectable.dart';
+
 import '../../domain/entities/meeting_entity.dart';
 import '../../domain/entities/participant_entity.dart';
 import '../../domain/entities/attendance_analytics_entity.dart';
 import '../../domain/repositories/meetings_repository.dart';
 import '../datasources/meetings_data_source.dart';
 
+@LazySingleton(as: MeetingsRepository)
 class MeetingsRepositoryImpl implements MeetingsRepository {
   final MeetingsDataSource _dataSource;
 
-  MeetingsRepositoryImpl({required MeetingsDataSource dataSource})
-    : _dataSource = dataSource;
+  MeetingsRepositoryImpl(this._dataSource);
 
   @override
   Future<MeetingEntity> createMeeting(String title) async {

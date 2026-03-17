@@ -6,11 +6,13 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../domain/entities/repo_info.dart';
 import '../../domain/repositories/repos_repository.dart';
-import '../../core/di/service_locator.dart';
 import '../../core/logging/app_logger.dart';
 
+@injectable
 class AppSettingsProvider extends ChangeNotifier {
   /// Depends on INTERFACE — satisfies Dependency Inversion Principle.
   final ReposRepository _repository;
@@ -22,8 +24,7 @@ class AppSettingsProvider extends ChangeNotifier {
   bool _isLoadingRepos = false;
   String? _errorRepoLoad;
 
-  AppSettingsProvider({required ReposRepository repository})
-    : _repository = repository;
+  AppSettingsProvider(this._repository);
 
   // ─── Getters ─────────────────────────────────────────────
   ThemeMode get themeMode => _themeMode;
@@ -71,7 +72,7 @@ class AppSettingsProvider extends ChangeNotifier {
       }
     } catch (e, stack) {
       _errorRepoLoad = e.toString();
-      sl.get<AppLogger>().error('AppSettingsProvider', 'Error loading repos: $e', stack);
+      appLogger.error('AppSettingsProvider', 'Error loading repos: $e', stack);
     }
 
     _isLoadingRepos = false;

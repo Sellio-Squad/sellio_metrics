@@ -5,16 +5,18 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../domain/entities/meeting_entity.dart';
 import '../../domain/entities/participant_entity.dart';
 import '../../domain/entities/attendance_analytics_entity.dart';
 import '../../domain/repositories/meetings_repository.dart';
 
+@injectable
 class MeetingsProvider extends ChangeNotifier {
   final MeetingsRepository _repository;
 
-  MeetingsProvider({required MeetingsRepository repository})
-    : _repository = repository;
+  MeetingsProvider(this._repository);
 
   // ─── State ──────────────────────────────────────────────
 

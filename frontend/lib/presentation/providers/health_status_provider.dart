@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../domain/entities/github_rate_limit_status.dart';
 import '../../domain/entities/kv_cache_quota_status.dart';
 import '../../domain/repositories/health_repository.dart';
 
+@injectable
 class HealthStatusProvider extends ChangeNotifier {
   final HealthRepository _repository;
   Timer? _refreshTimer;
@@ -18,8 +21,7 @@ class HealthStatusProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  HealthStatusProvider({required HealthRepository repository})
-      : _repository = repository;
+  HealthStatusProvider(this._repository);
 
   Future<void> fetchAll() async {
     _isLoading = true;
