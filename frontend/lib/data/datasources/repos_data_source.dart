@@ -3,11 +3,11 @@
 /// Abstract datasource interface + remote implementation.
 library;
 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../domain/entities/repo_info.dart';
-import '../../core/di/service_locator.dart';
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../core/logging/app_logger.dart';
+import '../../domain/entities/repo_info.dart';
 
 // ─── Abstract Interface ──────────────────────────────────────
 
@@ -17,28 +17,27 @@ abstract class ReposDataSource {
 
 // ─── Remote Implementation ───────────────────────────────────
 
+@Injectable(as: ReposDataSource, env: [Environment.prod])
 class RemoteReposDataSource implements ReposDataSource {
-  final String baseUrl;
-  final http.Client _client;
+  final Dio _dio;
 
-  RemoteReposDataSource({required this.baseUrl, http.Client? client})
-    : _client = client ?? http.Client();
+  RemoteReposDataSource(this._dio);
 
   /// GET /api/repos
   @override
   Future<List<RepoInfo>> fetchRepositories() async {
-    final url = Uri.parse('$baseUrl/api/repos');
-    sl.get<AppLogger>().network('ReposDataSource', 'GET', url);
+    final url = '/api/repos';
+    appLogger.network('ReposDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Repos fetch failed: ${response.statusCode} ${response.body}',
+        'Repos fetch failed: ${response.statusCode} ${response.data}',
       );
     }
 
-    final body = json.decode(response.body) as Map<String, dynamic>;
+    final body = response.data as Map<String, dynamic>;
     final repoList = body['repos'] as List<dynamic>? ?? [];
 
     return repoList.map((r) {

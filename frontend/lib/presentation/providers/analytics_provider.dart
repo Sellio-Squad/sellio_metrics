@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/entities/kpi_entity.dart';
@@ -6,15 +8,15 @@ import '../../domain/entities/bottleneck_entity.dart';
 import '../../domain/services/kpi_service.dart';
 import '../../domain/services/bottleneck_service.dart';
 
+@injectable
 class AnalyticsProvider extends ChangeNotifier {
   final KpiService _kpiService;
   final BottleneckService _bottleneckService;
 
-  AnalyticsProvider({
-    required KpiService kpiService,
-    required BottleneckService bottleneckService,
-  }) : _kpiService = kpiService,
-       _bottleneckService = bottleneckService;
+  AnalyticsProvider(
+    this._kpiService,
+    this._bottleneckService,
+  );
 
   KpiEntity calculateKpis(List<PrEntity> sourcePrs, {String? developerFilter}) {
     return _kpiService.calculateKpis(

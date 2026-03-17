@@ -1,31 +1,32 @@
 library;
 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
 import '../../core/constants/app_constants.dart';
 
 abstract class PrDataSource {
   Future<List<dynamic>> fetchOpenPrs({required String org});
 }
 
+@Injectable(as: PrDataSource, env: [Environment.prod])
 class RemotePrDataSource implements PrDataSource {
-  final http.Client client;
+  final Dio _dio;
 
-  RemotePrDataSource({required this.client});
-
-
+  RemotePrDataSource(this._dio);
 
   @override
   Future<List<dynamic>> fetchOpenPrs({required String org}) async {
     final baseUrl = ApiConfig.baseUrl.trim().replaceAll(RegExp(r'/$'), '');
-    final url = Uri.parse('$baseUrl/api/prs');
+    final url = '$baseUrl/api/prs';
 
-    final response = await client.get(url, headers: {
-      'Accept': 'application/json',
-    });
+    final response = await _dio.get(url, options: Options(
+      headers: {
+        'Accept': 'application/json',
+      },
+    ));
 
     if (response.statusCode == 200) {
-      final jsonResponse = json.decode(response.body);
+      final jsonResponse = response.data;
       if (jsonResponse is Map<String, dynamic> && jsonResponse.containsKey('data')) {
         return jsonResponse['data'] as List<dynamic>;
       }

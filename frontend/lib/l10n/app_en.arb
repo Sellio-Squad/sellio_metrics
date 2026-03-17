@@ -232,8 +232,10 @@
     }
   },
   "memberNoActivity": "No recent activity",
-  "memberStatusActive": "Active (≤ 30 days)",
-  "memberStatusInactive": "Inactive (> 30 days)",
+  "memberStatusActive": "Active",
+  "memberStatusInactive": "Inactive",
+  "memberActiveDays": "≤ 30 days",
+  "memberInactiveDays": "> 30 days",
   "membersSubtitle": "{active} active · {inactive} inactive",
   "@membersSubtitle": {
     "placeholders": {

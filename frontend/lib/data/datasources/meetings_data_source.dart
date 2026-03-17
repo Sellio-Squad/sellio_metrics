@@ -4,9 +4,9 @@
 /// Completely separate from MetricsDataSource (Single Responsibility).
 library;
 
-import 'dart:convert';
-import 'package:http/http.dart' as http;
-import '../../core/di/service_locator.dart';
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../core/logging/app_logger.dart';
 
 // ─── Abstract Interface ─────────────────────────────────────
@@ -45,131 +45,126 @@ class AuthRequiredException implements Exception {
 
 // ─── Remote Implementation ──────────────────────────────────
 
+@Injectable(as: MeetingsDataSource, env: [Environment.prod])
 class RemoteMeetingsDataSource implements MeetingsDataSource {
-  final String baseUrl;
-  final http.Client _client;
+  final Dio _dio;
 
-  RemoteMeetingsDataSource({required this.baseUrl, http.Client? client})
-    : _client = client ?? http.Client();
+  RemoteMeetingsDataSource(this._dio);
 
   @override
   Future<Map<String, dynamic>> createMeeting(String title) async {
-    final url = Uri.parse('$baseUrl/api/meetings');
-    sl.get<AppLogger>().network('MeetingsDataSource', 'POST', url);
+    final url = '/api/meetings';
+    appLogger.network('MeetingsDataSource', 'POST', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.post(
-      url,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'title': title}),
-    );
-
-    if (response.statusCode == 401) {
-      final body = json.decode(response.body);
-      if (body['authUrl'] != null) {
-        throw AuthRequiredException(
-          body['authUrl'],
-          body['message'] ?? 'Authentication required',
-        );
-      }
-    }
-
-    if (response.statusCode != 200) {
-      throw Exception(
-        'Failed to create meeting: ${response.statusCode} ${response.body}',
+    try {
+      final response = await _dio.post(
+        url,
+        data: {'title': title},
       );
-    }
 
-    return json.decode(response.body) as Map<String, dynamic>;
+      return response.data as Map<String, dynamic>;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 401) {
+        final body = e.response?.data as Map<String, dynamic>? ?? {};
+        if (body['authUrl'] != null) {
+          throw AuthRequiredException(
+            body['authUrl'] as String,
+            body['message'] as String? ?? 'Authentication required',
+          );
+        }
+      }
+      throw Exception('Failed to create meeting: ${e.response?.statusCode} ${e.response?.data}');
+    }
   }
 
   @override
   Future<List<Map<String, dynamic>>> fetchMeetings() async {
-    final url = Uri.parse('$baseUrl/api/meetings');
-    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
+    final url = '/api/meetings';
+    appLogger.network('MeetingsDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to fetch meetings: ${response.statusCode} ${response.body}',
+        'Failed to fetch meetings: ${response.statusCode} ${response.data}',
       );
     }
 
-    final List<dynamic> list = json.decode(response.body) as List<dynamic>;
+    final List<dynamic> list = response.data as List<dynamic>;
     return list.cast<Map<String, dynamic>>();
   }
 
   @override
   Future<Map<String, dynamic>> fetchMeetingDetail(String id) async {
-    final url = Uri.parse('$baseUrl/api/meetings/$id');
-    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
+    final url = '/api/meetings/$id';
+    appLogger.network('MeetingsDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to fetch meeting detail: ${response.statusCode} ${response.body}',
+        'Failed to fetch meeting detail: ${response.statusCode} ${response.data}',
       );
     }
 
-    return json.decode(response.body) as Map<String, dynamic>;
+    return response.data as Map<String, dynamic>;
   }
 
   @override
   Future<Map<String, dynamic>> fetchAttendance(String meetingId) async {
-    final url = Uri.parse('$baseUrl/api/meetings/$meetingId/attendance');
-    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
+    final url = '/api/meetings/$meetingId/attendance';
+    appLogger.network('MeetingsDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to fetch attendance: ${response.statusCode} ${response.body}',
+        'Failed to fetch attendance: ${response.statusCode} ${response.data}',
       );
     }
 
-    return json.decode(response.body) as Map<String, dynamic>;
+    return response.data as Map<String, dynamic>;
   }
 
   @override
   Future<Map<String, dynamic>> fetchAnalytics() async {
-    final url = Uri.parse('$baseUrl/api/meetings/analytics');
-    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
+    final url = '/api/meetings/analytics';
+    appLogger.network('MeetingsDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to fetch analytics: ${response.statusCode} ${response.body}',
+        'Failed to fetch analytics: ${response.statusCode} ${response.data}',
       );
     }
 
-    return json.decode(response.body) as Map<String, dynamic>;
+    return response.data as Map<String, dynamic>;
   }
 
   @override
   Future<Map<String, dynamic>> fetchRateLimitStatus() async {
-    final url = Uri.parse('$baseUrl/api/meetings/rate-limit');
-    sl.get<AppLogger>().network('MeetingsDataSource', 'GET', url);
+    final url = '/api/meetings/rate-limit';
+    appLogger.network('MeetingsDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to fetch rate limit: ${response.statusCode} ${response.body}',
+        'Failed to fetch rate limit: ${response.statusCode} ${response.data}',
       );
     }
 
-    return json.decode(response.body) as Map<String, dynamic>;
+    return response.data as Map<String, dynamic>;
   }
 
   @override
   Future<bool> fetchAuthStatus() async {
     try {
-      final url = Uri.parse('$baseUrl/api/meetings/auth-status');
-      final response = await _client.get(url);
+      final url = '/api/meetings/auth-status';
+      final response = await _dio.get(url);
       if (response.statusCode == 200) {
-        final body = json.decode(response.body);
+        final body = response.data as Map<String, dynamic>;
         return body['isReady'] == true;
       }
     } catch (_) {}
@@ -179,10 +174,10 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
   @override
   Future<String?> fetchAuthUrl() async {
     try {
-      final url = Uri.parse('$baseUrl/api/meetings/auth-url');
-      final response = await _client.get(url);
+      final url = '/api/meetings/auth-url';
+      final response = await _dio.get(url);
       if (response.statusCode == 200) {
-        final body = json.decode(response.body);
+        final body = response.data as Map<String, dynamic>;
         return body['authUrl'] as String?;
       }
     } catch (_) {}
@@ -191,24 +186,24 @@ class RemoteMeetingsDataSource implements MeetingsDataSource {
 
   @override
   Future<void> logout() async {
-    final url = Uri.parse('$baseUrl/api/meetings/auth-logout');
-    sl.get<AppLogger>().network('MeetingsDataSource', 'POST', url);
-    final response = await _client.post(url);
+    final url = '/api/meetings/auth-logout';
+    appLogger.network('MeetingsDataSource', 'POST', Uri.parse(_dio.options.baseUrl + url));
+    final response = await _dio.post(url);
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to logout: ${response.statusCode} ${response.body}',
+        'Failed to logout: ${response.statusCode} ${response.data}',
       );
     }
   }
 
   @override
   Future<void> endMeeting(String id) async {
-    final url = Uri.parse('$baseUrl/api/meetings/$id/end');
-    sl.get<AppLogger>().network('MeetingsDataSource', 'POST', url);
-    final response = await _client.post(url);
+    final url = '/api/meetings/$id/end';
+    appLogger.network('MeetingsDataSource', 'POST', Uri.parse(_dio.options.baseUrl + url));
+    final response = await _dio.post(url);
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to end meeting: ${response.statusCode} ${response.body}',
+        'Failed to end meeting: ${response.statusCode} ${response.data}',
       );
     }
   }

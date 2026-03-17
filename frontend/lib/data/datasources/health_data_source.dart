@@ -1,26 +1,23 @@
-import 'dart:convert';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
 
 abstract class HealthDataSource {
   Future<Map<String, dynamic>?> fetchHealthStatus();
   Future<Map<String, dynamic>?> fetchCacheQuota();
 }
 
+@Injectable(as: HealthDataSource, env: [Environment.prod])
 class RemoteHealthDataSource implements HealthDataSource {
-  final String baseUrl;
-  final http.Client _client;
+  final Dio _dio;
 
-  RemoteHealthDataSource({required this.baseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+  RemoteHealthDataSource(this._dio);
 
   @override
   Future<Map<String, dynamic>?> fetchHealthStatus() async {
     try {
-      final response = await _client
-          .get(Uri.parse('$baseUrl/api/health'))
-          .timeout(const Duration(seconds: 8));
+      final response = await _dio.get('/api/health').timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
-      return json.decode(response.body) as Map<String, dynamic>;
+      return response.data as Map<String, dynamic>;
     } catch (_) {
       return null;
     }
@@ -29,11 +26,9 @@ class RemoteHealthDataSource implements HealthDataSource {
   @override
   Future<Map<String, dynamic>?> fetchCacheQuota() async {
     try {
-      final response = await _client
-          .get(Uri.parse('$baseUrl/api/debug/cache-quota'))
-          .timeout(const Duration(seconds: 8));
+      final response = await _dio.get('/api/debug/cache-quota').timeout(const Duration(seconds: 8));
       if (response.statusCode != 200) return null;
-      return json.decode(response.body) as Map<String, dynamic>;
+      return response.data as Map<String, dynamic>;
     } catch (_) {
       return null;
     }

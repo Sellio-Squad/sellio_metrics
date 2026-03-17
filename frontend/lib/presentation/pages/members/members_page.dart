@@ -4,11 +4,11 @@ import 'package:provider/provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../providers/app_settings_provider.dart';
 import '../../providers/member_provider.dart';
-import '../../widgets/common/error_screen.dart';
 import '../../widgets/common/loading_screen.dart';
-import 'widgets/members_empty_state.dart';
-import 'widgets/members_grid.dart';
+import '../../widgets/common/error_screen.dart';
 import 'widgets/members_header.dart';
+import 'widgets/members_grid.dart';
+import 'widgets/members_empty_state.dart';
 
 class MembersPage extends StatefulWidget {
   const MembersPage({super.key});
@@ -19,8 +19,6 @@ class MembersPage extends StatefulWidget {
 
 class _MembersPageState extends State<MembersPage> {
   late final AppSettingsProvider _settings;
-
-  /// Track what repos were selected last time we loaded.
   Set<String> _lastLoadedRepos = {};
 
   @override
@@ -43,20 +41,18 @@ class _MembersPageState extends State<MembersPage> {
 
   void _onSettingsChanged() {
     if (!mounted) return;
-
-    final currentRepos = _settings.selectedRepos.map((r) => r.fullName).toSet();
-
-    // Only reload if repo selection actually changed
-    // Theme/Locale changes won't trigger network calls
+    final currentRepos =
+        _settings.selectedRepos.map((r) => r.fullName).toSet();
     if (!_setsEqual(currentRepos, _lastLoadedRepos)) {
       _loadMembers();
     }
   }
 
   void _loadMembers() {
-    final repoNames = _settings.selectedRepos.map((r) => r.fullName).toList();
+    final repoNames =
+        _settings.selectedRepos.map((r) => r.fullName).toList();
     _lastLoadedRepos = repoNames.toSet();
-
+    if (repoNames.isEmpty) return;
     context.read<MemberProvider>().fetchStatuses(repoNames);
   }
 
@@ -81,24 +77,18 @@ class _MembersPageState extends State<MembersPage> {
           return const MembersEmptyState();
         }
 
-        return Align(
-          alignment: Alignment.topLeft,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  MembersHeader(
-                    activeCount: provider.activeCount,
-                    inactiveCount: provider.inactiveCount,
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  MembersGrid(members: provider.memberStatuses),
-                ],
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              MembersHeader(
+                activeCount: provider.activeCount,
+                inactiveCount: provider.inactiveCount,
               ),
-            ),
+              const SizedBox(height: AppSpacing.xl),
+              MembersGrid(members: provider.memberStatuses),
+            ],
           ),
         );
       },

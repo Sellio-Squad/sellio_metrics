@@ -4,10 +4,13 @@
 /// Also provides utility methods for available weeks/developers.
 library;
 
+import 'package:injectable/injectable.dart';
+
 import '../../core/constants/app_constants.dart';
 import '../../core/utils/date_utils.dart';
 import '../entities/pr_entity.dart';
 
+@lazySingleton
 class FilterService {
   const FilterService();
 

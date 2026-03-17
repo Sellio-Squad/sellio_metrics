@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:injectable/injectable.dart';
 
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/repositories/pr_repository.dart';
 import '../../core/constants/app_constants.dart';
-import '../../core/di/service_locator.dart';
 import '../../core/logging/app_logger.dart';
 
 enum DataLoadingStatus { loading, loaded, error }
 
+@injectable
 class PrDataProvider extends ChangeNotifier {
   final PrRepository _repository;
 
-  PrDataProvider({required PrRepository repository})
-    : _repository = repository;
+  PrDataProvider(this._repository);
   
   // Open PRs specifically fetched from the new endpoint
   List<PrEntity> _openPrs = [];
@@ -36,7 +36,7 @@ class PrDataProvider extends ChangeNotifier {
       _openPrsStatus = DataLoadingStatus.loaded;
     } catch (e, stack) {
       _openPrsStatus = DataLoadingStatus.error;
-      sl.get<AppLogger>().error('PrDataProvider', 'Error loading open PRs: $e', stack);
+      appLogger.error('PrDataProvider', 'Error loading open PRs: $e', stack);
     }
     notifyListeners();
   }

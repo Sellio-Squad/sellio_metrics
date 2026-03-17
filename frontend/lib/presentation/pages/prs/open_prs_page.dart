@@ -12,7 +12,7 @@ import '../../providers/pr_data_provider.dart';
 import '../../providers/filter_provider.dart';
 import '../../providers/analytics_provider.dart';
 import '../../../domain/services/filter_service.dart';
-import '../../../core/di/service_locator.dart';
+import '../../../core/di/injection.dart';
 import '../../widgets/common/loading_screen.dart';
 import '../../widgets/common/error_screen.dart';
 import 'empty_state.dart';
@@ -43,7 +43,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
 
     return Consumer3<PrDataProvider, FilterProvider, AnalyticsProvider>(
       builder: (context, prData, filter, analytics, _) {
-        final filterService = sl.get<FilterService>();
+        final filterService = getIt<FilterService>();
 
         // Analytics pipeline uses open PRs only
         final weekFiltered = filterService.filterByWeek(
@@ -114,7 +114,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                               final isWide = constraints.maxWidth > 800;
                               final isMedium =
                                   constraints.maxWidth > 500 &&
-                                  constraints.maxWidth <= 800;
+                                      constraints.maxWidth <= 800;
 
                               final k1 = KpiCard(
                                 label: l10n.kpiTotalPrs,
@@ -222,15 +222,15 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                     ),
                     prs.isEmpty
                         ? SliverFillRemaining(
-                            hasScrollBody: false,
-                            child: EmptyState(scheme: scheme, l10n: l10n),
-                          )
+                      hasScrollBody: false,
+                      child: EmptyState(scheme: scheme, l10n: l10n),
+                    )
                         : SliverList(
-                            delegate: SliverChildBuilderDelegate(
-                              (context, index) => PrListTile(pr: prs[index]),
-                              childCount: prs.length,
-                            ),
-                          ),
+                      delegate: SliverChildBuilderDelegate(
+                            (context, index) => PrListTile(pr: prs[index]),
+                        childCount: prs.length,
+                      ),
+                    ),
                     SliverToBoxAdapter(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -251,7 +251,7 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                             )
                           else
                             ...bottlenecks.map(
-                              (b) => BottleneckItem(bottleneck: b),
+                                  (b) => BottleneckItem(bottleneck: b),
                             ),
                           const SizedBox(height: AppSpacing.xxl),
                         ],

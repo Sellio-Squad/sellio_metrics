@@ -1,13 +1,15 @@
+import 'package:injectable/injectable.dart';
+
 import '../../domain/entities/github_rate_limit_status.dart';
 import '../../domain/entities/kv_cache_quota_status.dart';
 import '../../domain/repositories/health_repository.dart';
 import '../datasources/health_data_source.dart';
 
+@LazySingleton(as: HealthRepository)
 class HealthRepositoryImpl implements HealthRepository {
   final HealthDataSource _dataSource;
 
-  HealthRepositoryImpl({required HealthDataSource dataSource})
-      : _dataSource = dataSource;
+  HealthRepositoryImpl(this._dataSource);
 
   @override
   Future<GitHubRateLimitStatus?> getRateLimitStatus() async {

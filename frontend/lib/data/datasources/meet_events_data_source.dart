@@ -8,8 +8,9 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'package:web/web.dart' as web;
-import 'package:http/http.dart' as http;
-import '../../core/di/service_locator.dart';
+import 'package:dio/dio.dart';
+import 'package:injectable/injectable.dart';
+
 import '../../core/logging/app_logger.dart';
 
 // ─── Abstract Interface ─────────────────────────────────────
@@ -33,68 +34,66 @@ abstract class MeetEventsDataSource {
 
 // ─── Remote Implementation ──────────────────────────────────
 
+@Injectable(as: MeetEventsDataSource, env: [Environment.prod])
 class RemoteMeetEventsDataSource implements MeetEventsDataSource {
-  final String baseUrl;
-  final http.Client _client;
+  final Dio _dio;
 
   web.EventSource? _eventSource;
   StreamController<Map<String, dynamic>>? _streamController;
 
-  RemoteMeetEventsDataSource({required this.baseUrl, http.Client? client})
-      : _client = client ?? http.Client();
+  RemoteMeetEventsDataSource(this._dio);
 
   @override
   Future<Map<String, dynamic>> subscribe(String spaceName) async {
-    final url = Uri.parse('$baseUrl/api/meet-events/subscribe');
-    sl.get<AppLogger>().network('MeetEventsDataSource', 'POST', url);
+    final url = '/api/meet-events/subscribe';
+    appLogger.network('MeetEventsDataSource', 'POST', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.post(
+    final response = await _dio.post(
       url,
-      headers: {'Content-Type': 'application/json'},
-      body: json.encode({'spaceName': spaceName}),
+      data: {'spaceName': spaceName},
     );
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to subscribe: ${response.statusCode} ${response.body}',
+        'Failed to subscribe: ${response.statusCode} ${response.data}',
       );
     }
 
-    return json.decode(response.body) as Map<String, dynamic>;
+    return response.data as Map<String, dynamic>;
   }
 
   @override
   Future<List<Map<String, dynamic>>> fetchEvents({int limit = 50}) async {
-    final url = Uri.parse('$baseUrl/api/meet-events/events?limit=$limit');
-    sl.get<AppLogger>().network('MeetEventsDataSource', 'GET', url);
+    final url = '/api/meet-events/events?limit=$limit';
+    appLogger.network('MeetEventsDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to fetch events: ${response.statusCode} ${response.body}',
+        'Failed to fetch events: ${response.statusCode} ${response.data}',
       );
     }
 
-    final body = json.decode(response.body) as Map<String, dynamic>;
+    final body = response.data as Map<String, dynamic>;
     final events = body['events'] as List<dynamic>? ?? [];
     return events.cast<Map<String, dynamic>>();
   }
 
   @override
   Future<List<Map<String, dynamic>>> fetchSubscriptions() async {
-    final url = Uri.parse('$baseUrl/api/meet-events/subscriptions');
-    sl.get<AppLogger>().network('MeetEventsDataSource', 'GET', url);
+    final url = '/api/meet-events/subscriptions';
+    appLogger.network('MeetEventsDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
-    final response = await _client.get(url);
+    final response = await _dio.get(url);
 
     if (response.statusCode != 200) {
       throw Exception(
-        'Failed to fetch subscriptions: ${response.statusCode} ${response.body}',
+        'Failed to fetch subscriptions: ${response.statusCode} ${response.data}',
       );
     }
 
-    final body = json.decode(response.body) as Map<String, dynamic>;
+    final body = response.data as Map<String, dynamic>;
     final subs = body['subscriptions'] as List<dynamic>? ?? [];
     return subs.cast<Map<String, dynamic>>();
   }
@@ -107,11 +106,11 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
     _streamController = StreamController<Map<String, dynamic>>.broadcast();
 
     final sseUrl = lastEventId != null
-        ? '$baseUrl/api/meet-events/stream?lastEventId=$lastEventId'
-        : '$baseUrl/api/meet-events/stream';
+        ? '${_dio.options.baseUrl}/api/meet-events/stream?lastEventId=$lastEventId'
+        : '${_dio.options.baseUrl}/api/meet-events/stream';
 
     final sseUri = Uri.parse(sseUrl);
-    sl.get<AppLogger>().network('MeetEventsDataSource', 'SSE-CONNECT', sseUri);
+    appLogger.network('MeetEventsDataSource', 'SSE-CONNECT', sseUri);
 
     _eventSource = web.EventSource(sseUrl);
 
@@ -124,17 +123,17 @@ class RemoteMeetEventsDataSource implements MeetEventsDataSource {
           final data = json.decode(dataStr) as Map<String, dynamic>;
           _streamController?.add(data);
         } catch (e, stack) {
-          sl.get<AppLogger>().error('MeetEventsDataSource', 'SSE parse error: $e', stack);
+          appLogger.error('MeetEventsDataSource', 'SSE parse error: $e', stack);
         }
       }).toJS,
     );
 
     _eventSource!.onOpen.listen((_) {
-      sl.get<AppLogger>().info('MeetEventsDataSource', 'SSE connected');
+      appLogger.info('MeetEventsDataSource', 'SSE connected');
     });
 
     _eventSource!.onError.listen((event) {
-      sl.get<AppLogger>().info('MeetEventsDataSource', 'SSE error — will auto-reconnect');
+      appLogger.info('MeetEventsDataSource', 'SSE error — will auto-reconnect');
       // EventSource handles reconnection automatically
     });
 

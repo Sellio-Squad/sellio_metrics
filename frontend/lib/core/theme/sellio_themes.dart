@@ -38,7 +38,10 @@ class SellioThemes {
       colorScheme: colorScheme,
       scaffoldBackgroundColor: c.surface,
       cardColor: c.surfaceHigh,
-      dialogBackgroundColor: c.surfaceHigh,
+      dialogTheme: DialogThemeData(
+        backgroundColor: c.surfaceHigh,
+        surfaceTintColor: Colors.transparent,
+      ),
     );
   }
 }
