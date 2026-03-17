@@ -71,7 +71,7 @@ export function calculateLeaderboard(prs: PrMetric[], rules?: PointRule[]): Lead
 
         for (const comment of pr.comments) {
             const commenter = ensure(comment.author.login);
-            commenter.commentsGiven++;
+            commenter.commentsGiven += comment.count;
             commenter.avatarUrl ??= comment.author.avatar_url;
         }
     }

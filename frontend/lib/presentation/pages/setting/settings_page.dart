@@ -9,9 +9,6 @@ import 'widgets/settings_section.dart';
 import 'widgets/repository_selector.dart';
 import 'widgets/theme_toggle.dart';
 import 'widgets/language_toggle.dart';
-import 'widgets/github_rate_limit_banner.dart';
-import 'widgets/kv_cache_quota_banner.dart';
-
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -39,10 +36,6 @@ class SettingsPage extends StatelessWidget {
               icon: Icons.source_outlined,
               children: const [
                 RepositorySelector(),
-                SizedBox(height: AppSpacing.lg),
-                GitHubRateLimitBanner(),
-                SizedBox(height: AppSpacing.lg),
-                KvCacheQuotaBanner(),
               ],
             ),
             const SizedBox(height: AppSpacing.xl),

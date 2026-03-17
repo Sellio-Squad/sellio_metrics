@@ -44,26 +44,27 @@ export function groupComments(
         ...reviewComments.filter((c) => c.user?.type !== "Bot"),
     ];
 
-    const byAuthor = new Map<number, { user: GitHubUser; dates: string[] }>();
+    const byAuthor = new Map<number, { user: GitHubUser; comments: { id: number; date: string }[] }>();
 
     for (const c of allComments) {
         const userId = c.user?.id;
-        if (!userId || !c.user) continue;
+        if (!userId || !c.user || !c.id) continue;
 
         const existing = byAuthor.get(userId);
         if (existing) {
-            existing.dates.push(c.created_at);
+            existing.comments.push({ id: c.id, date: c.created_at });
         } else {
-            byAuthor.set(userId, { user: c.user, dates: [c.created_at] });
+            byAuthor.set(userId, { user: c.user, comments: [{ id: c.id, date: c.created_at }] });
         }
     }
 
     return [...byAuthor.values()].map((group) => {
-        const sorted = group.dates.sort();
+        const sorted = group.comments.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
         return {
             author: toUserInfo(group.user),
-            first_comment_at: sorted[0] ?? null,
-            last_comment_at: sorted[sorted.length - 1] ?? null,
+            comments: sorted.map(c => ({ id: c.id, created_at: c.date })),
+            first_comment_at: sorted[0]?.date ?? null,
+            last_comment_at: sorted[sorted.length - 1]?.date ?? null,
             count: sorted.length,
         };
     });
