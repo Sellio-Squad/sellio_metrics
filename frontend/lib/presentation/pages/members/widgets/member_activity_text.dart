@@ -4,8 +4,7 @@ import '../../../../core/extensions/theme_extensions.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../l10n/app_localizations.dart';
 
-/// Shared formatter — created once, reused across all instances.
-final DateFormat _activityDateFormat = DateFormat('MMM d, yyyy');
+final DateFormat _dateFormat = DateFormat('MMM d, yyyy');
 
 class MemberActivityText extends StatelessWidget {
   final DateTime? lastActiveDate;
@@ -18,16 +17,18 @@ class MemberActivityText extends StatelessWidget {
     final l10n = AppLocalizations.of(context);
 
     final text = lastActiveDate != null
-        ? l10n.memberLastActive(
-            _activityDateFormat.format(lastActiveDate!),
-          )
+        ? l10n.memberLastActive(_dateFormat.format(lastActiveDate!))
         : l10n.memberNoActivity;
 
     return Text(
       text,
-      style: AppTypography.caption.copyWith(color: scheme.hint),
+      style: AppTypography.caption.copyWith(
+        color: scheme.hint,
+        fontSize: 12,
+      ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
     );
   }
 }

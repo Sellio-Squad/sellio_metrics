@@ -227,7 +227,9 @@
   "utcMidnight": "منتصف الليل UTC",
   "memberLastActive": "آخر نشاط: {date}",
   "memberNoActivity": "لا يوجد نشاط حديث",
-  "memberStatusActive": "نشط (≤ ٣٠ يوم)",
-  "memberStatusInactive": "غير نشط (> ٣٠ يوم)",
+  "memberStatusActive": "نشط",
+  "memberStatusInactive": "غير نشط",
+  "memberActiveDays": "≤ ٣٠ يوم",
+  "memberInactiveDays": "> ٣٠ يوم",
   "membersSubtitle": "{active} نشط · {inactive} غير نشط"
 }

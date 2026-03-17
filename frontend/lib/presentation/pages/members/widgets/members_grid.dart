@@ -12,18 +12,28 @@ class MembersGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final crossAxisCount = _calculateColumns(constraints.maxWidth);
+        final width = constraints.maxWidth;
+        final crossAxisCount = _columns(width);
+        final spacing = AppSpacing.md;
+
+        // Calculate card width so we can derive a good aspect ratio
+        final totalSpacing = spacing * (crossAxisCount - 1);
+        final cardWidth = (width - totalSpacing) / crossAxisCount;
+
+        // Fixed card height — tall enough for avatar + name + badge
+        const cardHeight = 200.0;
+        final aspectRatio = cardWidth / cardHeight;
 
         return GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
+          itemCount: members.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: crossAxisCount,
-            crossAxisSpacing: AppSpacing.md,
-            mainAxisSpacing: AppSpacing.md,
-            childAspectRatio: _aspectRatio(crossAxisCount),
+            crossAxisSpacing: spacing,
+            mainAxisSpacing: spacing,
+            childAspectRatio: aspectRatio,
           ),
-          itemCount: members.length,
           itemBuilder: (context, index) => MemberCard(
             member: members[index],
           ),
@@ -32,22 +42,10 @@ class MembersGrid extends StatelessWidget {
     );
   }
 
-  /// Responsive column calculation.
-  int _calculateColumns(double width) {
-    if (width >= 900) return 3;
-    if (width >= 550) return 2;
+  int _columns(double width) {
+    if (width >= 1100) return 4;
+    if (width >= 800) return 3;
+    if (width >= 500) return 2;
     return 1;
-  }
-
-  /// Adjust aspect ratio per column count for visual balance.
-  double _aspectRatio(int columns) {
-    switch (columns) {
-      case 3:
-        return 2.8;
-      case 2:
-        return 3.2;
-      default:
-        return 4.0;
-    }
   }
 }
