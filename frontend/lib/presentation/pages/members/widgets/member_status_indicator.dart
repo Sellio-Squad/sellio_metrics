@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
-/// Pulsing green/red dot — positioned at the top-right of the card.
+import '../../../../core/theme/app_theme.dart';
+import '../../../../l10n/app_localizations.dart';
+
 class MemberStatusIndicator extends StatefulWidget {
   final bool isActive;
 
@@ -34,7 +36,6 @@ class _MemberStatusIndicatorState extends State<MemberStatusIndicator>
       CurvedAnimation(parent: _controller, curve: Curves.easeInOut),
     );
 
-    // Only pulse for active members
     if (widget.isActive) {
       _controller.repeat(reverse: true);
     }
@@ -59,29 +60,52 @@ class _MemberStatusIndicatorState extends State<MemberStatusIndicator>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final color = widget.isActive ? _activeColor : _inactiveColor;
+    final label = widget.isActive
+        ? l10n.memberStatusActive
+        : l10n.memberStatusInactive;
 
-    return AnimatedBuilder(
-      animation: _animation,
-      builder: (context, child) {
-        return Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Label
+        Text(
+          label,
+          style: AppTypography.caption.copyWith(
             color: color,
-            boxShadow: widget.isActive
-                ? [
-                    BoxShadow(
-                      color: color.withValues(alpha: _animation.value * 0.6),
-                      blurRadius: 8,
-                      spreadRadius: 2,
-                    ),
-                  ]
-                : null,
+            fontWeight: FontWeight.w600,
+            fontSize: 11,
           ),
-        );
-      },
+        ),
+        const SizedBox(width: 6),
+
+        // Animated dot
+        AnimatedBuilder(
+          animation: _animation,
+          builder: (context, child) {
+            return Container(
+              width: 10,
+              height: 10,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color,
+                boxShadow: widget.isActive
+                    ? [
+                  BoxShadow(
+                    color: color.withValues(
+                      alpha: _animation.value * 0.6,
+                    ),
+                    blurRadius: 8,
+                    spreadRadius: 2,
+                  ),
+                ]
+                    : null,
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

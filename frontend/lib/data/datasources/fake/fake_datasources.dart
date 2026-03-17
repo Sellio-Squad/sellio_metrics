@@ -111,6 +111,25 @@ class FakeMembersDataSource implements MembersDataSource {
       'isActive': false,
       'lastActiveDate': DateTime.now().subtract(const Duration(days: 35)).toIso8601String(),
     },
+
+    {
+      'developer': 'alice',
+      'avatarUrl': 'https://avatars.githubusercontent.com/u/4?v=4',
+      'isActive': true,
+      'lastActiveDate': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
+    },
+    {
+      'developer': 'bob',
+      'avatarUrl': 'https://avatars.githubusercontent.com/u/5?v=4',
+      'isActive': true,
+      'lastActiveDate': DateTime.now().subtract(const Duration(days: 3)).toIso8601String(),
+    },
+    {
+      'developer': 'carol',
+      'avatarUrl': 'https://avatars.githubusercontent.com/u/6?v=4',
+      'isActive': false,
+      'lastActiveDate': DateTime.now().subtract(const Duration(days: 35)).toIso8601String(),
+    },
   ];
 
   @override
