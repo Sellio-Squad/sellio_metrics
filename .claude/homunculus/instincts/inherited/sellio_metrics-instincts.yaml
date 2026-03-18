@@ -1,5 +1,5 @@
 # Instincts generated from https://github.com/Sellio-Squad/sellio_metrics
-# Generated: 2026-03-18T19:35:49.978Z
+# Generated: 2026-03-18T19:36:38.407Z
 # Version: 2.0
 
 ---
@@ -19,7 +19,7 @@ Write moderate-length commit messages (~50 characters)
 
 ## Evidence
 
-- Average commit message length: 52 chars
+- Average commit message length: 54 chars
 - Based on 200 commits
 
 ---
@@ -143,13 +143,13 @@ Follow the feature-development workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~18x per month
-- Files: backend/src/modules/prs/*, backend/src/*, backend/src/core/*
+- Frequency: ~22x per month
+- Files: frontend/lib/design_system/components/*, backend/src/core/*, backend/src/infra/database/*
 
 ---
 id: sellio_metrics-workflow-refactoring
 trigger: "when refactoring code"
-confidence: 0.9
+confidence: 0.85
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
@@ -167,132 +167,112 @@ Follow the refactoring workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~11x per month
+- Frequency: ~7x per month
 - Files: src/**/*
 
 ---
-id: sellio_metrics-workflow-feature-development-with-page-and-widgets
-trigger: "when doing feature development with page and widgets"
-confidence: 0.7
-domain: workflow
-source: repo-analysis
-source_repo: https://github.com/Sellio-Squad/sellio_metrics
----
-
-# Sellio_metrics Workflow Feature Development With Page And Widgets
-
-## Action
-
-Follow the feature-development-with-page-and-widgets workflow:
-1. Create or update a page file in frontend/lib/presentation/pages/<feature>/<feature>_page.dart
-2. Add or update supporting widgets in frontend/lib/presentation/pages/<feature>/widgets/
-3. Update or add providers in frontend/lib/presentation/pages/<feature>/providers/
-4. Update navigation in frontend/lib/core/navigation/app_navigation.dart
-5. Update or create domain/data entities and services as needed
-6. Update localization files if UI text changes (frontend/lib/l10n/app_*.arb)
-
-## Evidence
-
-- Workflow detected from commit patterns
-- Frequency: ~4x per month
-- Files: frontend/lib/presentation/pages/*/*_page.dart, frontend/lib/presentation/pages/*/widgets/*.dart, frontend/lib/presentation/pages/*/providers/*.dart
-
----
-id: sellio_metrics-workflow-refactor-presentation-providers-into-feature-folders
-trigger: "when doing refactor presentation providers into feature folders"
+id: sellio_metrics-workflow-ecc-bundle-onboarding
+trigger: "when doing ecc bundle onboarding"
 confidence: 0.6
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Refactor Presentation Providers Into Feature Folders
+# Sellio_metrics Workflow Ecc Bundle Onboarding
 
 ## Action
 
-Follow the refactor-presentation-providers-into-feature-folders workflow:
+Follow the ecc-bundle-onboarding workflow:
+1. Add or update .claude/commands/*.md files (feature-development, refactoring, etc.)
+2. Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+3. Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+4. Add or update .codex/AGENTS.md and .codex/config.toml
+5. Add or update .claude/identity.json
+6. Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+7. Add or update .agents/skills/sellio_metrics/SKILL.md
+8. Add or update .claude/skills/sellio_metrics/SKILL.md
+9. Add or update .claude/ecc-tools.json
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: .claude/commands/*.md, .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml, .codex/agents/*.toml
+
+---
+id: sellio_metrics-workflow-feature-development-pr-details-page
+trigger: "when doing feature development pr details page"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Feature Development Pr Details Page
+
+## Action
+
+Follow the feature-development-pr-details-page workflow:
+1. Add new domain entities and enums (e.g., pr_code_insight.dart, pr_entity.dart, pr_size_category.dart)
+2. Add or update domain services (e.g., pr_analysis_service.dart)
+3. Add new presentation pages and widgets (e.g., pr_details_page.dart, pr_code_insights_section.dart, pr_media_section.dart, pr_ticket_link_section.dart)
+4. Update navigation to include new routes (app_navigation.dart)
+5. Update or refactor existing widgets and list tiles to integrate the new feature
+6. Update data sources and providers as needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: frontend/lib/domain/entities/*.dart, frontend/lib/domain/enums/*.dart, frontend/lib/domain/services/*.dart
+
+---
+id: sellio_metrics-workflow-provider-restructuring-into-feature-folders
+trigger: "when doing provider restructuring into feature folders"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Provider Restructuring Into Feature Folders
+
+## Action
+
+Follow the provider-restructuring-into-feature-folders workflow:
 1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
-2. Update all import statements across the codebase to reflect new provider locations
-3. Test to ensure all providers are correctly referenced and functionality is intact
+2. Update all import statements across the codebase to the new provider paths
+3. Test and verify that all features using providers function correctly
 
 ## Evidence
 
 - Workflow detected from commit patterns
 - Frequency: ~2x per month
-- Files: frontend/lib/presentation/providers/*.dart, frontend/lib/presentation/pages/*/providers/*.dart, frontend/lib/presentation/pages/*/*.dart
+- Files: frontend/lib/presentation/providers/*.dart, frontend/lib/presentation/pages/*/providers/*.dart, frontend/lib/app.dart
 
 ---
-id: sellio_metrics-workflow-enhance-or-refactor-widget-ui
-trigger: "when doing enhance or refactor widget ui"
-confidence: 0.65
-domain: workflow
-source: repo-analysis
-source_repo: https://github.com/Sellio-Squad/sellio_metrics
----
-
-# Sellio_metrics Workflow Enhance Or Refactor Widget Ui
-
-## Action
-
-Follow the enhance-or-refactor-widget-ui workflow:
-1. Modify widget files in frontend/lib/presentation/widgets/ or frontend/lib/presentation/pages/<feature>/widgets/
-2. Update usage of the widget in relevant page files
-3. Update or add new properties, assertions, or display logic
-4. Update localization files if UI text is affected
-
-## Evidence
-
-- Workflow detected from commit patterns
-- Frequency: ~3x per month
-- Files: frontend/lib/presentation/widgets/*.dart, frontend/lib/presentation/pages/*/widgets/*.dart, frontend/lib/presentation/pages/*/*_page.dart
-
----
-id: sellio_metrics-workflow-add-or-refactor-backend-api-or-service
-trigger: "when doing add or refactor backend api or service"
+id: sellio_metrics-workflow-frontend-widget-refactor-and-enhancement
+trigger: "when doing frontend widget refactor and enhancement"
 confidence: 0.6
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Add Or Refactor Backend Api Or Service
+# Sellio_metrics Workflow Frontend Widget Refactor And Enhancement
 
 ## Action
 
-Follow the add-or-refactor-backend-api-or-service workflow:
-1. Create or update service files in backend/src/modules/<module>/*.ts
-2. Update core types or event processing logic in backend/src/core/ or backend/src/worker.ts
-3. Update or add migration or SQL files if database schema changes
-4. Update API documentation if needed
+Follow the frontend-widget-refactor-and-enhancement workflow:
+1. Move widget code into dedicated files within widgets/ directories
+2. Enhance widget APIs (e.g., add richValue, assertions, or new properties)
+3. Update all usages of the refactored widgets in presentation pages
+4. Test UI to ensure no regressions
 
 ## Evidence
 
 - Workflow detected from commit patterns
 - Frequency: ~2x per month
-- Files: backend/src/modules/*/*.ts, backend/src/core/*.ts, backend/src/worker.ts
-
----
-id: sellio_metrics-workflow-add-or-enhance-member-status-ui
-trigger: "when doing add or enhance member status ui"
-confidence: 0.6
-domain: workflow
-source: repo-analysis
-source_repo: https://github.com/Sellio-Squad/sellio_metrics
----
-
-# Sellio_metrics Workflow Add Or Enhance Member Status Ui
-
-## Action
-
-Follow the add-or-enhance-member-status-ui workflow:
-1. Update or add widgets in frontend/lib/presentation/pages/members/widgets/
-2. Modify members_page.dart and related provider/entity files
-3. Update fake data sources for members
-4. Update localization files for new/changed status texts
-
-## Evidence
-
-- Workflow detected from commit patterns
-- Frequency: ~2x per month
-- Files: frontend/lib/presentation/pages/members/widgets/*.dart, frontend/lib/presentation/pages/members/members_page.dart, frontend/lib/presentation/providers/member_provider.dart
+- Files: frontend/lib/presentation/pages/open_prs/widgets/*.dart, frontend/lib/presentation/widgets/kpi_card.dart, frontend/lib/presentation/pages/open_prs/open_prs_page.dart
 
