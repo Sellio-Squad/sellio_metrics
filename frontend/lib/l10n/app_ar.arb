@@ -133,6 +133,7 @@
   "unitComments": "تعليقات",
   "unitAdditions": "إضافات",
   "unitDeletions": "حذوفات",
+  "unitLines": "أسطر",
   "aboutMeetings": "جدول الاجتماعات",
   "meetingDownloadIcs": "أضف للتقويم",
   "meetingWeekly": "أسبوعياً",

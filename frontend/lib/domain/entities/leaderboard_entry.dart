@@ -4,8 +4,10 @@ class LeaderboardEntry {
   final int prsCreated;
   final int prsMerged;
   final int commentsGiven;
-  final int additions;
-  final int deletions;
+  /// Actual number of lines added (sum across all repos).
+  final int lineAdditions;
+  /// Actual number of lines deleted (sum across all repos).
+  final int lineDeletions;
   final double totalScore;
 
   const LeaderboardEntry({
@@ -14,8 +16,8 @@ class LeaderboardEntry {
     required this.prsCreated,
     required this.prsMerged,
     required this.commentsGiven,
-    required this.additions,
-    required this.deletions,
+    required this.lineAdditions,
+    required this.lineDeletions,
     required this.totalScore,
   });
 }

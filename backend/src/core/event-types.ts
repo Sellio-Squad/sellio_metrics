@@ -69,6 +69,10 @@ export interface AggregatedLeaderboardEntry {
     developer_id: string;
     total_points: number;
     event_counts: Record<string, number>;
+    /** Actual number of lines added across all PRs (sum of lines metadata). */
+    line_additions: number;
+    /** Actual number of lines deleted across all PRs (sum of lines metadata). */
+    line_deletions: number;
     avatarUrl?: string;
 }
 

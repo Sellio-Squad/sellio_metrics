@@ -267,100 +267,107 @@ async function handleOpenPrs(cradle: Cradle): Promise<Response> {
 
 // ─── GitHub Sync (Backfill) ───────────────────────────────
 
+/**
+ * Syncs a SINGLE repository's PR history into D1.
+ *
+ * Why single-repo only?
+ * Cloudflare Workers enforce a hard limit of 1,000 subrequests per invocation.
+ * Each PR enrichment makes 4 GitHub API calls (PR details, reviews, issue
+ * comments, review comments) + 1 for listing PRs = easily exceeded across
+ * many repos. Call this endpoint once per repository.
+ */
 async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Response> {
-    const { prFetcherService, eventsService, scoreAggregationService, reposService, env } = cradle;
+    const { prFetcherService, eventsService, scoreAggregationService, env } = cradle;
     const body = await request.json().catch(() => ({})) as any;
     const owner = body.owner || env.org;
-    const requestedRepo = body.repo;
+    const repoName: string | undefined = body.repo;
+
+    // Enforce single-repo: syncing all repos at once exceeds the 1000 subrequest limit
+    if (!repoName) {
+        return err(
+            "Missing 'repo' in request body. Sync one repository at a time to stay within Cloudflare's 1000 subrequest limit. Example: { \"repo\": \"sellio_mobile\" }",
+            400,
+        );
+    }
 
     try {
-        let repoNames: string[] = [];
-        if (requestedRepo) {
-            repoNames = [requestedRepo];
-        } else {
-            const orgRepos = await reposService.listByOrg(owner);
-            repoNames = orgRepos.map((r: any) => r.name);
-        }
+        const prs = await prFetcherService.fetch(owner, repoName);
+        const events: ScoringEvent[] = [];
 
-        let totalInserted = 0;
-        let totalDuplicates = 0;
-        let totalEvents = 0;
-        let totalPrs = 0;
+        for (const pr of prs) {
+            // ─── PR Created ─────────────────────────────────────────
+            events.push({
+                id: `github:pr_created:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
+                developerId: pr.creator.login,
+                eventType: EventType.PR_CREATED,
+                source: "github",
+                sourceId: pr.url,
+                eventTimestamp: pr.opened_at,
+                metadata: { pr_number: pr.pr_number, title: pr.title, repo: `${owner}/${repoName}` },
+            });
 
-        for (const repoName of repoNames) {
-            const prs = await prFetcherService.fetch(owner, repoName);
-            totalPrs += prs.length;
-            const events: ScoringEvent[] = [];
-
-            for (const pr of prs) {
+            if (pr.status === "merged") {
+                // ─── PR Merged ───────────────────────────────────────
                 events.push({
-                    id: `github:pr_created:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
+                    id: `github:pr_merged:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
                     developerId: pr.creator.login,
-                    eventType: EventType.PR_CREATED,
+                    eventType: EventType.PR_MERGED,
                     source: "github",
                     sourceId: pr.url,
-                    eventTimestamp: pr.opened_at,
+                    eventTimestamp: pr.merged_at || pr.closed_at || pr.opened_at,
                     metadata: { pr_number: pr.pr_number, title: pr.title, repo: `${owner}/${repoName}` },
                 });
 
-                if (pr.status === "merged") {
+                // ─── Code Lines (MERGED only) ────────────────────────
+                // Only count lines for merged PRs — open PRs might change further,
+                // and closed-unmerged PRs should not earn line points.
+                const mergeTs = pr.merged_at || pr.closed_at || pr.opened_at;
+                if (pr.diff_stats.additions > 0) {
                     events.push({
-                        id: `github:pr_merged:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
+                        id: `github:code_additions:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
                         developerId: pr.creator.login,
-                        eventType: EventType.PR_MERGED,
+                        eventType: EventType.CODE_ADDITION,
                         source: "github",
                         sourceId: pr.url,
-                        eventTimestamp: pr.merged_at || pr.closed_at || pr.opened_at,
-                        metadata: { pr_number: pr.pr_number, title: pr.title, repo: `${owner}/${repoName}` },
+                        eventTimestamp: mergeTs,
+                        metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}`, lines: pr.diff_stats.additions },
                     });
                 }
-
-                if (pr.diff_stats) {
-                    if (pr.diff_stats.additions > 0) {
-                        events.push({
-                            id: `github:code_additions:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
-                            developerId: pr.creator.login,
-                            eventType: EventType.CODE_ADDITION,
-                            source: "github",
-                            sourceId: pr.url,
-                            eventTimestamp: pr.opened_at,
-                            metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}`, score_multiplier: pr.diff_stats.additions },
-                        });
-                    }
-                    if (pr.diff_stats.deletions > 0) {
-                        events.push({
-                            id: `github:code_deletions:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
-                            developerId: pr.creator.login,
-                            eventType: EventType.CODE_DELETION,
-                            source: "github",
-                            sourceId: pr.url,
-                            eventTimestamp: pr.opened_at,
-                            metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}`, score_multiplier: pr.diff_stats.deletions },
-                        });
-                    }
-                }
-
-                for (const commentGroup of pr.comments || []) {
-                    for (const comment of commentGroup.comments) {
-                        events.push({
-                            id: `github:comment:${repoName}:${comment.id}:${commentGroup.author.login}`,
-                            developerId: commentGroup.author.login,
-                            eventType: EventType.COMMENT,
-                            source: "github",
-                            sourceId: pr.url,
-                            eventTimestamp: comment.created_at,
-                            metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}` },
-                        });
-                    }
+                if (pr.diff_stats.deletions > 0) {
+                    events.push({
+                        id: `github:code_deletions:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
+                        developerId: pr.creator.login,
+                        eventType: EventType.CODE_DELETION,
+                        source: "github",
+                        sourceId: pr.url,
+                        eventTimestamp: mergeTs,
+                        metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}`, lines: pr.diff_stats.deletions },
+                    });
                 }
             }
 
-            if (events.length > 0) {
-                totalEvents += events.length;
-                const result = await eventsService.ingestBatch(events);
-                totalInserted += result.inserted;
-                totalDuplicates += result.duplicates;
+            // ─── Comments (all PRs) ──────────────────────────────────
+            for (const commentGroup of pr.comments || []) {
+                for (const comment of commentGroup.comments) {
+                    events.push({
+                        id: `github:comment:${owner}/${repoName}:${comment.id}:${commentGroup.author.login}`,
+                        developerId: commentGroup.author.login,
+                        eventType: EventType.COMMENT,
+                        source: "github",
+                        sourceId: pr.url,
+                        eventTimestamp: comment.created_at,
+                        metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}` },
+                    });
+                }
             }
+        }
+
+        let inserted = 0;
+        let duplicates = 0;
+        if (events.length > 0) {
+            const result = await eventsService.ingestBatch(events);
+            inserted = result.inserted;
+            duplicates = result.duplicates;
         }
 
         // Refresh snapshots immediately
@@ -368,18 +375,20 @@ async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Respo
 
         return json({
             ok: true,
-            reposSynced: repoNames,
-            prsFound: totalPrs,
-            eventsGenerated: totalEvents,
-            eventsInserted: totalInserted,
-            duplicates: totalDuplicates,
-            metricsStatus: "Moved to D1 + KV scores namespace",
+            repo: `${owner}/${repoName}`,
+            prsFound: prs.length,
+            mergedPrsFound: prs.filter(p => p.status === "merged").length,
+            eventsGenerated: events.length,
+            eventsInserted: inserted,
+            duplicates,
+            note: "Sync one repository at a time. Repeat for each repo in the org.",
         });
 
     } catch (e: any) {
         return err(`Sync failed: ${e.message}`, 500);
     }
 }
+
 
 // ─── Webhook Handler (Event-Driven) ─────────────────────────
 
@@ -416,20 +425,30 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
         const creator = pr.user?.login;
         if (!creator) return json({ ok: true, event, reason: "no user" });
 
-        if (action === "opened" || action === "reopened" || action === "synchronize" || action === "edited") {
-            if (action === "opened" || action === "reopened") {
-                events.push({
-                    id: `github:pr_created:${repo.full_name}:${pr.number}:${creator}`,
-                    developerId: creator,
-                    eventType: EventType.PR_CREATED,
-                    source: "github",
-                    sourceId: pr.html_url,
-                    eventTimestamp: pr.created_at, // Event-native timestamp
-                    metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
-                });
-            }
+        if (action === "opened" || action === "reopened") {
+            events.push({
+                id: `github:pr_created:${repo.full_name}:${pr.number}:${creator}`,
+                developerId: creator,
+                eventType: EventType.PR_CREATED,
+                source: "github",
+                sourceId: pr.html_url,
+                eventTimestamp: pr.created_at,
+                metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
+            });
+        }
 
-            // Always upsert additions and deletions on open or update
+        if (action === "closed" && pr.merged) {
+            const mergeTs = pr.merged_at || pr.closed_at || new Date().toISOString();
+            events.push({
+                id: `github:pr_merged:${repo.full_name}:${pr.number}:${creator}`,
+                developerId: creator,
+                eventType: EventType.PR_MERGED,
+                source: "github",
+                sourceId: pr.html_url,
+                eventTimestamp: mergeTs,
+                metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
+            });
+            // Capture final line counts at merge time
             if (typeof pr.additions === "number" && pr.additions > 0) {
                 events.push({
                     id: `github:code_additions:${repo.full_name}:${pr.number}:${creator}`,
@@ -437,8 +456,8 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
                     eventType: EventType.CODE_ADDITION,
                     source: "github",
                     sourceId: pr.html_url,
-                    eventTimestamp: pr.created_at,
-                    metadata: { pr_number: pr.number, repo: repo.full_name, score_multiplier: pr.additions },
+                    eventTimestamp: mergeTs,
+                    metadata: { pr_number: pr.number, repo: repo.full_name, lines: pr.additions },
                 });
             }
             if (typeof pr.deletions === "number" && pr.deletions > 0) {
@@ -448,22 +467,10 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
                     eventType: EventType.CODE_DELETION,
                     source: "github",
                     sourceId: pr.html_url,
-                    eventTimestamp: pr.created_at,
-                    metadata: { pr_number: pr.number, repo: repo.full_name, score_multiplier: pr.deletions },
+                    eventTimestamp: mergeTs,
+                    metadata: { pr_number: pr.number, repo: repo.full_name, lines: pr.deletions },
                 });
             }
-        }
-
-        if (action === "closed" && pr.merged) {
-            events.push({
-                id: `github:pr_merged:${repo.full_name}:${pr.number}:${creator}`,
-                developerId: creator,
-                eventType: EventType.PR_MERGED,
-                source: "github",
-                sourceId: pr.html_url,
-                eventTimestamp: pr.merged_at || pr.closed_at, // Event-native timestamp
-                metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
-            });
         }
     }
 
@@ -522,23 +529,40 @@ async function handleUpdatePointRule(cradle: Cradle, request: Request): Promise<
 async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Response> {
     const since = url.searchParams.get("since") || undefined;
     const until = url.searchParams.get("until") || undefined;
-    const limit = parseInt(url.searchParams.get("limit") || "10", 10);
+    const limit = parseInt(url.searchParams.get("limit") || "50", 10);
 
     const result = await cradle.scoreAggregationService.getLeaderboard(since, until, limit);
 
     try {
         const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
         const avatarMap = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
+        // Only include members that belong to the org's GitHub member list
+        const memberLogins = new Set(orgMembers.map((m: any) => m.login as string));
         
-        result.entries = result.entries.map((entry: any) => ({
-            ...entry,
-            avatarUrl: avatarMap.get(entry.developer_id) || `https://github.com/${entry.developer_id}.png`
-        }));
+        result.entries = result.entries
+            .filter((entry: any) => memberLogins.has(entry.developer_id))
+            .map((entry: any) => ({
+                ...entry,
+                avatarUrl: avatarMap.get(entry.developer_id) || `https://github.com/${entry.developer_id}.png`
+            }));
     } catch (e: any) {
         cradle.logger.warn({ err: e.message }, "Failed to fetch avatarUrls for leaderboard");
     }
 
     return json(result);
+}
+
+// ─── Delete Developer Events Handler ─────────────────────────
+
+async function handleDeleteDeveloper(cradle: Cradle, developerId: string): Promise<Response> {
+    if (!developerId) return err("Missing developerId", 400);
+    const deleted = await cradle.d1Service.deleteEventsByDeveloper(developerId);
+    // Invalidate leaderboard cache so the change is reflected immediately
+    try {
+        await (cradle as any).scoresKvCache?.del("leaderboard:all:all");
+    } catch { /* ignore */ }
+    await cradle.scoreAggregationService.precomputeSnapshots();
+    return json({ ok: true, developerId, eventsDeleted: deleted });
 }
 
 // ─── Members Handler ────────────────────────────────────────
@@ -880,6 +904,9 @@ function matchRoute(p: string): { handler: string; params?: Record<string, strin
     if (p === "/api/attendance/history") return { handler: "attendanceHistory" };
     if (p === "/api/sync/github") return { handler: "syncGithub" };
 
+    const devDeleteMatch = p.match(/^\/api\/developers\/([^/]+)\/events$/);
+    if (devDeleteMatch) return { handler: "deleteDeveloper", params: { developerId: devDeleteMatch[1] } };
+
     if (p.startsWith("/api/meetings")) return { handler: "meetings", params: { path: p.replace("/api/meetings", "") } };
     if (p.startsWith("/api/meet-events")) return { handler: "meetEvents", params: { path: p.replace("/api/meet-events", "") } };
 
@@ -956,6 +983,9 @@ export default {
                 case "attendanceHistory":
                     if (request.method !== "GET") return err("Method Not Allowed", 405);
                     return handleAttendanceHistory(cradle, url);
+                case "deleteDeveloper":
+                    if (request.method !== "DELETE") return err("Method Not Allowed", 405);
+                    return handleDeleteDeveloper(cradle, route.params!.developerId);
                 case "meetings": return handleMeetings(cradle, request, route.params!.path, url);
                 case "meetEvents": return handleMeetEvents(cradle, request, route.params!.path, url);
                 case "logs":

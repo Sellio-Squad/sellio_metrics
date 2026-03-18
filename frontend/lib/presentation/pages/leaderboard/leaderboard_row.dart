@@ -57,7 +57,7 @@ class LeaderboardRow extends StatelessWidget {
                 Text(
                   '${entry.prsCreated} ${l10n.unitPrs} · '
                   '${entry.commentsGiven} ${l10n.unitComments} · '
-                  '+${entry.additions} ${l10n.unitAdditions} / -${entry.deletions} ${l10n.unitDeletions}',
+                  '+${entry.lineAdditions} / -${entry.lineDeletions} ${l10n.unitLines}',
                   style: AppTypography.caption.copyWith(
                     color: scheme.hint,
                     fontSize: 11,
