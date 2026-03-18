@@ -1,5 +1,5 @@
 # Instincts generated from https://github.com/Sellio-Squad/sellio_metrics
-# Generated: 2026-03-18T19:36:36.305Z
+# Generated: 2026-03-18T19:37:16.863Z
 # Version: 2.0
 
 ---
@@ -19,7 +19,7 @@ Write moderate-length commit messages (~50 characters)
 
 ## Evidence
 
-- Average commit message length: 53 chars
+- Average commit message length: 55 chars
 - Based on 200 commits
 
 ---
@@ -143,13 +143,13 @@ Follow the feature-development workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~22x per month
+- Frequency: ~26x per month
 - Files: frontend/lib/design_system/components/*, backend/src/core/*, backend/src/infra/database/*
 
 ---
 id: sellio_metrics-workflow-refactoring
 trigger: "when refactoring code"
-confidence: 0.85
+confidence: 0.75
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
@@ -167,107 +167,86 @@ Follow the refactoring workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~7x per month
+- Frequency: ~5x per month
 - Files: src/**/*
 
 ---
-id: sellio_metrics-workflow-add-or-update-ecc-bundle
-trigger: "when doing add or update ecc bundle"
-confidence: 0.75
-domain: workflow
-source: repo-analysis
-source_repo: https://github.com/Sellio-Squad/sellio_metrics
----
-
-# Sellio_metrics Workflow Add Or Update Ecc Bundle
-
-## Action
-
-Follow the add-or-update-ecc-bundle workflow:
-1. Add or update files in .claude/commands/, .claude/skills/, .claude/homunculus/instincts/inherited/, .codex/agents/, .codex/, .agents/skills/sellio_metrics/
-2. Commit with message referencing 'add sellio_metrics ECC bundle'
-
-## Evidence
-
-- Workflow detected from commit patterns
-- Frequency: ~5x per month
-- Files: .claude/commands/*.md, .claude/skills/sellio_metrics/SKILL.md, .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
-
----
-id: sellio_metrics-workflow-frontend-feature-or-refactor-with-multi-file-touch
-trigger: "when doing frontend feature or refactor with multi file touch"
+id: sellio_metrics-workflow-ecc-bundle-synchronization
+trigger: "when doing ecc bundle synchronization"
 confidence: 0.65
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Frontend Feature Or Refactor With Multi File Touch
+# Sellio_metrics Workflow Ecc Bundle Synchronization
 
 ## Action
 
-Follow the frontend-feature-or-refactor-with-multi-file-touch workflow:
-1. Create or update navigation and routing files
-2. Add or update domain entities, enums, or services
-3. Add or update data sources and repositories
-4. Create or refactor presentation pages and widgets
-5. Update or move providers (ChangeNotifier) to new locations
-6. Update localization files if UI changes require new text
-7. Update or add tests (not always visible in this log)
+Follow the ecc-bundle-synchronization workflow:
+1. Add or update .claude/commands/*.md files for new or changed workflows (e.g., feature-development.md, refactoring.md)
+2. Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+3. Add or update .codex/agents/*.toml files (docs-researcher.toml, reviewer.toml, explorer.toml)
+4. Add or update .codex/AGENTS.md and .codex/config.toml
+5. Add or update .claude/identity.json
+6. Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+7. Add or update .agents/skills/sellio_metrics/SKILL.md and .claude/skills/sellio_metrics/SKILL.md
+8. Add or update .claude/ecc-tools.json
 
 ## Evidence
 
 - Workflow detected from commit patterns
 - Frequency: ~3x per month
-- Files: frontend/lib/core/navigation/app_navigation.dart, frontend/lib/domain/entities/*.dart, frontend/lib/domain/services/*.dart
+- Files: .claude/commands/*.md, .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml, .codex/agents/*.toml
 
 ---
-id: sellio_metrics-workflow-backend-feature-with-migration-and-api-update
-trigger: "when doing backend feature with migration and api update"
-confidence: 0.55
+id: sellio_metrics-workflow-feature-refactor-provider-restructure
+trigger: "when doing feature refactor provider restructure"
+confidence: 0.6
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Backend Feature With Migration And Api Update
+# Sellio_metrics Workflow Feature Refactor Provider Restructure
 
 ## Action
 
-Follow the backend-feature-with-migration-and-api-update workflow:
-1. Create or update a migration SQL file in backend/migrations/
-2. Update backend logic in src/core/ and src/infra/database/
-3. Update worker or service files if needed
-4. Update API documentation (e.g., Postman collection)
-5. Update frontend repositories/entities if API changes affect the client
-6. Update localization files if new units or strings are introduced
+Follow the feature-refactor-provider-restructure workflow:
+1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
+2. Update all import statements across the frontend to point to the new provider locations
+3. Update related page and widget files to use the new provider paths
 
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~1x per month
+- Frequency: ~2x per month
+- Files: frontend/lib/presentation/pages/*/providers/*.dart, frontend/lib/presentation/pages/*/*.dart, frontend/lib/presentation/widgets/*.dart
+
+---
+id: sellio_metrics-workflow-feature-development-with-api-and-frontend
+trigger: "when doing feature development with api and frontend"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Feature Development With Api And Frontend
+
+## Action
+
+Follow the feature-development-with-api-and-frontend workflow:
+1. Create or update backend migration files (e.g., backend/migrations/*.sql)
+2. Implement or update backend logic (e.g., backend/src/core/*.ts, backend/src/infra/database/*.ts, backend/src/worker.ts)
+3. Add or update API documentation (e.g., docs/Sellio_Metrics_API.postman_collection.json)
+4. Implement or update frontend repository, entity, and page files (e.g., frontend/lib/data/repositories/*, frontend/lib/domain/entities/*, frontend/lib/presentation/pages/*)
+5. Update frontend localization files if needed (e.g., frontend/lib/l10n/*.arb)
+6. Update or create new frontend widgets as required
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
 - Files: backend/migrations/*.sql, backend/src/core/*.ts, backend/src/infra/database/*.ts
-
----
-id: sellio_metrics-workflow-ci-cd-workflow-update
-trigger: "when doing ci cd workflow update"
-confidence: 0.55
-domain: workflow
-source: repo-analysis
-source_repo: https://github.com/Sellio-Squad/sellio_metrics
----
-
-# Sellio_metrics Workflow Ci Cd Workflow Update
-
-## Action
-
-Follow the ci-cd-workflow-update workflow:
-1. Update .github/workflows/*.yml to add or modify build/deploy steps
-2. Commit with a message referencing the workflow and the change
-
-## Evidence
-
-- Workflow detected from commit patterns
-- Frequency: ~1x per month
-- Files: .github/workflows/*.yml
 
