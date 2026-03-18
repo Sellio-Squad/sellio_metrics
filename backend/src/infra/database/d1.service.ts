@@ -230,74 +230,56 @@ export class D1Service {
     ): Promise<AggregatedLeaderboardEntry[]> {
         if (!this.db) return [];
 
-        let query: string;
+        const conditions: string[] = [];
         const params: unknown[] = [];
         let paramIdx = 1;
 
-        if (since && until) {
-            query = `
-                SELECT e.developer_id, ROUND(SUM(r.points * COALESCE(CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL), 1.0)), 2) as total_points
-                FROM events e
-                JOIN point_rules r ON e.event_type = r.event_type
-                WHERE e.event_timestamp BETWEEN ?${paramIdx++} AND ?${paramIdx++}
-                GROUP BY e.developer_id
-                ORDER BY total_points DESC
-                LIMIT ?${paramIdx}
-            `;
-            params.push(since, until, limit);
-        } else if (since) {
-            query = `
-                SELECT e.developer_id, ROUND(SUM(r.points * COALESCE(CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL), 1.0)), 2) as total_points
-                FROM events e
-                JOIN point_rules r ON e.event_type = r.event_type
-                WHERE e.event_timestamp >= ?${paramIdx++}
-                GROUP BY e.developer_id
-                ORDER BY total_points DESC
-                LIMIT ?${paramIdx}
-            `;
-            params.push(since, limit);
-        } else if (until) {
-            query = `
-                SELECT e.developer_id, ROUND(SUM(r.points * COALESCE(CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL), 1.0)), 2) as total_points
-                FROM events e
-                JOIN point_rules r ON e.event_type = r.event_type
-                WHERE e.event_timestamp <= ?${paramIdx++}
-                GROUP BY e.developer_id
-                ORDER BY total_points DESC
-                LIMIT ?${paramIdx}
-            `;
-            params.push(until, limit);
-        } else {
-            query = `
-                SELECT e.developer_id, ROUND(SUM(r.points * COALESCE(CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL), 1.0)), 2) as total_points
-                FROM events e
-                JOIN point_rules r ON e.event_type = r.event_type
-                GROUP BY e.developer_id
-                ORDER BY total_points DESC
-                LIMIT ?${paramIdx}
-            `;
-            params.push(limit);
+        if (since) {
+            conditions.push(`e.event_timestamp >= ?${paramIdx++}`);
+            params.push(since);
         }
+        if (until) {
+            conditions.push(`e.event_timestamp <= ?${paramIdx++}`);
+            params.push(until);
+        }
+        const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+
+        // Main query: total points per developer
+        // For CODE_ADDITION / CODE_DELETION the `lines` metadata field is the
+        // per-event multiplier so the score = rule.points × lines_changed
+        const query = `
+            SELECT
+                e.developer_id,
+                ROUND(SUM(
+                    r.points * COALESCE(CAST(json_extract(e.metadata, '$.lines') AS REAL), 1.0)
+                ), 2) AS total_points
+            FROM events e
+            JOIN point_rules r ON e.event_type = r.event_type
+            ${where}
+            GROUP BY e.developer_id
+            ORDER BY total_points DESC
+            LIMIT ?${paramIdx}
+        `;
+        params.push(limit);
 
         const result = await this.db.prepare(query).bind(...params).all<{
             developer_id: string;
             total_points: number;
         }>();
 
-        // Also get per-type counts for each developer
+        // For each developer also fetch per-type counts and line sums
         const entries: AggregatedLeaderboardEntry[] = [];
         for (const row of result.results) {
+            const countConditions: string[] = [`developer_id = ?1`];
+            const countParams: unknown[] = [row.developer_id];
+            let ci = 2;
+            if (since) { countConditions.push(`event_timestamp >= ?${ci++}`); countParams.push(since); }
+            if (until) { countConditions.push(`event_timestamp <= ?${ci++}`); countParams.push(until); }
+            const countWhere = `WHERE ${countConditions.join(" AND ")}`;
+
             const countsResult = await this.db
-                .prepare(
-                    since && until
-                        ? `SELECT event_type, COUNT(*) as cnt FROM events WHERE developer_id = ?1 AND event_timestamp BETWEEN ?2 AND ?3 GROUP BY event_type`
-                        : since
-                          ? `SELECT event_type, COUNT(*) as cnt FROM events WHERE developer_id = ?1 AND event_timestamp >= ?2 GROUP BY event_type`
-                          : until
-                            ? `SELECT event_type, COUNT(*) as cnt FROM events WHERE developer_id = ?1 AND event_timestamp <= ?2 GROUP BY event_type`
-                            : `SELECT event_type, COUNT(*) as cnt FROM events WHERE developer_id = ?1 GROUP BY event_type`,
-                )
-                .bind(row.developer_id, ...(since ? [since] : []), ...(until && !since ? [until] : until && since ? [until] : []))
+                .prepare(`SELECT event_type, COUNT(*) as cnt FROM events ${countWhere} GROUP BY event_type`)
+                .bind(...countParams)
                 .all<{ event_type: string; cnt: number }>();
 
             const event_counts: Record<string, number> = {};
@@ -305,10 +287,33 @@ export class D1Service {
                 event_counts[c.event_type] = c.cnt;
             }
 
+            // Sum of actual lines added/deleted (from `lines` metadata)
+            const linesResult = await this.db
+                .prepare(`
+                    SELECT
+                        event_type,
+                        CAST(ROUND(SUM(COALESCE(CAST(json_extract(metadata, '$.lines') AS REAL), 0))) AS INTEGER) as total_lines
+                    FROM events
+                    ${countWhere}
+                    AND event_type IN ('CODE_ADDITION', 'CODE_DELETION')
+                    GROUP BY event_type
+                `)
+                .bind(...countParams)
+                .all<{ event_type: string; total_lines: number }>();
+
+            let line_additions = 0;
+            let line_deletions = 0;
+            for (const lr of linesResult.results) {
+                if (lr.event_type === "CODE_ADDITION") line_additions = lr.total_lines ?? 0;
+                if (lr.event_type === "CODE_DELETION") line_deletions = lr.total_lines ?? 0;
+            }
+
             entries.push({
                 developer_id: row.developer_id,
                 total_points: row.total_points,
                 event_counts,
+                line_additions,
+                line_deletions,
             });
         }
 
@@ -344,6 +349,22 @@ export class D1Service {
             .run();
 
         this.logger.info({ eventType, points }, "Point rule updated");
+    }
+
+    /**
+     * Delete all events for a given developer (e.g. to remove test accounts).
+     */
+    async deleteEventsByDeveloper(developerId: string): Promise<number> {
+        if (!this.db) return 0;
+
+        const result = await this.db
+            .prepare("DELETE FROM events WHERE developer_id = ?1")
+            .bind(developerId)
+            .run();
+
+        const deleted = result.meta.changes ?? 0;
+        this.logger.info({ developerId, deleted }, "Deleted all events for developer");
+        return deleted;
     }
 
     // ─── Latest CHECK_IN for a developer ────────────────────

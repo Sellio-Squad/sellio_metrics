@@ -319,10 +319,10 @@
         },
         {
             "name": "GitHub Sync",
-            "description": "Backfill D1 with historical data from GitHub API. Call once per repo to populate events, then let webhooks handle real-time.",
+            "description": "Backfill D1 with historical GitHub data. Sync ONE repo per request to stay within Cloudflare's 1,000 subrequest limit (each PR = 4 API calls: details + reviews + issue comments + review comments).",
             "item": [
                 {
-                    "name": "Sync Repository",
+                    "name": "Sync Single Repository",
                     "request": {
                         "method": "POST",
                         "header": [{"key": "Content-Type", "value": "application/json"}],
@@ -335,7 +335,7 @@
                             "host": ["{{baseUrl}}"],
                             "path": ["api", "sync", "github"]
                         },
-                        "description": "Fetches all PRs from a GitHub repo and creates scoring events in D1.\n\nThis is the backfill mechanism:\n1. Fetches PRs from GitHub API (fresh, no cache)\n2. Creates PR_CREATED, PR_MERGED, PR_REVIEW, COMMENT events\n3. All events are idempotent (duplicate calls safe)\n4. Precomputes leaderboard snapshots after sync\n\nBody:\n- repo (string, required): repository name\n- owner (string, optional): defaults to configured org"
+                        "description": "Sync ONE repository at a time (required).\n\nProcess per repo:\n1. Fetches all PRs with reviews + comments from GitHub\n2. Creates PR_CREATED, PR_MERGED events for all PRs\n3. Creates CODE_ADDITION, CODE_DELETION events for MERGED PRs only\n4. Creates one COMMENT event per individual comment\n5. All events are idempotent — safe to re-run\n6. Refreshes leaderboard snapshot immediately\n\nIMPORTANT: Must specify 'repo'. Cloudflare Workers has a hard 1,000-subrequest limit per invocation. Each PR enrichment uses 4 subrequests, so syncing 250+ PRs in one call fails."
                     },
                     "response": [
                         {
@@ -343,14 +343,14 @@
                             "status": "OK",
                             "code": 200,
                             "header": [{"key": "Content-Type", "value": "application/json"}],
-                            "body": "{\n  \"ok\": true,\n  \"repo\": \"Sellio-Squad/sellio_mobile\",\n  \"prsFound\": 42,\n  \"eventsGenerated\": 156,\n  \"eventsInserted\": 156,\n  \"duplicates\": 0\n}"
+                            "body": "{\n  \"ok\": true,\n  \"repo\": \"Sellio-Squad/sellio_mobile\",\n  \"prsFound\": 42,\n  \"mergedPrsFound\": 38,\n  \"eventsGenerated\": 156,\n  \"eventsInserted\": 156,\n  \"duplicates\": 0,\n  \"note\": \"Sync one repository at a time. Repeat for each repo in the org.\"\n}"
                         },
                         {
-                            "name": "200 OK (re-run, idempotent)",
-                            "status": "OK",
-                            "code": 200,
+                            "name": "400 Bad Request (missing repo)",
+                            "status": "Bad Request",
+                            "code": 400,
                             "header": [{"key": "Content-Type", "value": "application/json"}],
-                            "body": "{\n  \"ok\": true,\n  \"repo\": \"Sellio-Squad/sellio_mobile\",\n  \"prsFound\": 42,\n  \"eventsGenerated\": 156,\n  \"eventsInserted\": 0,\n  \"duplicates\": 156\n}"
+                            "body": "{\n  \"error\": \"Missing 'repo' in request body. Sync one repository at a time to stay within Cloudflare's 1000 subrequest limit.\"\n}"
                         }
                     ]
                 }
@@ -488,6 +488,34 @@
                         "description": "Returns all open pull requests across the entire organization using the GitHub Search API."
                     },
                     "response": []
+                }
+            ]
+        },
+        {
+            "name": "Developers",
+            "description": "Manage developer data in D1. Use these endpoints to remove test accounts or incorrect data.",
+            "item": [
+                {
+                    "name": "Delete Developer Events",
+                    "request": {
+                        "method": "DELETE",
+                        "header": [],
+                        "url": {
+                            "raw": "{{baseUrl}}/api/developers/dev-01/events",
+                            "host": ["{{baseUrl}}"],
+                            "path": ["api", "developers", "dev-01", "events"]
+                        },
+                        "description": "Deletes ALL scoring events for the given developer login from D1.\n\nUse this to:\n- Remove test accounts (e.g. dev-01, test-user)\n- Correct accidental data ingestion\n\nThis action:\n1. Deletes all D1 events where developer_id = :login\n2. Immediately refreshes the leaderboard snapshot\n\nReplace 'dev-01' in the URL with the actual GitHub login to remove."
+                    },
+                    "response": [
+                        {
+                            "name": "200 OK",
+                            "status": "OK",
+                            "code": 200,
+                            "header": [{"key": "Content-Type", "value": "application/json"}],
+                            "body": "{\n  \"ok\": true,\n  \"developerId\": \"dev-01\",\n  \"eventsDeleted\": 42\n}"
+                        }
+                    ]
                 }
             ]
         }

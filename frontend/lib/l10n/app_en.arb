@@ -133,6 +133,7 @@
   "unitComments": "comments",
   "unitAdditions": "added",
   "unitDeletions": "deleted",
+  "unitLines": "lines",
   "aboutMeetings": "Meeting Schedule",
   "meetingDownloadIcs": "Add to Calendar",
   "meetingWeekly": "Weekly",
