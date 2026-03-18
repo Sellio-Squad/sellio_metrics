@@ -268,104 +268,145 @@ async function handleOpenPrs(cradle: Cradle): Promise<Response> {
 // ─── GitHub Sync (Backfill) ───────────────────────────────
 
 /**
- * Syncs a SINGLE repository's PR history into D1.
+ * Syncs a SINGLE repository into D1 using only 4-6 API calls total,
+ * regardless of how many PRs or comments the repo has.
  *
- * Why single-repo only?
- * Cloudflare Workers enforce a hard limit of 1,000 subrequests per invocation.
- * Each PR enrichment makes 4 GitHub API calls (PR details, reviews, issue
- * comments, review comments) + 1 for listing PRs = easily exceeded across
- * many repos. Call this endpoint once per repository.
+ * Strategy (avoids the 1000 subrequest limit):
+ *  1. getContributorStats()       → 1 call  → lines added/deleted per developer (matches GitHub UI)
+ *  2. pulls.list (paginated)      → ~2 calls → PR_CREATED + PR_MERGED events
+ *  3. listAllIssueComments()      → ~2 calls → all PR/issue comments in one pass
+ *  4. listAllPRReviewComments()   → ~2 calls → all inline review comments in one pass
  */
 async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Response> {
-    const { prFetcherService, eventsService, scoreAggregationService, env } = cradle;
+    const { cachedGithubClient, eventsService, scoreAggregationService, env } = cradle;
     const body = await request.json().catch(() => ({})) as any;
     const owner = body.owner || env.org;
     const repoName: string | undefined = body.repo;
 
-    // Enforce single-repo: syncing all repos at once exceeds the 1000 subrequest limit
     if (!repoName) {
         return err(
-            "Missing 'repo' in request body. Sync one repository at a time to stay within Cloudflare's 1000 subrequest limit. Example: { \"repo\": \"sellio_mobile\" }",
+            "Missing 'repo' in request body. Sync one repo at a time. Example: { \"repo\": \"sellio_mobile\" }",
             400,
         );
     }
 
+    // Optionally clear old events for this repo first (set body.clear = true)
+    if (body.clear === true) {
+        await (cradle.d1Service as any).truncateAllEvents();
+    }
+
     try {
-        const prs = await prFetcherService.fetch(owner, repoName);
         const events: ScoringEvent[] = [];
+        const repoFull = `${owner}/${repoName}`;
 
-        for (const pr of prs) {
-            // ─── PR Created ─────────────────────────────────────────
-            events.push({
-                id: `github:pr_created:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
-                developerId: pr.creator.login,
-                eventType: EventType.PR_CREATED,
-                source: "github",
-                sourceId: pr.url,
-                eventTimestamp: pr.opened_at,
-                metadata: { pr_number: pr.pr_number, title: pr.title, repo: `${owner}/${repoName}` },
-            });
+        // ─── Fetch everything in parallel ────────────────────────────────────
+        // Firing contributor stats FIRST (alongside other fetches) gives GitHub
+        // ~15-30 extra seconds to compute while we paginate PRs and comments.
+        // Sequential fetching gave GitHub only 3 seconds — not enough.
+        const [contributorStats, prs, issueComments, reviewComments] = await Promise.all([
+            cachedGithubClient.getContributorStats(owner, repoName),
+            cachedGithubClient.listPulls(owner, repoName, "all", 100),
+            cachedGithubClient.listAllIssueComments(owner, repoName),
+            cachedGithubClient.listAllPRReviewComments(owner, repoName),
+        ]);
 
-            if (pr.status === "merged") {
-                // ─── PR Merged ───────────────────────────────────────
-                events.push({
-                    id: `github:pr_merged:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
-                    developerId: pr.creator.login,
-                    eventType: EventType.PR_MERGED,
-                    source: "github",
-                    sourceId: pr.url,
-                    eventTimestamp: pr.merged_at || pr.closed_at || pr.opened_at,
-                    metadata: { pr_number: pr.pr_number, title: pr.title, repo: `${owner}/${repoName}` },
-                });
+        // ─── 1. Contributor stats → CODE_ADDITION + CODE_DELETION ───────────
+        // Exact same data GitHub shows on /graphs/contributors.
+        // Each contributor gets ONE aggregate event per repo (not per PR).
+        if (contributorStats && Array.isArray(contributorStats)) {
+            for (const contributor of contributorStats) {
+                const login: string = contributor.author?.login;
+                if (!login || login.endsWith("[bot]")) continue;
 
-                // ─── Code Lines (MERGED only) ────────────────────────
-                // Only count lines for merged PRs — open PRs might change further,
-                // and closed-unmerged PRs should not earn line points.
-                const mergeTs = pr.merged_at || pr.closed_at || pr.opened_at;
-                if (pr.diff_stats.additions > 0) {
+                // Sum additions and deletions across all weeks
+                let totalAdditions = 0;
+                let totalDeletions = 0;
+                for (const week of contributor.weeks ?? []) {
+                    totalAdditions += week.a ?? 0;
+                    totalDeletions += week.d ?? 0;
+                }
+
+                if (totalAdditions > 0) {
                     events.push({
-                        id: `github:code_additions:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
-                        developerId: pr.creator.login,
+                        id: `github:code_additions:${repoFull}:${login}`,
+                        developerId: login,
                         eventType: EventType.CODE_ADDITION,
                         source: "github",
-                        sourceId: pr.url,
-                        eventTimestamp: mergeTs,
-                        metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}`, lines: pr.diff_stats.additions },
+                        sourceId: `https://github.com/${repoFull}/graphs/contributors`,
+                        eventTimestamp: new Date().toISOString(),
+                        metadata: { repo: repoFull, lines: totalAdditions },
                     });
                 }
-                if (pr.diff_stats.deletions > 0) {
+                if (totalDeletions > 0) {
                     events.push({
-                        id: `github:code_deletions:${owner}/${repoName}:${pr.pr_number}:${pr.creator.login}`,
-                        developerId: pr.creator.login,
+                        id: `github:code_deletions:${repoFull}:${login}`,
+                        developerId: login,
                         eventType: EventType.CODE_DELETION,
                         source: "github",
-                        sourceId: pr.url,
-                        eventTimestamp: mergeTs,
-                        metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}`, lines: pr.diff_stats.deletions },
-                    });
-                }
-            }
-
-            // ─── Comments (all PRs) ──────────────────────────────────
-            for (const commentGroup of pr.comments || []) {
-                // Skip bot accounts — they should not appear on the leaderboard
-                if (commentGroup.author.login.endsWith("[bot]")) continue;
-                for (const comment of commentGroup.comments) {
-                    events.push({
-                        // Keep ID format as repoName-only (no owner/) to stay backward-compatible
-                        // with events already stored in D1 using the old format.
-                        id: `github:comment:${repoName}:${comment.id}:${commentGroup.author.login}`,
-                        developerId: commentGroup.author.login,
-                        eventType: EventType.COMMENT,
-                        source: "github",
-                        sourceId: pr.url,
-                        eventTimestamp: comment.created_at,
-                        metadata: { pr_number: pr.pr_number, repo: `${owner}/${repoName}` },
+                        sourceId: `https://github.com/${repoFull}/graphs/contributors`,
+                        eventTimestamp: new Date().toISOString(),
+                        metadata: { repo: repoFull, lines: totalDeletions },
                     });
                 }
             }
         }
 
+        for (const pr of prs) {
+            const creator: string = pr.user?.login;
+            if (!creator || creator.endsWith("[bot]")) continue;
+
+            events.push({
+                id: `github:pr_created:${repoFull}:${pr.number}:${creator}`,
+                developerId: creator,
+                eventType: EventType.PR_CREATED,
+                source: "github",
+                sourceId: pr.html_url,
+                eventTimestamp: pr.created_at,
+                metadata: { pr_number: pr.number, title: pr.title, repo: repoFull },
+            });
+
+            if (pr.merged_at) {
+                events.push({
+                    id: `github:pr_merged:${repoFull}:${pr.number}:${creator}`,
+                    developerId: creator,
+                    eventType: EventType.PR_MERGED,
+                    source: "github",
+                    sourceId: pr.html_url,
+                    eventTimestamp: pr.merged_at,
+                    metadata: { pr_number: pr.number, title: pr.title, repo: repoFull },
+                });
+            }
+        }
+
+        for (const comment of issueComments) {
+            const author: string = comment.user?.login;
+            if (!author || author.endsWith("[bot]")) continue;
+            events.push({
+                id: `github:comment:${repoName}:${comment.id}:${author}`,
+                developerId: author,
+                eventType: EventType.COMMENT,
+                source: "github",
+                sourceId: comment.html_url,
+                eventTimestamp: comment.created_at,
+                metadata: { repo: repoFull },
+            });
+        }
+
+        for (const comment of reviewComments) {
+            const author: string = comment.user?.login;
+            if (!author || author.endsWith("[bot]")) continue;
+            events.push({
+                id: `github:review_comment:${repoName}:${comment.id}:${author}`,
+                developerId: author,
+                eventType: EventType.COMMENT,
+                source: "github",
+                sourceId: comment.html_url,
+                eventTimestamp: comment.created_at,
+                metadata: { repo: repoFull, pr_number: comment.pull_request_url?.split("/").pop() },
+            });
+        }
+
+        // ─── Ingest ──────────────────────────────────────────────────────────
         let inserted = 0;
         let duplicates = 0;
         if (events.length > 0) {
@@ -374,24 +415,38 @@ async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Respo
             duplicates = result.duplicates;
         }
 
-        // Refresh snapshots immediately
+        // Precompute snapshots so leaderboard reflects new data immediately
         await scoreAggregationService.precomputeSnapshots();
 
+        const statsOk = contributorStats != null && contributorStats.length > 0;
         return json({
             ok: true,
-            repo: `${owner}/${repoName}`,
+            repo: repoFull,
             prsFound: prs.length,
-            mergedPrsFound: prs.filter(p => p.status === "merged").length,
+            mergedPrs: prs.filter((p: any) => !!p.merged_at).length,
+            issueComments: issueComments.length,
+            reviewComments: reviewComments.length,
             eventsGenerated: events.length,
             eventsInserted: inserted,
             duplicates,
-            note: "Sync one repository at a time. Repeat for each repo in the org.",
+            lineStatsSource: statsOk
+                ? `GitHub contributor stats (${contributorStats!.length} contributors)`
+                : "GitHub stats unavailable — re-sync this repo in a few minutes",
         });
 
     } catch (e: any) {
         return err(`Sync failed: ${e.message}`, 500);
     }
 }
+
+// ─── Clear All Events Handler ────────────────────────────
+
+async function handleClearEvents(cradle: Cradle): Promise<Response> {
+    const deleted = await (cradle.d1Service as any).truncateAllEvents();
+    await cradle.scoreAggregationService.precomputeSnapshots();
+    return json({ ok: true, eventsDeleted: deleted });
+}
+
 
 
 // ─── Webhook Handler (Event-Driven) ─────────────────────────
@@ -913,6 +968,7 @@ function matchRoute(p: string): { handler: string; params?: Record<string, strin
     if (p === "/api/scores/leaderboard") return { handler: "scoresLeaderboard" };
     if (p === "/api/members") return { handler: "members" };
     if (p === "/api/events") return { handler: "events" };
+    if (p === "/api/events/clear") return { handler: "clearEvents" };
     if (p === "/api/attendance/check-in") return { handler: "checkIn" };
     if (p === "/api/attendance/check-out") return { handler: "checkOut" };
     if (p === "/api/attendance/history") return { handler: "attendanceHistory" };
@@ -988,6 +1044,9 @@ export default {
                 case "events":
                     if (request.method !== "GET") return err("Method Not Allowed", 405);
                     return handleListEvents(cradle, url);
+                case "clearEvents":
+                    if (request.method !== "DELETE") return err("Method Not Allowed", 405);
+                    return handleClearEvents(cradle);
                 case "checkIn":
                     if (request.method !== "POST") return err("Method Not Allowed", 405);
                     return handleCheckIn(cradle, request);
