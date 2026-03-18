@@ -38,7 +38,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 
 ### Message Guidelines
 
-- Average message length: ~52 characters
+- Average message length: ~53 characters
 - Keep first line concise and descriptive
 - Use imperative mood ("Add feature" not "Added feature")
 
@@ -46,7 +46,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 *Commit message example*
 
 ```text
-feat: add sellio_metrics ECC bundle (.claude/commands/add-or-refactor-feature-with-new-page-and-provider.md)
+feat: add sellio_metrics ECC bundle (.claude/commands/feature-development-with-api-and-frontend.md)
 ```
 
 *Commit message example*
@@ -76,12 +76,6 @@ fix(frontend): resolve missing exceptions and dio imports in logs feature (#59)
 *Commit message example*
 
 ```text
-Merge develop into ecc-tools/sellio_metrics-1773862451360
-```
-
-*Commit message example*
-
-```text
 feat: add sellio_metrics ECC bundle (.claude/commands/refactoring.md)
 ```
 
@@ -89,6 +83,12 @@ feat: add sellio_metrics ECC bundle (.claude/commands/refactoring.md)
 
 ```text
 feat: add sellio_metrics ECC bundle (.claude/commands/feature-development.md)
+```
+
+*Commit message example*
+
+```text
+feat: add sellio_metrics ECC bundle (.codex/agents/docs-researcher.toml)
 ```
 
 ## Architecture
@@ -174,7 +174,7 @@ These workflows were detected from analyzing commit patterns.
 
 Standard feature implementation workflow
 
-**Frequency**: ~18 times per month
+**Frequency**: ~22 times per month
 
 **Steps**:
 1. Add feature implementation
@@ -182,24 +182,23 @@ Standard feature implementation workflow
 3. Update documentation
 
 **Files typically involved**:
-- `backend/src/modules/prs/*`
-- `backend/src/*`
+- `frontend/lib/design_system/components/*`
 - `backend/src/core/*`
-- `**/*.test.*`
+- `backend/src/infra/database/*`
 - `**/api/**`
 
 **Example commit sequence**:
 ```
-refactor(prs): Implement cache for open PRs and invalidate on webhook
+ci(frontend): Add build_runner step to deploy workflow
+ci(frontend): Add build_runner step to deploy workflow (#83)
 Merge main into develop
-Develop (#78)
 ```
 
 ### Refactoring
 
 Code refactoring and cleanup workflow
 
-**Frequency**: ~10 times per month
+**Frequency**: ~7 times per month
 
 **Steps**:
 1. Ensure tests pass before refactor
@@ -211,141 +210,127 @@ Code refactoring and cleanup workflow
 
 **Example commit sequence**:
 ```
-feat(members): refactor and enhance member status display
+feat(openprs): refactor open PRs page and components
+refactor(ui): enhance KpiCard with richValue and assertions
 Merge main into develop
-Develop (#81)
 ```
 
-### Feature Development With Api And Frontend
+### Add Or Update Ecc Bundle
 
-Implements a new feature that involves both backend (API/database) and frontend (UI) changes, often including new endpoints, data models, and UI pages/components.
+Adds or updates ECC (Extensible Command/Capability) bundle files for the sellio_metrics project, including commands, skills, agent configs, and documentation.
+
+**Frequency**: ~5 times per month
+
+**Steps**:
+1. Add or update files in .claude/commands/, .claude/skills/, .claude/homunculus/instincts/inherited/, .codex/agents/, .codex/, .agents/skills/sellio_metrics/
+2. Commit with message referencing 'add sellio_metrics ECC bundle'
+
+**Files typically involved**:
+- `.claude/commands/*.md`
+- `.claude/skills/sellio_metrics/SKILL.md`
+- `.claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml`
+- `.codex/agents/*.toml`
+- `.codex/AGENTS.md`
+- `.codex/config.toml`
+- `.claude/identity.json`
+- `.claude/ecc-tools.json`
+- `.agents/skills/sellio_metrics/SKILL.md`
+- `.agents/skills/sellio_metrics/agents/openai.yaml`
+
+**Example commit sequence**:
+```
+Add or update files in .claude/commands/, .claude/skills/, .claude/homunculus/instincts/inherited/, .codex/agents/, .codex/, .agents/skills/sellio_metrics/
+Commit with message referencing 'add sellio_metrics ECC bundle'
+```
+
+### Frontend Feature Or Refactor With Multi File Touch
+
+Implements a new frontend feature or performs a major refactor, typically involving multiple files across navigation, data sources, domain entities/services, presentation pages/widgets, and providers.
 
 **Frequency**: ~3 times per month
 
 **Steps**:
-1. Create or update backend logic (e.g., new endpoint, service, or database migration).
-2. Update backend types and/or migrations if needed.
-3. Update or add frontend data repositories/entities to consume new API or data.
-4. Implement new or updated frontend pages/components to display the feature.
-5. Update localization files if new UI text is added.
-6. Update or add documentation (e.g., Postman collection or docs).
+1. Create or update navigation and routing files
+2. Add or update domain entities, enums, or services
+3. Add or update data sources and repositories
+4. Create or refactor presentation pages and widgets
+5. Update or move providers (ChangeNotifier) to new locations
+6. Update localization files if UI changes require new text
+7. Update or add tests (not always visible in this log)
 
 **Files typically involved**:
-- `backend/src/**/*.ts`
-- `backend/migrations/*.sql`
-- `docs/*.json`
+- `frontend/lib/core/navigation/app_navigation.dart`
+- `frontend/lib/domain/entities/*.dart`
+- `frontend/lib/domain/services/*.dart`
+- `frontend/lib/data/datasources/**/*.dart`
 - `frontend/lib/data/repositories/**/*.dart`
-- `frontend/lib/domain/entities/**/*.dart`
 - `frontend/lib/presentation/pages/**/*.dart`
+- `frontend/lib/presentation/widgets/**/*.dart`
+- `frontend/lib/presentation/providers/**/*.dart`
 - `frontend/lib/l10n/*.arb`
 
 **Example commit sequence**:
 ```
-Create or update backend logic (e.g., new endpoint, service, or database migration).
-Update backend types and/or migrations if needed.
-Update or add frontend data repositories/entities to consume new API or data.
-Implement new or updated frontend pages/components to display the feature.
-Update localization files if new UI text is added.
-Update or add documentation (e.g., Postman collection or docs).
+Create or update navigation and routing files
+Add or update domain entities, enums, or services
+Add or update data sources and repositories
+Create or refactor presentation pages and widgets
+Update or move providers (ChangeNotifier) to new locations
+Update localization files if UI changes require new text
+Update or add tests (not always visible in this log)
 ```
 
-### Frontend Component Refactor And Restructure
+### Backend Feature With Migration And Api Update
 
-Refactors frontend components/widgets, often splitting large files into smaller ones, moving files into feature folders, and updating imports throughout the codebase.
-
-**Frequency**: ~2 times per month
-
-**Steps**:
-1. Move or split widgets/components into new files or directories (often feature-based).
-2. Update all relevant imports across the frontend codebase.
-3. Adjust related page files to use new structure.
-4. Update or refactor providers if their location or usage changes.
-
-**Files typically involved**:
-- `frontend/lib/presentation/pages/**/*.dart`
-- `frontend/lib/presentation/widgets/**/*.dart`
-- `frontend/lib/presentation/providers/**/*.dart`
-- `frontend/lib/app.dart`
-- `frontend/lib/core/navigation/app_navigation.dart`
-
-**Example commit sequence**:
-```
-Move or split widgets/components into new files or directories (often feature-based).
-Update all relevant imports across the frontend codebase.
-Adjust related page files to use new structure.
-Update or refactor providers if their location or usage changes.
-```
-
-### Dependency Injection Migration Or Update
-
-Migrates or updates the dependency injection (DI) system in the frontend, such as switching to a new DI framework or updating DI configuration and annotations.
+Implements a backend feature that requires a database migration, updates to backend logic, and corresponding API documentation.
 
 **Frequency**: ~1 times per month
 
 **Steps**:
-1. Add or update DI-related dependencies in pubspec.yaml.
-2. Create or update DI configuration files (e.g., app_module.dart, injection.dart).
-3. Annotate services, repositories, and providers with DI annotations.
-4. Update main.dart and other entry points to use the new DI system.
-5. Remove or refactor old DI/service locator code.
+1. Create or update a migration SQL file in backend/migrations/
+2. Update backend logic in src/core/ and src/infra/database/
+3. Update worker or service files if needed
+4. Update API documentation (e.g., Postman collection)
+5. Update frontend repositories/entities if API changes affect the client
+6. Update localization files if new units or strings are introduced
 
 **Files typically involved**:
-- `frontend/pubspec.yaml`
-- `frontend/lib/core/di/*.dart`
-- `frontend/lib/app.dart`
-- `frontend/lib/main.dart`
+- `backend/migrations/*.sql`
+- `backend/src/core/*.ts`
+- `backend/src/infra/database/*.ts`
+- `backend/src/worker.ts`
+- `docs/Sellio_Metrics_API.postman_collection.json`
 - `frontend/lib/data/repositories/**/*.dart`
-- `frontend/lib/domain/services/**/*.dart`
-- `frontend/lib/presentation/providers/**/*.dart`
+- `frontend/lib/domain/entities/**/*.dart`
+- `frontend/lib/l10n/*.arb`
 
 **Example commit sequence**:
 ```
-Add or update DI-related dependencies in pubspec.yaml.
-Create or update DI configuration files (e.g., app_module.dart, injection.dart).
-Annotate services, repositories, and providers with DI annotations.
-Update main.dart and other entry points to use the new DI system.
-Remove or refactor old DI/service locator code.
+Create or update a migration SQL file in backend/migrations/
+Update backend logic in src/core/ and src/infra/database/
+Update worker or service files if needed
+Update API documentation (e.g., Postman collection)
+Update frontend repositories/entities if API changes affect the client
+Update localization files if new units or strings are introduced
 ```
 
-### Ci Workflow Update
+### Ci Cd Workflow Update
 
-Updates continuous integration (CI) workflow files, such as adding new build steps or modifying deployment pipelines.
+Updates CI/CD workflow files, typically to add new build steps or deployment improvements.
 
 **Frequency**: ~1 times per month
 
 **Steps**:
-1. Edit or add steps in workflow YAML files under .github/workflows.
-2. Commit and push changes to trigger new CI runs.
+1. Update .github/workflows/*.yml to add or modify build/deploy steps
+2. Commit with a message referencing the workflow and the change
 
 **Files typically involved**:
 - `.github/workflows/*.yml`
 
 **Example commit sequence**:
 ```
-Edit or add steps in workflow YAML files under .github/workflows.
-Commit and push changes to trigger new CI runs.
-```
-
-### Backend Caching Enhancement
-
-Implements or improves caching for backend endpoints, including cache invalidation logic tied to webhooks or data updates.
-
-**Frequency**: ~1 times per month
-
-**Steps**:
-1. Add or update cache logic in backend service files.
-2. Implement or update cache invalidation logic (e.g., on webhook events).
-3. Update worker or background job files if needed.
-
-**Files typically involved**:
-- `backend/src/modules/**/*.ts`
-- `backend/src/worker.ts`
-
-**Example commit sequence**:
-```
-Add or update cache logic in backend service files.
-Implement or update cache invalidation logic (e.g., on webhook events).
-Update worker or background job files if needed.
+Update .github/workflows/*.yml to add or modify build/deploy steps
+Commit with a message referencing the workflow and the change
 ```
 
 
