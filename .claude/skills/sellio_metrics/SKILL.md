@@ -38,7 +38,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 
 ### Message Guidelines
 
-- Average message length: ~53 characters
+- Average message length: ~55 characters
 - Keep first line concise and descriptive
 - Use imperative mood ("Add feature" not "Added feature")
 
@@ -46,7 +46,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 *Commit message example*
 
 ```text
-feat: add sellio_metrics ECC bundle (.claude/commands/feature-development-with-api-and-frontend.md)
+feat: add sellio_metrics ECC bundle (.claude/commands/add-or-update-ecc-bundle.md)
 ```
 
 *Commit message example*
@@ -174,7 +174,7 @@ These workflows were detected from analyzing commit patterns.
 
 Standard feature implementation workflow
 
-**Frequency**: ~22 times per month
+**Frequency**: ~26 times per month
 
 **Steps**:
 1. Add feature implementation
@@ -189,8 +189,8 @@ Standard feature implementation workflow
 
 **Example commit sequence**:
 ```
-ci(frontend): Add build_runner step to deploy workflow
-ci(frontend): Add build_runner step to deploy workflow (#83)
+Develop (#87)
+refactor(presentation): restructure providers into feature folders
 Merge main into develop
 ```
 
@@ -198,7 +198,7 @@ Merge main into develop
 
 Code refactoring and cleanup workflow
 
-**Frequency**: ~7 times per month
+**Frequency**: ~5 times per month
 
 **Steps**:
 1. Ensure tests pass before refactor
@@ -210,89 +210,89 @@ Code refactoring and cleanup workflow
 
 **Example commit sequence**:
 ```
-feat(openprs): refactor open PRs page and components
-refactor(ui): enhance KpiCard with richValue and assertions
+Develop (#87)
+refactor(presentation): restructure providers into feature folders
 Merge main into develop
 ```
 
-### Add Or Update Ecc Bundle
+### Ecc Bundle Synchronization
 
-Adds or updates ECC (Extensible Command/Capability) bundle files for the sellio_metrics project, including commands, skills, agent configs, and documentation.
+Synchronize or update the ECC bundle for sellio_metrics, including commands, skills, instincts, agent configs, and tool definitions.
 
-**Frequency**: ~5 times per month
+**Frequency**: ~3 times per month
 
 **Steps**:
-1. Add or update files in .claude/commands/, .claude/skills/, .claude/homunculus/instincts/inherited/, .codex/agents/, .codex/, .agents/skills/sellio_metrics/
-2. Commit with message referencing 'add sellio_metrics ECC bundle'
+1. Add or update .claude/commands/*.md files for new or changed workflows (e.g., feature-development.md, refactoring.md)
+2. Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+3. Add or update .codex/agents/*.toml files (docs-researcher.toml, reviewer.toml, explorer.toml)
+4. Add or update .codex/AGENTS.md and .codex/config.toml
+5. Add or update .claude/identity.json
+6. Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+7. Add or update .agents/skills/sellio_metrics/SKILL.md and .claude/skills/sellio_metrics/SKILL.md
+8. Add or update .claude/ecc-tools.json
 
 **Files typically involved**:
 - `.claude/commands/*.md`
-- `.claude/skills/sellio_metrics/SKILL.md`
 - `.claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml`
 - `.codex/agents/*.toml`
 - `.codex/AGENTS.md`
 - `.codex/config.toml`
 - `.claude/identity.json`
-- `.claude/ecc-tools.json`
-- `.agents/skills/sellio_metrics/SKILL.md`
 - `.agents/skills/sellio_metrics/agents/openai.yaml`
+- `.agents/skills/sellio_metrics/SKILL.md`
+- `.claude/skills/sellio_metrics/SKILL.md`
+- `.claude/ecc-tools.json`
 
 **Example commit sequence**:
 ```
-Add or update files in .claude/commands/, .claude/skills/, .claude/homunculus/instincts/inherited/, .codex/agents/, .codex/, .agents/skills/sellio_metrics/
-Commit with message referencing 'add sellio_metrics ECC bundle'
+Add or update .claude/commands/*.md files for new or changed workflows (e.g., feature-development.md, refactoring.md)
+Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+Add or update .codex/agents/*.toml files (docs-researcher.toml, reviewer.toml, explorer.toml)
+Add or update .codex/AGENTS.md and .codex/config.toml
+Add or update .claude/identity.json
+Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+Add or update .agents/skills/sellio_metrics/SKILL.md and .claude/skills/sellio_metrics/SKILL.md
+Add or update .claude/ecc-tools.json
 ```
 
-### Frontend Feature Or Refactor With Multi File Touch
+### Feature Refactor Provider Restructure
 
-Implements a new frontend feature or performs a major refactor, typically involving multiple files across navigation, data sources, domain entities/services, presentation pages/widgets, and providers.
+Restructure frontend provider files into feature-specific folders and update all relevant imports for better maintainability.
 
-**Frequency**: ~3 times per month
+**Frequency**: ~2 times per month
 
 **Steps**:
-1. Create or update navigation and routing files
-2. Add or update domain entities, enums, or services
-3. Add or update data sources and repositories
-4. Create or refactor presentation pages and widgets
-5. Update or move providers (ChangeNotifier) to new locations
-6. Update localization files if UI changes require new text
-7. Update or add tests (not always visible in this log)
+1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
+2. Update all import statements across the frontend to point to the new provider locations
+3. Update related page and widget files to use the new provider paths
 
 **Files typically involved**:
+- `frontend/lib/presentation/pages/*/providers/*.dart`
+- `frontend/lib/presentation/pages/*/*.dart`
+- `frontend/lib/presentation/widgets/*.dart`
+- `frontend/lib/app.dart`
 - `frontend/lib/core/navigation/app_navigation.dart`
-- `frontend/lib/domain/entities/*.dart`
-- `frontend/lib/domain/services/*.dart`
-- `frontend/lib/data/datasources/**/*.dart`
-- `frontend/lib/data/repositories/**/*.dart`
-- `frontend/lib/presentation/pages/**/*.dart`
-- `frontend/lib/presentation/widgets/**/*.dart`
-- `frontend/lib/presentation/providers/**/*.dart`
-- `frontend/lib/l10n/*.arb`
 
 **Example commit sequence**:
 ```
-Create or update navigation and routing files
-Add or update domain entities, enums, or services
-Add or update data sources and repositories
-Create or refactor presentation pages and widgets
-Update or move providers (ChangeNotifier) to new locations
-Update localization files if UI changes require new text
-Update or add tests (not always visible in this log)
+Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
+Update all import statements across the frontend to point to the new provider locations
+Update related page and widget files to use the new provider paths
 ```
 
-### Backend Feature With Migration And Api Update
+### Feature Development With Api And Frontend
 
-Implements a backend feature that requires a database migration, updates to backend logic, and corresponding API documentation.
+Develop a new feature that includes backend (API/database), frontend (UI), and documentation updates.
 
-**Frequency**: ~1 times per month
+**Frequency**: ~2 times per month
 
 **Steps**:
-1. Create or update a migration SQL file in backend/migrations/
-2. Update backend logic in src/core/ and src/infra/database/
-3. Update worker or service files if needed
-4. Update API documentation (e.g., Postman collection)
-5. Update frontend repositories/entities if API changes affect the client
-6. Update localization files if new units or strings are introduced
+1. Create or update backend migration files (e.g., backend/migrations/*.sql)
+2. Implement or update backend logic (e.g., backend/src/core/*.ts, backend/src/infra/database/*.ts, backend/src/worker.ts)
+3. Add or update API documentation (e.g., docs/Sellio_Metrics_API.postman_collection.json)
+4. Implement or update frontend repository, entity, and page files (e.g., frontend/lib/data/repositories/*, frontend/lib/domain/entities/*, frontend/lib/presentation/pages/*)
+5. Update frontend localization files if needed (e.g., frontend/lib/l10n/*.arb)
+6. Update or create new frontend widgets as required
 
 **Files typically involved**:
 - `backend/migrations/*.sql`
@@ -300,37 +300,20 @@ Implements a backend feature that requires a database migration, updates to back
 - `backend/src/infra/database/*.ts`
 - `backend/src/worker.ts`
 - `docs/Sellio_Metrics_API.postman_collection.json`
-- `frontend/lib/data/repositories/**/*.dart`
-- `frontend/lib/domain/entities/**/*.dart`
+- `frontend/lib/data/repositories/*.dart`
+- `frontend/lib/domain/entities/*.dart`
+- `frontend/lib/presentation/pages/*/*.dart`
 - `frontend/lib/l10n/*.arb`
+- `frontend/lib/presentation/widgets/*.dart`
 
 **Example commit sequence**:
 ```
-Create or update a migration SQL file in backend/migrations/
-Update backend logic in src/core/ and src/infra/database/
-Update worker or service files if needed
-Update API documentation (e.g., Postman collection)
-Update frontend repositories/entities if API changes affect the client
-Update localization files if new units or strings are introduced
-```
-
-### Ci Cd Workflow Update
-
-Updates CI/CD workflow files, typically to add new build steps or deployment improvements.
-
-**Frequency**: ~1 times per month
-
-**Steps**:
-1. Update .github/workflows/*.yml to add or modify build/deploy steps
-2. Commit with a message referencing the workflow and the change
-
-**Files typically involved**:
-- `.github/workflows/*.yml`
-
-**Example commit sequence**:
-```
-Update .github/workflows/*.yml to add or modify build/deploy steps
-Commit with a message referencing the workflow and the change
+Create or update backend migration files (e.g., backend/migrations/*.sql)
+Implement or update backend logic (e.g., backend/src/core/*.ts, backend/src/infra/database/*.ts, backend/src/worker.ts)
+Add or update API documentation (e.g., docs/Sellio_Metrics_API.postman_collection.json)
+Implement or update frontend repository, entity, and page files (e.g., frontend/lib/data/repositories/*, frontend/lib/domain/entities/*, frontend/lib/presentation/pages/*)
+Update frontend localization files if needed (e.g., frontend/lib/l10n/*.arb)
+Update or create new frontend widgets as required
 ```
 
 
