@@ -1,5 +1,5 @@
 # Instincts generated from https://github.com/Sellio-Squad/sellio_metrics
-# Generated: 2026-03-18T19:35:08.755Z
+# Generated: 2026-03-18T19:36:02.185Z
 # Version: 2.0
 
 ---
@@ -19,7 +19,7 @@ Write moderate-length commit messages (~50 characters)
 
 ## Evidence
 
-- Average commit message length: 52 chars
+- Average commit message length: 53 chars
 - Based on 200 commits
 
 ---
@@ -143,8 +143,8 @@ Follow the feature-development workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~18x per month
-- Files: backend/src/modules/prs/*, backend/src/*, backend/src/core/*
+- Frequency: ~22x per month
+- Files: frontend/lib/design_system/components/*, backend/src/core/*, backend/src/infra/database/*
 
 ---
 id: sellio_metrics-workflow-refactoring
@@ -167,137 +167,88 @@ Follow the refactoring workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~11x per month
+- Frequency: ~8x per month
 - Files: src/**/*
 
 ---
-id: sellio_metrics-workflow-add-or-refactor-feature-with-new-page-and-provider
-trigger: "when doing add or refactor feature with new page and provider"
-confidence: 0.7
-domain: workflow
-source: repo-analysis
-source_repo: https://github.com/Sellio-Squad/sellio_metrics
----
-
-# Sellio_metrics Workflow Add Or Refactor Feature With New Page And Provider
-
-## Action
-
-Follow the add-or-refactor-feature-with-new-page-and-provider workflow:
-1. Create or update a new page widget under frontend/lib/presentation/pages/<feature>/
-2. Add or update provider under frontend/lib/presentation/providers/ or frontend/lib/presentation/pages/<feature>/providers/
-3. Update navigation in frontend/lib/core/navigation/app_navigation.dart
-4. Update or create new domain/entity/service files if needed
-5. Update or add widgets under frontend/lib/presentation/pages/<feature>/widgets/
-6. Update localization files if new UI text is introduced
-7. Update or add fake data sources if needed
-
-## Evidence
-
-- Workflow detected from commit patterns
-- Frequency: ~4x per month
-- Files: frontend/lib/presentation/pages/<feature>/<feature>_page.dart, frontend/lib/presentation/pages/<feature>/widgets/*.dart, frontend/lib/presentation/providers/<feature>_provider.dart
-
----
-id: sellio_metrics-workflow-refactor-widget-or-component-into-smaller-widgets
-trigger: "when doing refactor widget or component into smaller widgets"
+id: sellio_metrics-workflow-ecc-bundle-sync
+trigger: "when doing ecc bundle sync"
 confidence: 0.6
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Refactor Widget Or Component Into Smaller Widgets
+# Sellio_metrics Workflow Ecc Bundle Sync
 
 ## Action
 
-Follow the refactor-widget-or-component-into-smaller-widgets workflow:
-1. Identify large widget/page (e.g., OpenPrsPage, MemberCard)
-2. Extract sections into new widgets under widgets/ subdirectory
-3. Update the main page to use the new widgets
-4. Update imports and references throughout the codebase
+Follow the ecc-bundle-sync workflow:
+1. Add or update .claude/commands/*.md files (feature-development, refactoring, add-or-refactor-feature-with-new-page-and-provider)
+2. Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+3. Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+4. Add or update .codex/AGENTS.md and .codex/config.toml
+5. Add or update .claude/identity.json
+6. Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+7. Add or update .agents/skills/sellio_metrics/SKILL.md and .claude/skills/sellio_metrics/SKILL.md
+8. Add or update .claude/ecc-tools.json
 
 ## Evidence
 
 - Workflow detected from commit patterns
 - Frequency: ~2x per month
-- Files: frontend/lib/presentation/pages/<feature>/<feature>_page.dart, frontend/lib/presentation/pages/<feature>/widgets/*.dart
+- Files: .claude/commands/feature-development.md, .claude/commands/refactoring.md, .claude/commands/add-or-refactor-feature-with-new-page-and-provider.md
 
 ---
-id: sellio_metrics-workflow-backend-api-or-metrics-enhancement
-trigger: "when doing backend api or metrics enhancement"
+id: sellio_metrics-workflow-feature-development-with-ui-and-domain
+trigger: "when doing feature development with ui and domain"
 confidence: 0.6
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Backend Api Or Metrics Enhancement
+# Sellio_metrics Workflow Feature Development With Ui And Domain
 
 ## Action
 
-Follow the backend-api-or-metrics-enhancement workflow:
-1. Add or update SQL migration under backend/migrations/
-2. Update backend/src/core/event-types.ts or types.ts
-3. Update backend/src/infra/database/*.ts or modules/metrics/*.ts
-4. Update backend/src/worker.ts for ingestion/processing logic
-5. Update API documentation (e.g., Postman collection)
-6. Update frontend repository/entities if new data is exposed
+Follow the feature-development-with-ui-and-domain workflow:
+1. Create or update domain entities and enums (e.g., pr_entity.dart, pr_code_insight.dart, pr_size_category.dart)
+2. Implement or update domain services (e.g., pr_analysis_service.dart)
+3. Add or update data sources (e.g., fake_datasources.dart)
+4. Add or update navigation (e.g., app_navigation.dart)
+5. Create new page(s) and widgets under frontend/lib/presentation/pages/<feature>/
+6. Update or add providers if state management is needed
+7. Update design system exports if new components are introduced
+8. Update or create tests and documentation as needed
 
 ## Evidence
 
 - Workflow detected from commit patterns
 - Frequency: ~2x per month
-- Files: backend/migrations/*.sql, backend/src/core/event-types.ts, backend/src/core/types.ts
+- Files: frontend/lib/domain/entities/*.dart, frontend/lib/domain/services/*.dart, frontend/lib/domain/enums/*.dart
 
 ---
-id: sellio_metrics-workflow-dependency-injection-refactor-with-injectable
-trigger: "when doing dependency injection refactor with injectable"
-confidence: 0.55
+id: sellio_metrics-workflow-large-refactor-provider-structure
+trigger: "when doing large refactor provider structure"
+confidence: 0.6
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Dependency Injection Refactor With Injectable
+# Sellio_metrics Workflow Large Refactor Provider Structure
 
 ## Action
 
-Follow the dependency-injection-refactor-with-injectable workflow:
-1. Add or update injectable annotations to services, repositories, and providers
-2. Create or update DI modules (e.g., app_module.dart)
-3. Update or create injection config (e.g., injection.dart, injection.config.dart)
-4. Update main.dart to initialize DI
-5. Update pubspec.yaml with required dependencies
-6. Regenerate DI files (build_runner)
+Follow the large-refactor-provider-structure workflow:
+1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
+2. Update all import statements across the frontend to reflect the new provider paths
+3. Test the application to ensure no broken imports or runtime errors
 
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~1x per month
-- Files: frontend/lib/core/di/app_module.dart, frontend/lib/core/di/injection.dart, frontend/lib/core/di/service_locator.dart
-
----
-id: sellio_metrics-workflow-ci-workflow-update-for-build-runner
-trigger: "when doing ci workflow update for build runner"
-confidence: 0.55
-domain: workflow
-source: repo-analysis
-source_repo: https://github.com/Sellio-Squad/sellio_metrics
----
-
-# Sellio_metrics Workflow Ci Workflow Update For Build Runner
-
-## Action
-
-Follow the ci-workflow-update-for-build-runner workflow:
-1. Edit .github/workflows/deploy-frontend.yml
-2. Add or update step to run 'dart run build_runner build --delete-conflicting-outputs'
-3. Commit and push workflow changes
-
-## Evidence
-
-- Workflow detected from commit patterns
-- Frequency: ~1x per month
-- Files: .github/workflows/deploy-frontend.yml
+- Frequency: ~2x per month
+- Files: frontend/lib/presentation/providers/*.dart, frontend/lib/presentation/pages/*/providers/*.dart, frontend/lib/app.dart
 
