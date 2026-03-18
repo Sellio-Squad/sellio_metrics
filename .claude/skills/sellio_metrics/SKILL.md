@@ -38,7 +38,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 
 ### Message Guidelines
 
-- Average message length: ~53 characters
+- Average message length: ~55 characters
 - Keep first line concise and descriptive
 - Use imperative mood ("Add feature" not "Added feature")
 
@@ -46,7 +46,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 *Commit message example*
 
 ```text
-feat: add sellio_metrics ECC bundle (.claude/commands/add-or-refactor-feature-with-new-page-and-provider.md)
+feat: add sellio_metrics ECC bundle (.claude/commands/ecc-bundle-sync.md)
 ```
 
 *Commit message example*
@@ -174,7 +174,7 @@ These workflows were detected from analyzing commit patterns.
 
 Standard feature implementation workflow
 
-**Frequency**: ~22 times per month
+**Frequency**: ~26 times per month
 
 **Steps**:
 1. Add feature implementation
@@ -189,8 +189,8 @@ Standard feature implementation workflow
 
 **Example commit sequence**:
 ```
-ci(frontend): Add build_runner step to deploy workflow
-ci(frontend): Add build_runner step to deploy workflow (#83)
+Develop (#87)
+refactor(presentation): restructure providers into feature folders
 Merge main into develop
 ```
 
@@ -198,7 +198,7 @@ Merge main into develop
 
 Code refactoring and cleanup workflow
 
-**Frequency**: ~8 times per month
+**Frequency**: ~5 times per month
 
 **Steps**:
 1. Ensure tests pass before refactor
@@ -210,21 +210,21 @@ Code refactoring and cleanup workflow
 
 **Example commit sequence**:
 ```
-feat(openprs): refactor open PRs page and components
-refactor(ui): enhance KpiCard with richValue and assertions
+Develop (#87)
+refactor(presentation): restructure providers into feature folders
 Merge main into develop
 ```
 
-### Ecc Bundle Sync
+### Ecc Bundle Integration
 
-Synchronize or update ECC (Enhanced Code Context) bundle files for the sellio_metrics project, including commands, skills, agent configs, and tool manifests.
+Integrates or updates the sellio_metrics ECC bundle and related agent/configuration files for the Claude/Codex/Agents system.
 
-**Frequency**: ~2 times per month
+**Frequency**: ~3 times per month
 
 **Steps**:
-1. Add or update .claude/commands/*.md files (feature-development, refactoring, add-or-refactor-feature-with-new-page-and-provider)
+1. Add or update .claude/commands/*.md files (e.g., feature-development.md, refactoring.md, add-or-refactor-feature-with-new-page-and-provider.md)
 2. Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
-3. Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+3. Add or update .codex/agents/*.toml files (e.g., docs-researcher.toml, reviewer.toml, explorer.toml)
 4. Add or update .codex/AGENTS.md and .codex/config.toml
 5. Add or update .claude/identity.json
 6. Add or update .agents/skills/sellio_metrics/agents/openai.yaml
@@ -232,13 +232,9 @@ Synchronize or update ECC (Enhanced Code Context) bundle files for the sellio_me
 8. Add or update .claude/ecc-tools.json
 
 **Files typically involved**:
-- `.claude/commands/feature-development.md`
-- `.claude/commands/refactoring.md`
-- `.claude/commands/add-or-refactor-feature-with-new-page-and-provider.md`
+- `.claude/commands/*.md`
 - `.claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml`
-- `.codex/agents/docs-researcher.toml`
-- `.codex/agents/reviewer.toml`
-- `.codex/agents/explorer.toml`
+- `.codex/agents/*.toml`
 - `.codex/AGENTS.md`
 - `.codex/config.toml`
 - `.claude/identity.json`
@@ -249,9 +245,9 @@ Synchronize or update ECC (Enhanced Code Context) bundle files for the sellio_me
 
 **Example commit sequence**:
 ```
-Add or update .claude/commands/*.md files (feature-development, refactoring, add-or-refactor-feature-with-new-page-and-provider)
+Add or update .claude/commands/*.md files (e.g., feature-development.md, refactoring.md, add-or-refactor-feature-with-new-page-and-provider.md)
 Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
-Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+Add or update .codex/agents/*.toml files (e.g., docs-researcher.toml, reviewer.toml, explorer.toml)
 Add or update .codex/AGENTS.md and .codex/config.toml
 Add or update .claude/identity.json
 Add or update .agents/skills/sellio_metrics/agents/openai.yaml
@@ -259,69 +255,29 @@ Add or update .agents/skills/sellio_metrics/SKILL.md and .claude/skills/sellio_m
 Add or update .claude/ecc-tools.json
 ```
 
-### Feature Development With Ui And Domain
+### Provider Refactoring Feature Folderization
 
-Add a new feature or major UI/domain enhancement, typically involving new pages, widgets, entities, services, and navigation updates.
-
-**Frequency**: ~2 times per month
-
-**Steps**:
-1. Create or update domain entities and enums (e.g., pr_entity.dart, pr_code_insight.dart, pr_size_category.dart)
-2. Implement or update domain services (e.g., pr_analysis_service.dart)
-3. Add or update data sources (e.g., fake_datasources.dart)
-4. Add or update navigation (e.g., app_navigation.dart)
-5. Create new page(s) and widgets under frontend/lib/presentation/pages/<feature>/
-6. Update or add providers if state management is needed
-7. Update design system exports if new components are introduced
-8. Update or create tests and documentation as needed
-
-**Files typically involved**:
-- `frontend/lib/domain/entities/*.dart`
-- `frontend/lib/domain/services/*.dart`
-- `frontend/lib/domain/enums/*.dart`
-- `frontend/lib/data/datasources/fake/fake_datasources.dart`
-- `frontend/lib/core/navigation/app_navigation.dart`
-- `frontend/lib/presentation/pages/open_prs/pr_details_page.dart`
-- `frontend/lib/presentation/pages/open_prs/widgets/*.dart`
-- `frontend/lib/presentation/providers/*.dart`
-- `frontend/lib/design_system/design_system.dart`
-
-**Example commit sequence**:
-```
-Create or update domain entities and enums (e.g., pr_entity.dart, pr_code_insight.dart, pr_size_category.dart)
-Implement or update domain services (e.g., pr_analysis_service.dart)
-Add or update data sources (e.g., fake_datasources.dart)
-Add or update navigation (e.g., app_navigation.dart)
-Create new page(s) and widgets under frontend/lib/presentation/pages/<feature>/
-Update or add providers if state management is needed
-Update design system exports if new components are introduced
-Update or create tests and documentation as needed
-```
-
-### Large Refactor Provider Structure
-
-Restructure frontend provider files by moving them from a flat directory to feature-specific folders, updating all relevant imports and usages.
+Moves provider files from a flat directory into feature-specific folders and updates all relevant imports across the frontend codebase.
 
 **Frequency**: ~2 times per month
 
 **Steps**:
 1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
-2. Update all import statements across the frontend to reflect the new provider paths
-3. Test the application to ensure no broken imports or runtime errors
+2. Update all import statements referencing moved providers throughout the frontend codebase
+3. Update related page/widget files to use new provider paths
 
 **Files typically involved**:
 - `frontend/lib/presentation/providers/*.dart`
 - `frontend/lib/presentation/pages/*/providers/*.dart`
+- `frontend/lib/presentation/pages/**/*.dart`
 - `frontend/lib/app.dart`
 - `frontend/lib/core/navigation/app_navigation.dart`
-- `frontend/lib/presentation/navigation/app_sidebar.dart`
-- `frontend/lib/presentation/pages/**/*.dart`
 
 **Example commit sequence**:
 ```
 Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
-Update all import statements across the frontend to reflect the new provider paths
-Test the application to ensure no broken imports or runtime errors
+Update all import statements referencing moved providers throughout the frontend codebase
+Update related page/widget files to use new provider paths
 ```
 
 
