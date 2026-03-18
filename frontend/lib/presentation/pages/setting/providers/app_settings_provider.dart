@@ -14,7 +14,6 @@ import '../../../../core/logging/app_logger.dart';
 
 @injectable
 class AppSettingsProvider extends ChangeNotifier {
-  /// Depends on INTERFACE — satisfies Dependency Inversion Principle.
   final ReposRepository _repository;
 
   ThemeMode _themeMode = ThemeMode.light;
@@ -26,7 +25,6 @@ class AppSettingsProvider extends ChangeNotifier {
 
   AppSettingsProvider(this._repository);
 
-  // ─── Getters ─────────────────────────────────────────────
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
   bool get isDarkMode => _themeMode == ThemeMode.dark;
@@ -35,7 +33,6 @@ class AppSettingsProvider extends ChangeNotifier {
   bool get isLoadingRepos => _isLoadingRepos;
   String? get errorRepoLoad => _errorRepoLoad;
 
-  // ─── Theme ───────────────────────────────────────────────
   void toggleTheme() {
     _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     notifyListeners();
@@ -46,7 +43,6 @@ class AppSettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Locale ──────────────────────────────────────────────
   void setLocale(Locale locale) {
     _locale = locale;
     notifyListeners();
@@ -59,7 +55,6 @@ class AppSettingsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Repositories ────────────────────────────────────────
   Future<void> loadRepositories() async {
     _isLoadingRepos = true;
     _errorRepoLoad = null;

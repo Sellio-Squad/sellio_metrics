@@ -2,7 +2,6 @@ library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/di/injection.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../domain/services/filter_service.dart';
