@@ -10,16 +10,16 @@ Use this workflow when working on **add-or-refactor-feature-with-new-page-and-pr
 
 ## Goal
 
-Adds or refactors a frontend feature by creating or updating a page, its provider, and related widgets/components, often including navigation updates and entity changes.
+Implements a new feature or refactors an existing one by adding a new page (often under open_prs, members, or observability), updating navigation, and creating or updating a provider for state management.
 
 ## Common Files
 
-- `frontend/lib/presentation/pages/*/*_page.dart`
-- `frontend/lib/presentation/pages/*/providers/*_provider.dart`
-- `frontend/lib/presentation/pages/*/widgets/*.dart`
+- `frontend/lib/presentation/pages/<feature>/<feature>_page.dart`
+- `frontend/lib/presentation/pages/<feature>/widgets/*.dart`
+- `frontend/lib/presentation/providers/<feature>_provider.dart`
+- `frontend/lib/presentation/pages/<feature>/providers/<feature>_provider.dart`
 - `frontend/lib/core/navigation/app_navigation.dart`
 - `frontend/lib/domain/entities/*.dart`
-- `frontend/lib/domain/services/*.dart`
 
 ## Suggested Sequence
 
@@ -30,11 +30,11 @@ Adds or refactors a frontend feature by creating or updating a page, its provide
 
 ## Typical Commit Signals
 
-- Create or update a page under frontend/lib/presentation/pages/<feature>/<feature>_page.dart
-- Create or update provider under frontend/lib/presentation/pages/<feature>/providers/<feature>_provider.dart or frontend/lib/presentation/providers/<feature>_provider.dart
-- Add or update widgets/components under frontend/lib/presentation/pages/<feature>/widgets/
+- Create or update a new page widget under frontend/lib/presentation/pages/<feature>/
+- Add or update provider under frontend/lib/presentation/providers/ or frontend/lib/presentation/pages/<feature>/providers/
 - Update navigation in frontend/lib/core/navigation/app_navigation.dart
-- Update or add related entities or services under frontend/lib/domain/entities/ or frontend/lib/domain/services/
+- Update or create new domain/entity/service files if needed
+- Update or add widgets under frontend/lib/presentation/pages/<feature>/widgets/
 
 ## Notes
 
