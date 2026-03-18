@@ -348,9 +348,13 @@ async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Respo
 
             // ─── Comments (all PRs) ──────────────────────────────────
             for (const commentGroup of pr.comments || []) {
+                // Skip bot accounts — they should not appear on the leaderboard
+                if (commentGroup.author.login.endsWith("[bot]")) continue;
                 for (const comment of commentGroup.comments) {
                     events.push({
-                        id: `github:comment:${owner}/${repoName}:${comment.id}:${commentGroup.author.login}`,
+                        // Keep ID format as repoName-only (no owner/) to stay backward-compatible
+                        // with events already stored in D1 using the old format.
+                        id: `github:comment:${repoName}:${comment.id}:${commentGroup.author.login}`,
                         developerId: commentGroup.author.login,
                         eventType: EventType.COMMENT,
                         source: "github",
@@ -479,7 +483,8 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
     if ((event === "issue_comment" || event === "pull_request_review_comment") && payload.comment) {
         const comment = payload.comment;
         const author = comment.user?.login;
-        if (author && action === "created") {
+        // Skip bots entirely — they should not earn points or appear on the leaderboard
+        if (author && action === "created" && !author.endsWith("[bot]")) {
             const prNumber = payload.issue?.number || payload.pull_request?.number;
             events.push({
                 id: `github:comment:${repo.full_name}:${comment.id}:${author}`,
@@ -500,9 +505,17 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
         const result = await cradle.eventsService.ingestBatch(events);
         ingested = result.inserted;
         duplicates = result.duplicates;
+
+        // Refresh the leaderboard snapshot in the background so scores update
+        // immediately without blocking the webhook response (fire-and-forget).
+        if (ingested > 0) {
+            cradle.scoreAggregationService.precomputeSnapshots().catch((e: any) =>
+                cradle.logger.warn({ err: e.message }, "Failed to refresh leaderboard after webhook")
+            );
+        }
     }
 
-    return json({ ok: true, event, repo: repo.full_name, invalidated: true, eventsIngested: ingested, duplicates });
+    return json({ ok: true, event, repo: repo.full_name, eventsIngested: ingested, duplicates });
 }
 
 // ─── Points Rules Handlers ──────────────────────────────────
@@ -538,9 +551,10 @@ async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Respon
         const avatarMap = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
         // Only include members that belong to the org's GitHub member list
         const memberLogins = new Set(orgMembers.map((m: any) => m.login as string));
-        
+
         result.entries = result.entries
-            .filter((entry: any) => memberLogins.has(entry.developer_id))
+            // Exclude non-members AND bot accounts (suffix: [bot])
+            .filter((entry: any) => memberLogins.has(entry.developer_id) && !entry.developer_id.endsWith("[bot]"))
             .map((entry: any) => ({
                 ...entry,
                 avatarUrl: avatarMap.get(entry.developer_id) || `https://github.com/${entry.developer_id}.png`
