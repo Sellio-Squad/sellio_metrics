@@ -38,7 +38,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 
 ### Message Guidelines
 
-- Average message length: ~52 characters
+- Average message length: ~54 characters
 - Keep first line concise and descriptive
 - Use imperative mood ("Add feature" not "Added feature")
 
@@ -46,7 +46,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 *Commit message example*
 
 ```text
-feat: add sellio_metrics ECC bundle (.claude/commands/add-or-refactor-feature-page-with-widgets.md)
+feat: add sellio_metrics ECC bundle (.claude/commands/feature-development-with-page-and-widgets.md)
 ```
 
 *Commit message example*
@@ -174,7 +174,7 @@ These workflows were detected from analyzing commit patterns.
 
 Standard feature implementation workflow
 
-**Frequency**: ~18 times per month
+**Frequency**: ~22 times per month
 
 **Steps**:
 1. Add feature implementation
@@ -182,24 +182,23 @@ Standard feature implementation workflow
 3. Update documentation
 
 **Files typically involved**:
-- `backend/src/modules/prs/*`
-- `backend/src/*`
+- `frontend/lib/design_system/components/*`
 - `backend/src/core/*`
-- `**/*.test.*`
+- `backend/src/infra/database/*`
 - `**/api/**`
 
 **Example commit sequence**:
 ```
-refactor(prs): Implement cache for open PRs and invalidate on webhook
+ci(frontend): Add build_runner step to deploy workflow
+ci(frontend): Add build_runner step to deploy workflow (#83)
 Merge main into develop
-Develop (#78)
 ```
 
 ### Refactoring
 
 Code refactoring and cleanup workflow
 
-**Frequency**: ~11 times per month
+**Frequency**: ~7 times per month
 
 **Steps**:
 1. Ensure tests pass before refactor
@@ -211,148 +210,134 @@ Code refactoring and cleanup workflow
 
 **Example commit sequence**:
 ```
-feat(members): refactor and enhance member status display
+feat(openprs): refactor open PRs page and components
+refactor(ui): enhance KpiCard with richValue and assertions
 Merge main into develop
-Develop (#81)
 ```
 
-### Feature Development With Page And Widgets
+### Ecc Bundle Onboarding
 
-Implements a new feature page or enhances an existing one with supporting widgets, navigation, and data providers.
+Adds a new ECC bundle for sellio_metrics, including commands, skills, agents, and configuration files for Claude and Codex ecosystems.
 
-**Frequency**: ~4 times per month
+**Frequency**: ~2 times per month
 
 **Steps**:
-1. Create or update a page file in frontend/lib/presentation/pages/<feature>/<feature>_page.dart
-2. Add or update supporting widgets in frontend/lib/presentation/pages/<feature>/widgets/
-3. Update or add providers in frontend/lib/presentation/pages/<feature>/providers/
-4. Update navigation in frontend/lib/core/navigation/app_navigation.dart
-5. Update or create domain/data entities and services as needed
-6. Update localization files if UI text changes (frontend/lib/l10n/app_*.arb)
+1. Add or update .claude/commands/*.md files (feature-development, refactoring, etc.)
+2. Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+3. Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+4. Add or update .codex/AGENTS.md and .codex/config.toml
+5. Add or update .claude/identity.json
+6. Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+7. Add or update .agents/skills/sellio_metrics/SKILL.md
+8. Add or update .claude/skills/sellio_metrics/SKILL.md
+9. Add or update .claude/ecc-tools.json
 
 **Files typically involved**:
-- `frontend/lib/presentation/pages/*/*_page.dart`
-- `frontend/lib/presentation/pages/*/widgets/*.dart`
-- `frontend/lib/presentation/pages/*/providers/*.dart`
-- `frontend/lib/core/navigation/app_navigation.dart`
-- `frontend/lib/l10n/app_ar.arb`
-- `frontend/lib/l10n/app_en.arb`
+- `.claude/commands/*.md`
+- `.claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml`
+- `.codex/agents/*.toml`
+- `.codex/AGENTS.md`
+- `.codex/config.toml`
+- `.claude/identity.json`
+- `.agents/skills/sellio_metrics/agents/openai.yaml`
+- `.agents/skills/sellio_metrics/SKILL.md`
+- `.claude/skills/sellio_metrics/SKILL.md`
+- `.claude/ecc-tools.json`
 
 **Example commit sequence**:
 ```
-Create or update a page file in frontend/lib/presentation/pages/<feature>/<feature>_page.dart
-Add or update supporting widgets in frontend/lib/presentation/pages/<feature>/widgets/
-Update or add providers in frontend/lib/presentation/pages/<feature>/providers/
-Update navigation in frontend/lib/core/navigation/app_navigation.dart
-Update or create domain/data entities and services as needed
-Update localization files if UI text changes (frontend/lib/l10n/app_*.arb)
+Add or update .claude/commands/*.md files (feature-development, refactoring, etc.)
+Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+Add or update .codex/AGENTS.md and .codex/config.toml
+Add or update .claude/identity.json
+Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+Add or update .agents/skills/sellio_metrics/SKILL.md
+Add or update .claude/skills/sellio_metrics/SKILL.md
+Add or update .claude/ecc-tools.json
 ```
 
-### Refactor Presentation Providers Into Feature Folders
+### Feature Development Pr Details Page
 
-Moves ChangeNotifier providers from a shared directory into feature-specific folders, updating all imports and references.
+Implements a new feature (PR details page and analysis) by adding new entities, services, widgets, and updating navigation and presentation files.
+
+**Frequency**: ~2 times per month
+
+**Steps**:
+1. Add new domain entities and enums (e.g., pr_code_insight.dart, pr_entity.dart, pr_size_category.dart)
+2. Add or update domain services (e.g., pr_analysis_service.dart)
+3. Add new presentation pages and widgets (e.g., pr_details_page.dart, pr_code_insights_section.dart, pr_media_section.dart, pr_ticket_link_section.dart)
+4. Update navigation to include new routes (app_navigation.dart)
+5. Update or refactor existing widgets and list tiles to integrate the new feature
+6. Update data sources and providers as needed
+
+**Files typically involved**:
+- `frontend/lib/domain/entities/*.dart`
+- `frontend/lib/domain/enums/*.dart`
+- `frontend/lib/domain/services/*.dart`
+- `frontend/lib/presentation/pages/open_prs/pr_details_page.dart`
+- `frontend/lib/presentation/pages/open_prs/widgets/*.dart`
+- `frontend/lib/core/navigation/app_navigation.dart`
+- `frontend/lib/presentation/providers/pr_data_provider.dart`
+
+**Example commit sequence**:
+```
+Add new domain entities and enums (e.g., pr_code_insight.dart, pr_entity.dart, pr_size_category.dart)
+Add or update domain services (e.g., pr_analysis_service.dart)
+Add new presentation pages and widgets (e.g., pr_details_page.dart, pr_code_insights_section.dart, pr_media_section.dart, pr_ticket_link_section.dart)
+Update navigation to include new routes (app_navigation.dart)
+Update or refactor existing widgets and list tiles to integrate the new feature
+Update data sources and providers as needed
+```
+
+### Provider Restructuring Into Feature Folders
+
+Refactors frontend provider files from a flat structure into feature-specific folders, updating all relevant imports and usages.
 
 **Frequency**: ~2 times per month
 
 **Steps**:
 1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
-2. Update all import statements across the codebase to reflect new provider locations
-3. Test to ensure all providers are correctly referenced and functionality is intact
+2. Update all import statements across the codebase to the new provider paths
+3. Test and verify that all features using providers function correctly
 
 **Files typically involved**:
 - `frontend/lib/presentation/providers/*.dart`
 - `frontend/lib/presentation/pages/*/providers/*.dart`
-- `frontend/lib/presentation/pages/*/*.dart`
 - `frontend/lib/app.dart`
 - `frontend/lib/core/navigation/app_navigation.dart`
+- `frontend/lib/presentation/pages/**/*.dart`
 
 **Example commit sequence**:
 ```
 Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
-Update all import statements across the codebase to reflect new provider locations
-Test to ensure all providers are correctly referenced and functionality is intact
+Update all import statements across the codebase to the new provider paths
+Test and verify that all features using providers function correctly
 ```
 
-### Enhance Or Refactor Widget Ui
+### Frontend Widget Refactor And Enhancement
 
-Refactors or enhances UI widgets for improved flexibility, appearance, or maintainability.
-
-**Frequency**: ~3 times per month
-
-**Steps**:
-1. Modify widget files in frontend/lib/presentation/widgets/ or frontend/lib/presentation/pages/<feature>/widgets/
-2. Update usage of the widget in relevant page files
-3. Update or add new properties, assertions, or display logic
-4. Update localization files if UI text is affected
-
-**Files typically involved**:
-- `frontend/lib/presentation/widgets/*.dart`
-- `frontend/lib/presentation/pages/*/widgets/*.dart`
-- `frontend/lib/presentation/pages/*/*_page.dart`
-- `frontend/lib/l10n/app_ar.arb`
-- `frontend/lib/l10n/app_en.arb`
-
-**Example commit sequence**:
-```
-Modify widget files in frontend/lib/presentation/widgets/ or frontend/lib/presentation/pages/<feature>/widgets/
-Update usage of the widget in relevant page files
-Update or add new properties, assertions, or display logic
-Update localization files if UI text is affected
-```
-
-### Add Or Refactor Backend Api Or Service
-
-Adds or refactors backend API endpoints or services, including caching, event processing, or metrics logic.
+Refactors and enhances frontend widgets, often splitting large widgets into smaller components and improving their API or display capabilities.
 
 **Frequency**: ~2 times per month
 
 **Steps**:
-1. Create or update service files in backend/src/modules/<module>/*.ts
-2. Update core types or event processing logic in backend/src/core/ or backend/src/worker.ts
-3. Update or add migration or SQL files if database schema changes
-4. Update API documentation if needed
+1. Move widget code into dedicated files within widgets/ directories
+2. Enhance widget APIs (e.g., add richValue, assertions, or new properties)
+3. Update all usages of the refactored widgets in presentation pages
+4. Test UI to ensure no regressions
 
 **Files typically involved**:
-- `backend/src/modules/*/*.ts`
-- `backend/src/core/*.ts`
-- `backend/src/worker.ts`
-- `backend/migrations/*.sql`
-- `docs/Sellio_Metrics_API.postman_collection.json`
+- `frontend/lib/presentation/pages/open_prs/widgets/*.dart`
+- `frontend/lib/presentation/widgets/kpi_card.dart`
+- `frontend/lib/presentation/pages/open_prs/open_prs_page.dart`
 
 **Example commit sequence**:
 ```
-Create or update service files in backend/src/modules/<module>/*.ts
-Update core types or event processing logic in backend/src/core/ or backend/src/worker.ts
-Update or add migration or SQL files if database schema changes
-Update API documentation if needed
-```
-
-### Add Or Enhance Member Status Ui
-
-Refactors or enhances the members page and related widgets to improve status display and layout.
-
-**Frequency**: ~2 times per month
-
-**Steps**:
-1. Update or add widgets in frontend/lib/presentation/pages/members/widgets/
-2. Modify members_page.dart and related provider/entity files
-3. Update fake data sources for members
-4. Update localization files for new/changed status texts
-
-**Files typically involved**:
-- `frontend/lib/presentation/pages/members/widgets/*.dart`
-- `frontend/lib/presentation/pages/members/members_page.dart`
-- `frontend/lib/presentation/providers/member_provider.dart`
-- `frontend/lib/data/datasources/fake/fake_datasources.dart`
-- `frontend/lib/l10n/app_ar.arb`
-- `frontend/lib/l10n/app_en.arb`
-
-**Example commit sequence**:
-```
-Update or add widgets in frontend/lib/presentation/pages/members/widgets/
-Modify members_page.dart and related provider/entity files
-Update fake data sources for members
-Update localization files for new/changed status texts
+Move widget code into dedicated files within widgets/ directories
+Enhance widget APIs (e.g., add richValue, assertions, or new properties)
+Update all usages of the refactored widgets in presentation pages
+Test UI to ensure no regressions
 ```
 
 
