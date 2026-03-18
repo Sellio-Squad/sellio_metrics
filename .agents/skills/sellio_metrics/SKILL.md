@@ -38,7 +38,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 
 ### Message Guidelines
 
-- Average message length: ~51 characters
+- Average message length: ~52 characters
 - Keep first line concise and descriptive
 - Use imperative mood ("Add feature" not "Added feature")
 
@@ -46,7 +46,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 *Commit message example*
 
 ```text
-feat(core): implement line-based scoring & developer event deletion
+feat: add sellio_metrics ECC bundle (.claude/commands/add-or-refactor-feature-page-with-widgets.md)
 ```
 
 *Commit message example*
@@ -76,19 +76,19 @@ fix(frontend): resolve missing exceptions and dio imports in logs feature (#59)
 *Commit message example*
 
 ```text
-Merge main into develop
+feat: add sellio_metrics ECC bundle (.claude/commands/refactoring.md)
 ```
 
 *Commit message example*
 
 ```text
-refactor(presentation): restructure providers into feature folders
+feat: add sellio_metrics ECC bundle (.claude/commands/feature-development.md)
 ```
 
 *Commit message example*
 
 ```text
-Develop (#87)
+feat: add sellio_metrics ECC bundle (.codex/agents/docs-researcher.toml)
 ```
 
 ## Architecture
@@ -174,7 +174,7 @@ These workflows were detected from analyzing commit patterns.
 
 Standard feature implementation workflow
 
-**Frequency**: ~10 times per month
+**Frequency**: ~18 times per month
 
 **Steps**:
 1. Add feature implementation
@@ -182,24 +182,24 @@ Standard feature implementation workflow
 3. Update documentation
 
 **Files typically involved**:
-- `backend/src/core/*`
-- `backend/src/infra/github/*`
 - `backend/src/modules/prs/*`
+- `backend/src/*`
+- `backend/src/core/*`
 - `**/*.test.*`
 - `**/api/**`
 
 **Example commit sequence**:
 ```
-feat(prs): Add organization-wide open PRs fetching (#71)
-refactor(web): Migrate to dart:js_interop and web package
-Merge develop into feature/Add-organization-wide-open-PRs-fetching
+refactor(prs): Implement cache for open PRs and invalidate on webhook
+Merge main into develop
+Develop (#78)
 ```
 
 ### Refactoring
 
 Code refactoring and cleanup workflow
 
-**Frequency**: ~13 times per month
+**Frequency**: ~11 times per month
 
 **Steps**:
 1. Ensure tests pass before refactor
@@ -211,154 +211,148 @@ Code refactoring and cleanup workflow
 
 **Example commit sequence**:
 ```
-refactor(prs): streamline open PRs data fetching
-Merge develop into feature/Add-organization-wide-open-PRs-fetching
-Merge pull request #74 from Sellio-Squad/feature/Add-organization-wide-open-PRs-fetching
+feat(members): refactor and enhance member status display
+Merge main into develop
+Develop (#81)
 ```
 
-### Add Or Refactor Feature Page With Widgets
+### Feature Development With Page And Widgets
 
-Adds a new feature page or refactors an existing one by splitting logic into multiple smaller widgets/components for improved maintainability and readability.
+Implements a new feature page or enhances an existing one with supporting widgets, navigation, and data providers.
 
-**Frequency**: ~3 times per month
+**Frequency**: ~4 times per month
 
 **Steps**:
-1. Create or update main page file in frontend/lib/presentation/pages/<feature>/<feature>_page.dart
-2. Create or update multiple widget/component files in frontend/lib/presentation/pages/<feature>/widgets/
-3. Update navigation or routing in frontend/lib/core/navigation/app_navigation.dart if needed
-4. Update provider in frontend/lib/presentation/providers/<feature>_provider.dart if needed
+1. Create or update a page file in frontend/lib/presentation/pages/<feature>/<feature>_page.dart
+2. Add or update supporting widgets in frontend/lib/presentation/pages/<feature>/widgets/
+3. Update or add providers in frontend/lib/presentation/pages/<feature>/providers/
+4. Update navigation in frontend/lib/core/navigation/app_navigation.dart
+5. Update or create domain/data entities and services as needed
+6. Update localization files if UI text changes (frontend/lib/l10n/app_*.arb)
 
 **Files typically involved**:
-- `frontend/lib/presentation/pages/<feature>/<feature>_page.dart`
-- `frontend/lib/presentation/pages/<feature>/widgets/*.dart`
+- `frontend/lib/presentation/pages/*/*_page.dart`
+- `frontend/lib/presentation/pages/*/widgets/*.dart`
+- `frontend/lib/presentation/pages/*/providers/*.dart`
 - `frontend/lib/core/navigation/app_navigation.dart`
-- `frontend/lib/presentation/providers/<feature>_provider.dart`
+- `frontend/lib/l10n/app_ar.arb`
+- `frontend/lib/l10n/app_en.arb`
 
 **Example commit sequence**:
 ```
-Create or update main page file in frontend/lib/presentation/pages/<feature>/<feature>_page.dart
-Create or update multiple widget/component files in frontend/lib/presentation/pages/<feature>/widgets/
-Update navigation or routing in frontend/lib/core/navigation/app_navigation.dart if needed
-Update provider in frontend/lib/presentation/providers/<feature>_provider.dart if needed
+Create or update a page file in frontend/lib/presentation/pages/<feature>/<feature>_page.dart
+Add or update supporting widgets in frontend/lib/presentation/pages/<feature>/widgets/
+Update or add providers in frontend/lib/presentation/pages/<feature>/providers/
+Update navigation in frontend/lib/core/navigation/app_navigation.dart
+Update or create domain/data entities and services as needed
+Update localization files if UI text changes (frontend/lib/l10n/app_*.arb)
 ```
 
-### Refactor Provider Structure Into Feature Folders
+### Refactor Presentation Providers Into Feature Folders
 
-Moves ChangeNotifier providers from a flat providers directory into feature-specific folders, updating all imports and usages accordingly.
+Moves ChangeNotifier providers from a shared directory into feature-specific folders, updating all imports and references.
 
-**Frequency**: ~1 times per month
+**Frequency**: ~2 times per month
 
 **Steps**:
 1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
-2. Update all import statements across the codebase to point to the new provider locations
-3. Update main app file and navigation if necessary
+2. Update all import statements across the codebase to reflect new provider locations
+3. Test to ensure all providers are correctly referenced and functionality is intact
 
 **Files typically involved**:
 - `frontend/lib/presentation/providers/*.dart`
-- `frontend/lib/presentation/pages/<feature>/providers/*.dart`
+- `frontend/lib/presentation/pages/*/providers/*.dart`
+- `frontend/lib/presentation/pages/*/*.dart`
 - `frontend/lib/app.dart`
 - `frontend/lib/core/navigation/app_navigation.dart`
 
 **Example commit sequence**:
 ```
 Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
-Update all import statements across the codebase to point to the new provider locations
-Update main app file and navigation if necessary
+Update all import statements across the codebase to reflect new provider locations
+Test to ensure all providers are correctly referenced and functionality is intact
 ```
 
-### Add Or Refactor Api Endpoint And Consume In Frontend
+### Enhance Or Refactor Widget Ui
 
-Introduces a new backend API endpoint or refactors an existing one, then updates the frontend data source, repository, and provider to consume the new endpoint.
+Refactors or enhances UI widgets for improved flexibility, appearance, or maintainability.
 
-**Frequency**: ~2 times per month
+**Frequency**: ~3 times per month
 
 **Steps**:
-1. Create or update backend service/controller file (e.g., backend/src/modules/<feature>/<feature>.service.ts)
-2. Update backend API routing (e.g., backend/src/worker.ts)
-3. Update backend dependency injection/container if needed
-4. Update frontend data source (frontend/lib/data/datasources/<feature>_data_source.dart)
-5. Update frontend repository (frontend/lib/data/repositories/<feature>_repository_impl.dart)
-6. Update frontend provider (frontend/lib/presentation/providers/<feature>_provider.dart)
-7. Update frontend page or widget to use the new data
+1. Modify widget files in frontend/lib/presentation/widgets/ or frontend/lib/presentation/pages/<feature>/widgets/
+2. Update usage of the widget in relevant page files
+3. Update or add new properties, assertions, or display logic
+4. Update localization files if UI text is affected
 
 **Files typically involved**:
-- `backend/src/modules/<feature>/<feature>.service.ts`
-- `backend/src/worker.ts`
-- `backend/src/core/container.ts`
-- `frontend/lib/data/datasources/<feature>_data_source.dart`
-- `frontend/lib/data/repositories/<feature>_repository_impl.dart`
-- `frontend/lib/presentation/providers/<feature>_provider.dart`
-- `frontend/lib/presentation/pages/<feature>/<feature>_page.dart`
+- `frontend/lib/presentation/widgets/*.dart`
+- `frontend/lib/presentation/pages/*/widgets/*.dart`
+- `frontend/lib/presentation/pages/*/*_page.dart`
+- `frontend/lib/l10n/app_ar.arb`
+- `frontend/lib/l10n/app_en.arb`
 
 **Example commit sequence**:
 ```
-Create or update backend service/controller file (e.g., backend/src/modules/<feature>/<feature>.service.ts)
-Update backend API routing (e.g., backend/src/worker.ts)
-Update backend dependency injection/container if needed
-Update frontend data source (frontend/lib/data/datasources/<feature>_data_source.dart)
-Update frontend repository (frontend/lib/data/repositories/<feature>_repository_impl.dart)
-Update frontend provider (frontend/lib/presentation/providers/<feature>_provider.dart)
-Update frontend page or widget to use the new data
+Modify widget files in frontend/lib/presentation/widgets/ or frontend/lib/presentation/pages/<feature>/widgets/
+Update usage of the widget in relevant page files
+Update or add new properties, assertions, or display logic
+Update localization files if UI text is affected
 ```
 
-### Add Or Refactor Member Status Ui
+### Add Or Refactor Backend Api Or Service
 
-Refactors or enhances the member status display by updating the member card, status indicator, and related widgets, often updating localization and fake data sources.
+Adds or refactors backend API endpoints or services, including caching, event processing, or metrics logic.
 
 **Frequency**: ~2 times per month
 
 **Steps**:
-1. Update or create new widgets in frontend/lib/presentation/pages/members/widgets/
-2. Update members page in frontend/lib/presentation/pages/members/members_page.dart
-3. Update localization files (frontend/lib/l10n/app_en.arb, app_ar.arb)
-4. Update fake data sources (frontend/lib/data/datasources/fake/fake_datasources.dart)
+1. Create or update service files in backend/src/modules/<module>/*.ts
+2. Update core types or event processing logic in backend/src/core/ or backend/src/worker.ts
+3. Update or add migration or SQL files if database schema changes
+4. Update API documentation if needed
+
+**Files typically involved**:
+- `backend/src/modules/*/*.ts`
+- `backend/src/core/*.ts`
+- `backend/src/worker.ts`
+- `backend/migrations/*.sql`
+- `docs/Sellio_Metrics_API.postman_collection.json`
+
+**Example commit sequence**:
+```
+Create or update service files in backend/src/modules/<module>/*.ts
+Update core types or event processing logic in backend/src/core/ or backend/src/worker.ts
+Update or add migration or SQL files if database schema changes
+Update API documentation if needed
+```
+
+### Add Or Enhance Member Status Ui
+
+Refactors or enhances the members page and related widgets to improve status display and layout.
+
+**Frequency**: ~2 times per month
+
+**Steps**:
+1. Update or add widgets in frontend/lib/presentation/pages/members/widgets/
+2. Modify members_page.dart and related provider/entity files
+3. Update fake data sources for members
+4. Update localization files for new/changed status texts
 
 **Files typically involved**:
 - `frontend/lib/presentation/pages/members/widgets/*.dart`
 - `frontend/lib/presentation/pages/members/members_page.dart`
-- `frontend/lib/l10n/app_en.arb`
-- `frontend/lib/l10n/app_ar.arb`
+- `frontend/lib/presentation/providers/member_provider.dart`
 - `frontend/lib/data/datasources/fake/fake_datasources.dart`
+- `frontend/lib/l10n/app_ar.arb`
+- `frontend/lib/l10n/app_en.arb`
 
 **Example commit sequence**:
 ```
-Update or create new widgets in frontend/lib/presentation/pages/members/widgets/
-Update members page in frontend/lib/presentation/pages/members/members_page.dart
-Update localization files (frontend/lib/l10n/app_en.arb, app_ar.arb)
-Update fake data sources (frontend/lib/data/datasources/fake/fake_datasources.dart)
-```
-
-### Backend Leaderboard Or Metrics Rules Change
-
-Adds or refines backend logic for scoring, metrics, or leaderboard rules, often including a database migration and updating aggregation logic.
-
-**Frequency**: ~1 times per month
-
-**Steps**:
-1. Create or update migration file (backend/migrations/*.sql)
-2. Update backend event types or typescript definitions
-3. Update database service or aggregation logic
-4. Update API documentation if necessary
-5. Update frontend repository/entities if affected
-
-**Files typically involved**:
-- `backend/migrations/*.sql`
-- `backend/src/core/event-types.ts`
-- `backend/src/core/types.ts`
-- `backend/src/infra/database/d1.service.ts`
-- `backend/src/modules/metrics/*.ts`
-- `backend/src/worker.ts`
-- `docs/Sellio_Metrics_API.postman_collection.json`
-- `frontend/lib/data/repositories/leaderboard_repository_impl.dart`
-- `frontend/lib/domain/entities/leaderboard_entry.dart`
-
-**Example commit sequence**:
-```
-Create or update migration file (backend/migrations/*.sql)
-Update backend event types or typescript definitions
-Update database service or aggregation logic
-Update API documentation if necessary
-Update frontend repository/entities if affected
+Update or add widgets in frontend/lib/presentation/pages/members/widgets/
+Modify members_page.dart and related provider/entity files
+Update fake data sources for members
+Update localization files for new/changed status texts
 ```
 
 
