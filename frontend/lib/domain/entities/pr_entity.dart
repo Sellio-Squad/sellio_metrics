@@ -31,6 +31,9 @@ class PrEntity {
   final List<String> labels;
   final String? milestone;
   final bool draft;
+  final String body;
+  final List<String> reviewRequests;
+  final List<String> filesChanged;
 
   const PrEntity({
     required this.prNumber,
@@ -57,6 +60,9 @@ class PrEntity {
     this.labels = const [],
     this.milestone,
     this.draft = false,
+    this.body = '',
+    this.reviewRequests = const [],
+    this.filesChanged = const [],
   });
 
   factory PrEntity.fromJson(Map<String, dynamic> json) {
@@ -153,6 +159,9 @@ class PrEntity {
       labels: (json['labels'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
       milestone: (json['milestone'] as Map<String, dynamic>?)?['title'] as String?,
       draft: json['draft'] as bool? ?? false,
+      body: json['body'] as String? ?? '',
+      reviewRequests: (json['review_requests'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
+      filesChanged: (json['files_changed'] as List<dynamic>?)?.map((e) => e.toString()).toList() ?? [],
     );
   }
 

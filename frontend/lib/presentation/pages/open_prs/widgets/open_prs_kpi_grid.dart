@@ -2,7 +2,6 @@ library;
 
 import 'package:flutter/material.dart';
 import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/theme/app_theme.dart';
 import '../../../../domain/entities/kpi_entity.dart';
 import '../../../widgets/kpi_card.dart';
 import '../../../widgets/section_header.dart';
