@@ -86,12 +86,19 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
               Expanded(
                 child: CustomScrollView(
                   slivers: [
-                    // KPI Cards
+                    // 1. KPI Cards
                     SliverToBoxAdapter(
                       child: OpenPrsKpiGrid(kpis: kpis),
                     ),
 
-                    // Search + Count header
+                    // 2. Bottlenecks — NOW ABOVE PRs
+                    SliverToBoxAdapter(
+                      child: OpenPrsBottleneckSection(
+                        bottlenecks: bottlenecks,
+                      ),
+                    ),
+
+                    // 3. Search + Count header
                     SliverToBoxAdapter(
                       child: OpenPrsHeader(
                         prCount: filteredPrs.length,
@@ -99,14 +106,12 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                       ),
                     ),
 
-                    // PR List
+                    // 4. PR List
                     OpenPrsList(prs: filteredPrs),
 
-                    // Bottlenecks
-                    SliverToBoxAdapter(
-                      child: OpenPrsBottleneckSection(
-                        bottlenecks: bottlenecks,
-                      ),
+                    // Bottom padding
+                    const SliverToBoxAdapter(
+                      child: SizedBox(height: AppSpacing.xxl),
                     ),
                   ],
                 ),

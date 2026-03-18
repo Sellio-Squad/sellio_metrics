@@ -10,24 +10,36 @@ class KpiCard extends StatelessWidget {
   final Color accentColor;
   final String? subtitle;
 
-  /// Plain text value — used when no rich value is provided.
-  final String? value;
-
-  /// Rich value — replaces plain [value] with colored spans.
-  final InlineSpan? richValue;
+  /// The value display — accepts any widget.
+  final Widget value;
 
   const KpiCard({
     super.key,
     required this.label,
     required this.icon,
     required this.accentColor,
-    this.value,
-    this.richValue,
+    required this.value,
     this.subtitle,
-  }) : assert(
-  value != null || richValue != null,
-  'Either value or richValue must be provided',
-  );
+  });
+
+  /// Convenience constructor for plain text value.
+  factory KpiCard.text({
+    Key? key,
+    required String label,
+    required String value,
+    required IconData icon,
+    required Color accentColor,
+    String? subtitle,
+  }) {
+    return KpiCard(
+      key: key,
+      label: label,
+      icon: icon,
+      accentColor: accentColor,
+      subtitle: subtitle,
+      value: _PlainValue(text: value),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -56,7 +68,6 @@ class KpiCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Icon
           Container(
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
@@ -66,28 +77,12 @@ class KpiCard extends StatelessWidget {
             child: Icon(icon, color: accentColor, size: 22),
           ),
           const SizedBox(height: AppSpacing.lg),
-
-          // Value — either plain or rich, never both
-          if (richValue != null)
-            Text.rich(
-              TextSpan(children: [richValue!]),
-              style: AppTypography.kpiValue,
-            )
-          else
-            Text(
-              value!,
-              style: AppTypography.kpiValue.copyWith(color: scheme.title),
-            ),
-
+          value,
           const SizedBox(height: AppSpacing.xs),
-
-          // Label
           Text(
             label,
             style: AppTypography.caption.copyWith(color: scheme.body),
           ),
-
-          // Optional subtitle
           if (subtitle != null) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -103,3 +98,18 @@ class KpiCard extends StatelessWidget {
     );
   }
 }
+
+class _PlainValue extends StatelessWidget {
+  final String text;
+
+  const _PlainValue({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    return Text(
+      text,
+      style: AppTypography.kpiValue.copyWith(color: scheme.title),
+    );
+  }
+}
