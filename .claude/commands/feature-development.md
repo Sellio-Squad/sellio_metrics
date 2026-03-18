@@ -14,10 +14,9 @@ Standard feature implementation workflow
 
 ## Common Files
 
-- `backend/src/modules/prs/*`
-- `backend/src/*`
+- `frontend/lib/design_system/components/*`
 - `backend/src/core/*`
-- `**/*.test.*`
+- `backend/src/infra/database/*`
 - `**/api/**`
 
 ## Suggested Sequence
