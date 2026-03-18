@@ -5,23 +5,11 @@ import 'package:intl/intl.dart';
 class ApiConfig {
   const ApiConfig._();
 
-  /// Base URL for the backend API.
-  ///
-  /// Set at compile time via:
-  ///   flutter run --dart-define=API_BASE_URL=https://your-worker.workers.dev
-  ///   flutter build web --dart-define=API_BASE_URL=https://your-worker.workers.dev
-  ///
-  /// Falls back to localhost:3001 for local development.
   static const String baseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://127.0.0.1:8787',
   );
 
-  /// Whether to use a local fake data source instead of the backend.
-  ///
-  /// Enable via:
-  ///   flutter run --dart-define=USE_FAKE_DATA=true
-  ///   flutter build web --dart-define=USE_FAKE_DATA=true
   static const bool useFakeData = bool.fromEnvironment(
     'USE_FAKE_DATA',
     defaultValue: false,
@@ -78,15 +66,6 @@ class FilterOptions {
   static const String all = 'all';
 }
 
-/// Scoring weights for the leaderboard algorithm.
-class LeaderboardWeights {
-  const LeaderboardWeights._();
-
-  static const int prsCreated = 3;
-  static const int prsMerged = 2;
-  static const int reviewsGiven = 0;
-  static const int commentsGiven = 1;
-}
 
 class DateFormats {
   const DateFormats._();
