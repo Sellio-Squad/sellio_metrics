@@ -15,6 +15,7 @@ import 'widgets/open_prs_header.dart';
 import 'widgets/open_prs_kpi_grid.dart';
 import 'widgets/open_prs_list.dart';
 import 'widgets/open_prs_bottleneck_section.dart';
+import 'widgets/pr_size_overview_section.dart';
 
 class OpenPrsPage extends StatefulWidget {
   const OpenPrsPage({super.key});
@@ -96,6 +97,11 @@ class _OpenPrsPageState extends State<OpenPrsPage> {
                       child: OpenPrsBottleneckSection(
                         bottlenecks: bottlenecks,
                       ),
+                    ),
+
+                    // 3. Large PRs — Size hints
+                    SliverToBoxAdapter(
+                      child: PrSizeOverviewSection(prs: filteredPrs),
                     ),
 
                     // 3. Search + Count header

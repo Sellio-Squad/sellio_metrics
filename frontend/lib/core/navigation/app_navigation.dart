@@ -7,6 +7,7 @@ import '../../core/di/injection.dart';
 import '../../presentation/pages/leaderboard/leaderboard_page.dart';
 import '../../presentation/pages/members/members_page.dart';
 import '../../presentation/pages/open_prs/open_prs_page.dart';
+import '../../presentation/pages/open_prs/pr_details_page.dart';
 import '../../presentation/pages/about/about_page.dart';
 import '../../presentation/pages/meetings/meetings_page.dart';
 import '../../presentation/pages/setting/settings_page.dart';
@@ -148,6 +149,33 @@ class AppNavigation {
                   key: state.pageKey,
                   child: route.pageBuilder(context),
                 ),
+                routes: route.id == 'open_prs'
+                    ? [
+                        GoRoute(
+                          path: ':prNumber',
+                          pageBuilder: (context, state) {
+                            final prNumber = int.tryParse(
+                                  state.pathParameters['prNumber'] ?? '',
+                                ) ??
+                                0;
+                            return NoTransitionPage(
+                              key: state.pageKey,
+                              child: MultiProvider(
+                                providers: [
+                                  ChangeNotifierProvider.value(
+                                    value: getIt<PrDataProvider>(),
+                                  ),
+                                  ChangeNotifierProvider.value(
+                                    value: getIt<AnalyticsProvider>(),
+                                  ),
+                                ],
+                                child: PrDetailsPage(prNumber: prNumber),
+                              ),
+                            );
+                          },
+                        ),
+                      ]
+                    : [],
               ),
             ],
           );

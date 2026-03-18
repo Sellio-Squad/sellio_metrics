@@ -8,7 +8,7 @@ import '../../core/logging/app_logger.dart';
 
 enum DataLoadingStatus { loading, loaded, error }
 
-@injectable
+@lazySingleton
 class PrDataProvider extends ChangeNotifier {
   final PrRepository _repository;
 
