@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/extensions/theme_extensions.dart';
 import '../../../../design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../providers/app_settings_provider.dart';
+import 'package:sellio_metrics/presentation/pages/setting/providers/app_settings_provider.dart';
 
 /// Language toggle row.
 class LanguageToggle extends StatelessWidget {

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../widgets/date_filter/date_range_filter.dart';
 import 'widgets/settings_section.dart';
 import 'widgets/repository_selector.dart';
 import 'widgets/theme_toggle.dart';
@@ -53,14 +52,6 @@ class SettingsPage extends StatelessWidget {
               title: l10n.settingsLanguage,
               icon: Icons.translate,
               children: const [LanguageToggle()],
-            ),
-            const SizedBox(height: AppSpacing.xl),
-
-            // Date range filter as a settings section
-            SettingsSection(
-              title: 'Date Range Filter',
-              icon: Icons.calendar_today_outlined,
-              children: const [DateRangeFilter()],
             ),
           ],
         ),

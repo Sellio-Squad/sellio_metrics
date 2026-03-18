@@ -6,7 +6,7 @@ import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/navigation/app_navigation.dart';
-import '../providers/app_settings_provider.dart';
+import 'package:sellio_metrics/presentation/pages/setting/providers/app_settings_provider.dart';
 
 class AppSidebar extends StatelessWidget {
   final int selectedIndex;

@@ -7,10 +7,10 @@ library;
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../domain/entities/meeting_entity.dart';
-import '../../domain/entities/participant_entity.dart';
-import '../../domain/entities/attendance_analytics_entity.dart';
-import '../../domain/repositories/meetings_repository.dart';
+import '../../../../domain/entities/meeting_entity.dart';
+import '../../../../domain/entities/participant_entity.dart';
+import '../../../../domain/entities/attendance_analytics_entity.dart';
+import '../../../../domain/repositories/meetings_repository.dart';
 
 @injectable
 class MeetingsProvider extends ChangeNotifier {

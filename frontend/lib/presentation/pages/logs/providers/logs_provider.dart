@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../data/datasources/fake/fake_logs.dart';
-import '../../data/datasources/logs_data_source.dart';
+import '../../../../data/datasources/fake/fake_logs.dart';
+import '../../../../data/datasources/logs_data_source.dart';
 
 @injectable
 class LogsProvider extends ChangeNotifier {

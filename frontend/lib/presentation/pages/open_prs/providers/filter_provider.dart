@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../core/constants/app_constants.dart';
+import '../../../../core/constants/app_constants.dart';
 
 @injectable
 class FilterProvider extends ChangeNotifier {

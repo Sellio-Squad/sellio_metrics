@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../domain/entities/pr_entity.dart';
-import '../../domain/repositories/pr_repository.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/logging/app_logger.dart';
+import '../../../../domain/entities/pr_entity.dart';
+import '../../../../domain/repositories/pr_repository.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../core/logging/app_logger.dart';
 
 enum DataLoadingStatus { loading, loaded, error }
 

@@ -4,7 +4,7 @@ import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../data/datasources/fake/fake_logs.dart';
 import '../../../design_system/design_system.dart';
-import '../../providers/logs_provider.dart';
+import 'package:sellio_metrics/presentation/pages/logs/providers/logs_provider.dart';
 import 'package:provider/provider.dart';
 
 class LogsPage extends StatefulWidget {

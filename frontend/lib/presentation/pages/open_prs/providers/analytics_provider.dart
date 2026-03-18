@@ -1,12 +1,12 @@
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../core/constants/app_constants.dart';
-import '../../domain/entities/pr_entity.dart';
-import '../../domain/entities/kpi_entity.dart';
-import '../../domain/entities/bottleneck_entity.dart';
-import '../../domain/services/kpi_service.dart';
-import '../../domain/services/bottleneck_service.dart';
+import '../../../../core/constants/app_constants.dart';
+import '../../../../domain/entities/pr_entity.dart';
+import '../../../../domain/entities/kpi_entity.dart';
+import '../../../../domain/entities/bottleneck_entity.dart';
+import '../../../../domain/services/kpi_service.dart';
+import '../../../../domain/services/bottleneck_service.dart';
 
 @injectable
 class AnalyticsProvider extends ChangeNotifier {

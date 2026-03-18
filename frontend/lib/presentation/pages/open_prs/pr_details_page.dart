@@ -13,7 +13,7 @@ import '../../../design_system/design_system.dart';
 import '../../../domain/entities/pr_entity.dart';
 import '../../../domain/enums/pr_size_category.dart';
 import '../../../domain/services/pr_analysis_service.dart';
-import '../../providers/pr_data_provider.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/providers/pr_data_provider.dart';
 import 'widgets/pr_details_header.dart';
 import 'widgets/pr_code_insights_section.dart';
 import 'widgets/pr_media_section.dart';
