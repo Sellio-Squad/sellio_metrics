@@ -14,9 +14,9 @@ Standard feature implementation workflow
 
 ## Common Files
 
-- `backend/src/core/*`
-- `backend/src/infra/github/*`
 - `backend/src/modules/prs/*`
+- `backend/src/*`
+- `backend/src/core/*`
 - `**/*.test.*`
 - `**/api/**`
 
