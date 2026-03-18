@@ -1,5 +1,5 @@
 # Instincts generated from https://github.com/Sellio-Squad/sellio_metrics
-# Generated: 2026-03-18T19:36:02.185Z
+# Generated: 2026-03-18T19:36:38.664Z
 # Version: 2.0
 
 ---
@@ -19,7 +19,7 @@ Write moderate-length commit messages (~50 characters)
 
 ## Evidence
 
-- Average commit message length: 53 chars
+- Average commit message length: 55 chars
 - Based on 200 commits
 
 ---
@@ -143,13 +143,13 @@ Follow the feature-development workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~22x per month
+- Frequency: ~26x per month
 - Files: frontend/lib/design_system/components/*, backend/src/core/*, backend/src/infra/database/*
 
 ---
 id: sellio_metrics-workflow-refactoring
 trigger: "when refactoring code"
-confidence: 0.9
+confidence: 0.75
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
@@ -167,26 +167,26 @@ Follow the refactoring workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~8x per month
+- Frequency: ~5x per month
 - Files: src/**/*
 
 ---
-id: sellio_metrics-workflow-ecc-bundle-sync
-trigger: "when doing ecc bundle sync"
-confidence: 0.6
+id: sellio_metrics-workflow-ecc-bundle-integration
+trigger: "when doing ecc bundle integration"
+confidence: 0.65
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Ecc Bundle Sync
+# Sellio_metrics Workflow Ecc Bundle Integration
 
 ## Action
 
-Follow the ecc-bundle-sync workflow:
-1. Add or update .claude/commands/*.md files (feature-development, refactoring, add-or-refactor-feature-with-new-page-and-provider)
+Follow the ecc-bundle-integration workflow:
+1. Add or update .claude/commands/*.md files (e.g., feature-development.md, refactoring.md, add-or-refactor-feature-with-new-page-and-provider.md)
 2. Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
-3. Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+3. Add or update .codex/agents/*.toml files (e.g., docs-researcher.toml, reviewer.toml, explorer.toml)
 4. Add or update .codex/AGENTS.md and .codex/config.toml
 5. Add or update .claude/identity.json
 6. Add or update .agents/skills/sellio_metrics/agents/openai.yaml
@@ -196,59 +196,30 @@ Follow the ecc-bundle-sync workflow:
 ## Evidence
 
 - Workflow detected from commit patterns
-- Frequency: ~2x per month
-- Files: .claude/commands/feature-development.md, .claude/commands/refactoring.md, .claude/commands/add-or-refactor-feature-with-new-page-and-provider.md
+- Frequency: ~3x per month
+- Files: .claude/commands/*.md, .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml, .codex/agents/*.toml
 
 ---
-id: sellio_metrics-workflow-feature-development-with-ui-and-domain
-trigger: "when doing feature development with ui and domain"
+id: sellio_metrics-workflow-provider-refactoring-feature-folderization
+trigger: "when doing provider refactoring feature folderization"
 confidence: 0.6
 domain: workflow
 source: repo-analysis
 source_repo: https://github.com/Sellio-Squad/sellio_metrics
 ---
 
-# Sellio_metrics Workflow Feature Development With Ui And Domain
+# Sellio_metrics Workflow Provider Refactoring Feature Folderization
 
 ## Action
 
-Follow the feature-development-with-ui-and-domain workflow:
-1. Create or update domain entities and enums (e.g., pr_entity.dart, pr_code_insight.dart, pr_size_category.dart)
-2. Implement or update domain services (e.g., pr_analysis_service.dart)
-3. Add or update data sources (e.g., fake_datasources.dart)
-4. Add or update navigation (e.g., app_navigation.dart)
-5. Create new page(s) and widgets under frontend/lib/presentation/pages/<feature>/
-6. Update or add providers if state management is needed
-7. Update design system exports if new components are introduced
-8. Update or create tests and documentation as needed
-
-## Evidence
-
-- Workflow detected from commit patterns
-- Frequency: ~2x per month
-- Files: frontend/lib/domain/entities/*.dart, frontend/lib/domain/services/*.dart, frontend/lib/domain/enums/*.dart
-
----
-id: sellio_metrics-workflow-large-refactor-provider-structure
-trigger: "when doing large refactor provider structure"
-confidence: 0.6
-domain: workflow
-source: repo-analysis
-source_repo: https://github.com/Sellio-Squad/sellio_metrics
----
-
-# Sellio_metrics Workflow Large Refactor Provider Structure
-
-## Action
-
-Follow the large-refactor-provider-structure workflow:
+Follow the provider-refactoring-feature-folderization workflow:
 1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
-2. Update all import statements across the frontend to reflect the new provider paths
-3. Test the application to ensure no broken imports or runtime errors
+2. Update all import statements referencing moved providers throughout the frontend codebase
+3. Update related page/widget files to use new provider paths
 
 ## Evidence
 
 - Workflow detected from commit patterns
 - Frequency: ~2x per month
-- Files: frontend/lib/presentation/providers/*.dart, frontend/lib/presentation/pages/*/providers/*.dart, frontend/lib/app.dart
+- Files: frontend/lib/presentation/providers/*.dart, frontend/lib/presentation/pages/*/providers/*.dart, frontend/lib/presentation/pages/**/*.dart
 
