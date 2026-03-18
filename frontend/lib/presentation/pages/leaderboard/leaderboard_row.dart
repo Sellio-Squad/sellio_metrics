@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../design_system/components/s_avatar.dart';
@@ -12,12 +13,16 @@ class LeaderboardRow extends StatelessWidget {
   const LeaderboardRow({super.key, required this.index, required this.entry});
 
   static const _medals = ['🥇', '🥈', '🥉'];
+  static final _fmt = NumberFormat('#,###');
 
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
     final l10n = AppLocalizations.of(context);
     final medal = index < 3 ? _medals[index] : '${index + 1}';
+
+    final additions = entry.lineAdditions;
+    final deletions = entry.lineDeletions;
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
@@ -37,9 +42,7 @@ class LeaderboardRow extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           SAvatar(
             name: entry.developer,
-            imageUrl: entry.avatarUrl?.isNotEmpty == true
-                ? entry.avatarUrl
-                : null,
+            imageUrl: entry.avatarUrl?.isNotEmpty == true ? entry.avatarUrl : null,
             size: SAvatarSize.small,
           ),
           const SizedBox(width: AppSpacing.md),
@@ -54,14 +57,48 @@ class LeaderboardRow extends StatelessWidget {
                     color: scheme.title,
                   ),
                 ),
-                Text(
-                  '${entry.prsCreated} ${l10n.unitPrs} · '
-                  '${entry.commentsGiven} ${l10n.unitComments} · '
-                  '+${entry.lineAdditions} / -${entry.lineDeletions} ${l10n.unitLines}',
-                  style: AppTypography.caption.copyWith(
-                    color: scheme.hint,
-                    fontSize: 11,
-                  ),
+                const SizedBox(height: 2),
+                Row(
+                  children: [
+                    Text(
+                      '${entry.prsCreated} ${l10n.unitPrs} · '
+                      '${entry.commentsGiven} ${l10n.unitComments}',
+                      style: AppTypography.caption.copyWith(
+                        color: scheme.hint,
+                        fontSize: 11,
+                      ),
+                    ),
+                    if (additions > 0 || deletions > 0) ...[
+                      Text(
+                        ' · ',
+                        style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 11),
+                      ),
+                      Text(
+                        '+${_fmt.format(additions)}',
+                        style: AppTypography.caption.copyWith(
+                          color: Colors.green.shade400,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        ' / ',
+                        style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 11),
+                      ),
+                      Text(
+                        '-${_fmt.format(deletions)}',
+                        style: AppTypography.caption.copyWith(
+                          color: Colors.red.shade400,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Text(
+                        ' ${l10n.unitLines}',
+                        style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 11),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -76,7 +113,7 @@ class LeaderboardRow extends StatelessWidget {
               borderRadius: AppRadius.smAll,
             ),
             child: Text(
-              entry.totalScore.toStringAsFixed(2),
+              entry.totalScore.toStringAsFixed(0),
               style: AppTypography.caption.copyWith(
                 color: scheme.primary,
                 fontWeight: FontWeight.w700,

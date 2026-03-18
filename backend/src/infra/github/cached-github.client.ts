@@ -154,4 +154,61 @@ export class CachedGitHubClient {
     get raw(): GitHubClient {
         return this.github;
     }
+
+    /**
+     * Get contributor stats for a repo.
+     * Returns GitHub-computed total additions + deletions per contributor
+     * (same numbers shown on github.com/org/repo/graphs/contributors).
+     *
+     * GitHub returns 202 while stats are being computed (can take seconds).
+     * We retry up to 6 times with 2-second gaps. In the sync handler we fire
+     * this in parallel with other fetches so GitHub has extra time to compute.
+     */
+    async getContributorStats(owner: string, repo: string): Promise<any[] | null> {
+        await this.guard.checkAndWait();
+        const MAX_RETRIES = 6;
+        for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+            try {
+                const res = await this.github.rest.repos.getContributorsStats({ owner, repo });
+                if (res.status === 200 && Array.isArray(res.data) && res.data.length > 0) {
+                    this.logger.info({ owner, repo, contributors: res.data.length, attempt }, "Contributor stats fetched");
+                    return res.data as any[];
+                }
+                // 202 = still computing — wait and retry
+                if (attempt < MAX_RETRIES - 1) {
+                    this.logger.debug({ owner, repo, attempt }, "Contributor stats computing (202), retrying...");
+                    await new Promise(r => setTimeout(r, 2000));
+                }
+            } catch (e: any) {
+                this.logger.warn({ owner, repo, err: e.message }, "Contributor stats error");
+                return null;
+            }
+        }
+        this.logger.warn({ owner, repo }, "Contributor stats still computing after max retries — skipped");
+        return null;
+    }
+
+    /**
+     * List ALL issue/PR comments for a repo in one paginated call.
+     * Vastly more efficient than fetching per-PR (avoids the 1000 subrequest limit).
+     */
+    async listAllIssueComments(owner: string, repo: string): Promise<any[]> {
+        await this.guard.checkAndWait();
+        return this.github.paginate(
+            this.github.rest.issues.listCommentsForRepo,
+            { owner, repo, per_page: 100 },
+        );
+    }
+
+    /**
+     * List ALL PR review comments for a repo in one paginated call.
+     * Vastly more efficient than fetching per-PR.
+     */
+    async listAllPRReviewComments(owner: string, repo: string): Promise<any[]> {
+        await this.guard.checkAndWait();
+        return this.github.paginate(
+            this.github.rest.pulls.listReviewCommentsForRepo,
+            { owner, repo, per_page: 100 },
+        );
+    }
 }

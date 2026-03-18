@@ -244,14 +244,18 @@ export class D1Service {
         }
         const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
-        // Main query: total points per developer
-        // For CODE_ADDITION / CODE_DELETION the `lines` metadata field is the
-        // per-event multiplier so the score = rule.points × lines_changed
+        // Main query: total points per developer.
+        // COALESCE tries `lines` first (new format), then `score_multiplier` (old format)
+        // to handle existing events in D1 that were stored before the rename.
         const query = `
             SELECT
                 e.developer_id,
                 ROUND(SUM(
-                    r.points * COALESCE(CAST(json_extract(e.metadata, '$.lines') AS REAL), 1.0)
+                    r.points * COALESCE(
+                        CAST(json_extract(e.metadata, '$.lines') AS REAL),
+                        CAST(json_extract(e.metadata, '$.score_multiplier') AS REAL),
+                        1.0
+                    )
                 ), 2) AS total_points
             FROM events e
             JOIN point_rules r ON e.event_type = r.event_type
@@ -278,7 +282,12 @@ export class D1Service {
             const countWhere = `WHERE ${countConditions.join(" AND ")}`;
 
             const countsResult = await this.db
-                .prepare(`SELECT event_type, COUNT(*) as cnt FROM events ${countWhere} GROUP BY event_type`)
+                .prepare(`
+                    SELECT event_type, COUNT(*) as cnt
+                    FROM events ${countWhere}
+                    AND event_type NOT IN ('CODE_ADDITION', 'CODE_DELETION')
+                    GROUP BY event_type
+                `)
                 .bind(...countParams)
                 .all<{ event_type: string; cnt: number }>();
 
@@ -287,12 +296,19 @@ export class D1Service {
                 event_counts[c.event_type] = c.cnt;
             }
 
-            // Sum of actual lines added/deleted (from `lines` metadata)
+            // Sum of actual lines added/deleted — check `lines` first (new), fall back to
+            // `score_multiplier` (old rows stored before migration 0003 was applied).
             const linesResult = await this.db
                 .prepare(`
                     SELECT
                         event_type,
-                        CAST(ROUND(SUM(COALESCE(CAST(json_extract(metadata, '$.lines') AS REAL), 0))) AS INTEGER) as total_lines
+                        CAST(ROUND(SUM(
+                            COALESCE(
+                                CAST(json_extract(metadata, '$.lines') AS REAL),
+                                CAST(json_extract(metadata, '$.score_multiplier') AS REAL),
+                                0
+                            )
+                        )) AS INTEGER) as total_lines
                     FROM events
                     ${countWhere}
                     AND event_type IN ('CODE_ADDITION', 'CODE_DELETION')
@@ -366,6 +382,18 @@ export class D1Service {
         this.logger.info({ developerId, deleted }, "Deleted all events for developer");
         return deleted;
     }
+
+    /**
+     * Wipe ALL events — used to start fresh before a full re-sync.
+     */
+    async truncateAllEvents(): Promise<number> {
+        if (!this.db) return 0;
+        const result = await this.db.prepare("DELETE FROM events").run();
+        const deleted = result.meta.changes ?? 0;
+        this.logger.info({ deleted }, "Truncated all events from D1");
+        return deleted;
+    }
+
 
     // ─── Latest CHECK_IN for a developer ────────────────────
 

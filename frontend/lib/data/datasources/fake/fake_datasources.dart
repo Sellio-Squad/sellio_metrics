@@ -42,9 +42,9 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
       prsCreated: 12,
       prsMerged: 10,
       commentsGiven: 15,
-      additions: 1200,
-      deletions: 400,
-      totalScore: 62.0,
+      lineAdditions: 12000,
+      lineDeletions: 4000,
+      totalScore: 16062.0,
     ),
     LeaderboardEntry(
       developer: 'bob',
@@ -52,9 +52,9 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
       prsCreated: 8,
       prsMerged: 6,
       commentsGiven: 9,
-      additions: 800,
-      deletions: 200,
-      totalScore: 45.0,
+      lineAdditions: 8000,
+      lineDeletions: 2000,
+      totalScore: 10045.0,
     ),
     LeaderboardEntry(
       developer: 'carol',
@@ -62,9 +62,9 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
       prsCreated: 5,
       prsMerged: 5,
       commentsGiven: 5,
-      additions: 300,
-      deletions: 100,
-      totalScore: 30.0,
+      lineAdditions: 3000,
+      lineDeletions: 1000,
+      totalScore: 4030.0,
     ),
   ];
 
@@ -74,14 +74,16 @@ class FakeLeaderboardDataSource implements LeaderboardDataSource {
     return _entries
         .map(
           (e) => {
-            'developer': e.developer,
+            'developer_id': e.developer,
             'avatarUrl': e.avatarUrl,
-            'prsCreated': e.prsCreated,
-            'prsMerged': e.prsMerged,
-            'commentsGiven': e.commentsGiven,
-            'additions': e.additions,
-            'deletions': e.deletions,
-            'totalScore': e.totalScore,
+            'event_counts': {
+              'PR_CREATED': e.prsCreated,
+              'PR_MERGED': e.prsMerged,
+              'COMMENT': e.commentsGiven,
+            },
+            'line_additions': e.lineAdditions,
+            'line_deletions': e.lineDeletions,
+            'total_points': e.totalScore,
           },
         )
         .toList();
