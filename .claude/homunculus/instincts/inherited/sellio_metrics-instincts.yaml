@@ -1,0 +1,300 @@
+# Instincts generated from https://github.com/Sellio-Squad/sellio_metrics
+# Generated: 2026-03-18T19:35:03.390Z
+# Version: 2.0
+
+---
+id: sellio_metrics-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Commit Length
+
+## Action
+
+Write moderate-length commit messages (~50 characters)
+
+## Evidence
+
+- Average commit message length: 51 chars
+- Based on 200 commits
+
+---
+id: sellio_metrics-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Naming Files
+
+## Action
+
+Use snake_case naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: snake_case
+
+---
+id: sellio_metrics-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: sellio_metrics-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: sellio_metrics-arch-feature-based
+trigger: "when adding a new feature"
+confidence: 0.85
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Arch Feature Based
+
+## Action
+
+Create a new folder in src/features/ with all related code colocated
+
+## Evidence
+
+- Feature-based module organization detected
+- Structure: src/features/[feature-name]/
+
+---
+id: sellio_metrics-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: sellio_metrics-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~10x per month
+- Files: backend/src/core/*, backend/src/infra/github/*, backend/src/modules/prs/*
+
+---
+id: sellio_metrics-workflow-refactoring
+trigger: "when refactoring code"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Refactoring
+
+## Action
+
+Follow the refactoring workflow:
+1. Ensure tests pass before refactor
+2. Refactor code structure
+3. Verify tests still pass
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~13x per month
+- Files: src/**/*
+
+---
+id: sellio_metrics-workflow-add-or-refactor-feature-page-with-widgets
+trigger: "when doing add or refactor feature page with widgets"
+confidence: 0.65
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Add Or Refactor Feature Page With Widgets
+
+## Action
+
+Follow the add-or-refactor-feature-page-with-widgets workflow:
+1. Create or update main page file in frontend/lib/presentation/pages/<feature>/<feature>_page.dart
+2. Create or update multiple widget/component files in frontend/lib/presentation/pages/<feature>/widgets/
+3. Update navigation or routing in frontend/lib/core/navigation/app_navigation.dart if needed
+4. Update provider in frontend/lib/presentation/providers/<feature>_provider.dart if needed
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~3x per month
+- Files: frontend/lib/presentation/pages/<feature>/<feature>_page.dart, frontend/lib/presentation/pages/<feature>/widgets/*.dart, frontend/lib/core/navigation/app_navigation.dart
+
+---
+id: sellio_metrics-workflow-refactor-provider-structure-into-feature-folders
+trigger: "when doing refactor provider structure into feature folders"
+confidence: 0.55
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Refactor Provider Structure Into Feature Folders
+
+## Action
+
+Follow the refactor-provider-structure-into-feature-folders workflow:
+1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
+2. Update all import statements across the codebase to point to the new provider locations
+3. Update main app file and navigation if necessary
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~1x per month
+- Files: frontend/lib/presentation/providers/*.dart, frontend/lib/presentation/pages/<feature>/providers/*.dart, frontend/lib/app.dart
+
+---
+id: sellio_metrics-workflow-add-or-refactor-api-endpoint-and-consume-in-frontend
+trigger: "when doing add or refactor api endpoint and consume in frontend"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Add Or Refactor Api Endpoint And Consume In Frontend
+
+## Action
+
+Follow the add-or-refactor-api-endpoint-and-consume-in-frontend workflow:
+1. Create or update backend service/controller file (e.g., backend/src/modules/<feature>/<feature>.service.ts)
+2. Update backend API routing (e.g., backend/src/worker.ts)
+3. Update backend dependency injection/container if needed
+4. Update frontend data source (frontend/lib/data/datasources/<feature>_data_source.dart)
+5. Update frontend repository (frontend/lib/data/repositories/<feature>_repository_impl.dart)
+6. Update frontend provider (frontend/lib/presentation/providers/<feature>_provider.dart)
+7. Update frontend page or widget to use the new data
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: backend/src/modules/<feature>/<feature>.service.ts, backend/src/worker.ts, backend/src/core/container.ts
+
+---
+id: sellio_metrics-workflow-add-or-refactor-member-status-ui
+trigger: "when doing add or refactor member status ui"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Add Or Refactor Member Status Ui
+
+## Action
+
+Follow the add-or-refactor-member-status-ui workflow:
+1. Update or create new widgets in frontend/lib/presentation/pages/members/widgets/
+2. Update members page in frontend/lib/presentation/pages/members/members_page.dart
+3. Update localization files (frontend/lib/l10n/app_en.arb, app_ar.arb)
+4. Update fake data sources (frontend/lib/data/datasources/fake/fake_datasources.dart)
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: frontend/lib/presentation/pages/members/widgets/*.dart, frontend/lib/presentation/pages/members/members_page.dart, frontend/lib/l10n/app_en.arb
+
+---
+id: sellio_metrics-workflow-backend-leaderboard-or-metrics-rules-change
+trigger: "when doing backend leaderboard or metrics rules change"
+confidence: 0.55
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Backend Leaderboard Or Metrics Rules Change
+
+## Action
+
+Follow the backend-leaderboard-or-metrics-rules-change workflow:
+1. Create or update migration file (backend/migrations/*.sql)
+2. Update backend event types or typescript definitions
+3. Update database service or aggregation logic
+4. Update API documentation if necessary
+5. Update frontend repository/entities if affected
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~1x per month
+- Files: backend/migrations/*.sql, backend/src/core/event-types.ts, backend/src/core/types.ts
+
