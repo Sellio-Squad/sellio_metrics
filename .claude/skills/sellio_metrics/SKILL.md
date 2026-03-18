@@ -38,7 +38,7 @@ Follow these commit message conventions based on 8 analyzed commits.
 
 ### Message Guidelines
 
-- Average message length: ~52 characters
+- Average message length: ~53 characters
 - Keep first line concise and descriptive
 - Use imperative mood ("Add feature" not "Added feature")
 
@@ -52,7 +52,7 @@ feat: add sellio_metrics ECC bundle (.claude/commands/add-or-refactor-feature-wi
 *Commit message example*
 
 ```text
-refactor(presentation): restructure providers into feature folders
+refactor(presentation): restructure providers into feature folders (#88)
 ```
 
 *Commit message example*
@@ -174,7 +174,7 @@ These workflows were detected from analyzing commit patterns.
 
 Standard feature implementation workflow
 
-**Frequency**: ~18 times per month
+**Frequency**: ~22 times per month
 
 **Steps**:
 1. Add feature implementation
@@ -182,24 +182,23 @@ Standard feature implementation workflow
 3. Update documentation
 
 **Files typically involved**:
-- `backend/src/modules/prs/*`
-- `backend/src/*`
+- `frontend/lib/design_system/components/*`
 - `backend/src/core/*`
-- `**/*.test.*`
+- `backend/src/infra/database/*`
 - `**/api/**`
 
 **Example commit sequence**:
 ```
-refactor(prs): Implement cache for open PRs and invalidate on webhook
+ci(frontend): Add build_runner step to deploy workflow
+ci(frontend): Add build_runner step to deploy workflow (#83)
 Merge main into develop
-Develop (#78)
 ```
 
 ### Refactoring
 
 Code refactoring and cleanup workflow
 
-**Frequency**: ~11 times per month
+**Frequency**: ~8 times per month
 
 **Steps**:
 1. Ensure tests pass before refactor
@@ -211,158 +210,118 @@ Code refactoring and cleanup workflow
 
 **Example commit sequence**:
 ```
-feat(members): refactor and enhance member status display
+feat(openprs): refactor open PRs page and components
+refactor(ui): enhance KpiCard with richValue and assertions
 Merge main into develop
-Develop (#81)
 ```
 
-### Add Or Refactor Feature With New Page And Provider
+### Ecc Bundle Sync
 
-Implements a new feature or refactors an existing one by adding a new page (often under open_prs, members, or observability), updating navigation, and creating or updating a provider for state management.
+Synchronize or update ECC (Enhanced Code Context) bundle files for the sellio_metrics project, including commands, skills, agent configs, and tool manifests.
 
-**Frequency**: ~4 times per month
+**Frequency**: ~2 times per month
 
 **Steps**:
-1. Create or update a new page widget under frontend/lib/presentation/pages/<feature>/
-2. Add or update provider under frontend/lib/presentation/providers/ or frontend/lib/presentation/pages/<feature>/providers/
-3. Update navigation in frontend/lib/core/navigation/app_navigation.dart
-4. Update or create new domain/entity/service files if needed
-5. Update or add widgets under frontend/lib/presentation/pages/<feature>/widgets/
-6. Update localization files if new UI text is introduced
-7. Update or add fake data sources if needed
+1. Add or update .claude/commands/*.md files (feature-development, refactoring, add-or-refactor-feature-with-new-page-and-provider)
+2. Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+3. Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+4. Add or update .codex/AGENTS.md and .codex/config.toml
+5. Add or update .claude/identity.json
+6. Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+7. Add or update .agents/skills/sellio_metrics/SKILL.md and .claude/skills/sellio_metrics/SKILL.md
+8. Add or update .claude/ecc-tools.json
 
 **Files typically involved**:
-- `frontend/lib/presentation/pages/<feature>/<feature>_page.dart`
-- `frontend/lib/presentation/pages/<feature>/widgets/*.dart`
-- `frontend/lib/presentation/providers/<feature>_provider.dart`
-- `frontend/lib/presentation/pages/<feature>/providers/<feature>_provider.dart`
-- `frontend/lib/core/navigation/app_navigation.dart`
+- `.claude/commands/feature-development.md`
+- `.claude/commands/refactoring.md`
+- `.claude/commands/add-or-refactor-feature-with-new-page-and-provider.md`
+- `.claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml`
+- `.codex/agents/docs-researcher.toml`
+- `.codex/agents/reviewer.toml`
+- `.codex/agents/explorer.toml`
+- `.codex/AGENTS.md`
+- `.codex/config.toml`
+- `.claude/identity.json`
+- `.agents/skills/sellio_metrics/agents/openai.yaml`
+- `.agents/skills/sellio_metrics/SKILL.md`
+- `.claude/skills/sellio_metrics/SKILL.md`
+- `.claude/ecc-tools.json`
+
+**Example commit sequence**:
+```
+Add or update .claude/commands/*.md files (feature-development, refactoring, add-or-refactor-feature-with-new-page-and-provider)
+Add or update .claude/homunculus/instincts/inherited/sellio_metrics-instincts.yaml
+Add or update .codex/agents/*.toml files (docs-researcher, reviewer, explorer)
+Add or update .codex/AGENTS.md and .codex/config.toml
+Add or update .claude/identity.json
+Add or update .agents/skills/sellio_metrics/agents/openai.yaml
+Add or update .agents/skills/sellio_metrics/SKILL.md and .claude/skills/sellio_metrics/SKILL.md
+Add or update .claude/ecc-tools.json
+```
+
+### Feature Development With Ui And Domain
+
+Add a new feature or major UI/domain enhancement, typically involving new pages, widgets, entities, services, and navigation updates.
+
+**Frequency**: ~2 times per month
+
+**Steps**:
+1. Create or update domain entities and enums (e.g., pr_entity.dart, pr_code_insight.dart, pr_size_category.dart)
+2. Implement or update domain services (e.g., pr_analysis_service.dart)
+3. Add or update data sources (e.g., fake_datasources.dart)
+4. Add or update navigation (e.g., app_navigation.dart)
+5. Create new page(s) and widgets under frontend/lib/presentation/pages/<feature>/
+6. Update or add providers if state management is needed
+7. Update design system exports if new components are introduced
+8. Update or create tests and documentation as needed
+
+**Files typically involved**:
 - `frontend/lib/domain/entities/*.dart`
 - `frontend/lib/domain/services/*.dart`
+- `frontend/lib/domain/enums/*.dart`
 - `frontend/lib/data/datasources/fake/fake_datasources.dart`
-- `frontend/lib/l10n/app_en.arb`
-- `frontend/lib/l10n/app_ar.arb`
+- `frontend/lib/core/navigation/app_navigation.dart`
+- `frontend/lib/presentation/pages/open_prs/pr_details_page.dart`
+- `frontend/lib/presentation/pages/open_prs/widgets/*.dart`
+- `frontend/lib/presentation/providers/*.dart`
+- `frontend/lib/design_system/design_system.dart`
 
 **Example commit sequence**:
 ```
-Create or update a new page widget under frontend/lib/presentation/pages/<feature>/
-Add or update provider under frontend/lib/presentation/providers/ or frontend/lib/presentation/pages/<feature>/providers/
-Update navigation in frontend/lib/core/navigation/app_navigation.dart
-Update or create new domain/entity/service files if needed
-Update or add widgets under frontend/lib/presentation/pages/<feature>/widgets/
-Update localization files if new UI text is introduced
-Update or add fake data sources if needed
+Create or update domain entities and enums (e.g., pr_entity.dart, pr_code_insight.dart, pr_size_category.dart)
+Implement or update domain services (e.g., pr_analysis_service.dart)
+Add or update data sources (e.g., fake_datasources.dart)
+Add or update navigation (e.g., app_navigation.dart)
+Create new page(s) and widgets under frontend/lib/presentation/pages/<feature>/
+Update or add providers if state management is needed
+Update design system exports if new components are introduced
+Update or create tests and documentation as needed
 ```
 
-### Refactor Widget Or Component Into Smaller Widgets
+### Large Refactor Provider Structure
 
-Refactors a large widget/page into smaller, reusable widgets/components for maintainability and readability.
+Restructure frontend provider files by moving them from a flat directory to feature-specific folders, updating all relevant imports and usages.
 
 **Frequency**: ~2 times per month
 
 **Steps**:
-1. Identify large widget/page (e.g., OpenPrsPage, MemberCard)
-2. Extract sections into new widgets under widgets/ subdirectory
-3. Update the main page to use the new widgets
-4. Update imports and references throughout the codebase
+1. Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
+2. Update all import statements across the frontend to reflect the new provider paths
+3. Test the application to ensure no broken imports or runtime errors
 
 **Files typically involved**:
-- `frontend/lib/presentation/pages/<feature>/<feature>_page.dart`
-- `frontend/lib/presentation/pages/<feature>/widgets/*.dart`
+- `frontend/lib/presentation/providers/*.dart`
+- `frontend/lib/presentation/pages/*/providers/*.dart`
+- `frontend/lib/app.dart`
+- `frontend/lib/core/navigation/app_navigation.dart`
+- `frontend/lib/presentation/navigation/app_sidebar.dart`
+- `frontend/lib/presentation/pages/**/*.dart`
 
 **Example commit sequence**:
 ```
-Identify large widget/page (e.g., OpenPrsPage, MemberCard)
-Extract sections into new widgets under widgets/ subdirectory
-Update the main page to use the new widgets
-Update imports and references throughout the codebase
-```
-
-### Backend Api Or Metrics Enhancement
-
-Enhances backend metrics or API logic, often involving changes to event types, database migrations, and updating aggregation logic.
-
-**Frequency**: ~2 times per month
-
-**Steps**:
-1. Add or update SQL migration under backend/migrations/
-2. Update backend/src/core/event-types.ts or types.ts
-3. Update backend/src/infra/database/*.ts or modules/metrics/*.ts
-4. Update backend/src/worker.ts for ingestion/processing logic
-5. Update API documentation (e.g., Postman collection)
-6. Update frontend repository/entities if new data is exposed
-
-**Files typically involved**:
-- `backend/migrations/*.sql`
-- `backend/src/core/event-types.ts`
-- `backend/src/core/types.ts`
-- `backend/src/infra/database/*.ts`
-- `backend/src/modules/metrics/*.ts`
-- `backend/src/worker.ts`
-- `docs/Sellio_Metrics_API.postman_collection.json`
-- `frontend/lib/data/repositories/*.dart`
-- `frontend/lib/domain/entities/*.dart`
-
-**Example commit sequence**:
-```
-Add or update SQL migration under backend/migrations/
-Update backend/src/core/event-types.ts or types.ts
-Update backend/src/infra/database/*.ts or modules/metrics/*.ts
-Update backend/src/worker.ts for ingestion/processing logic
-Update API documentation (e.g., Postman collection)
-Update frontend repository/entities if new data is exposed
-```
-
-### Dependency Injection Refactor With Injectable
-
-Migrates or refactors dependency injection setup to use the injectable package, updating DI configuration, annotations, and generated files.
-
-**Frequency**: ~1 times per month
-
-**Steps**:
-1. Add or update injectable annotations to services, repositories, and providers
-2. Create or update DI modules (e.g., app_module.dart)
-3. Update or create injection config (e.g., injection.dart, injection.config.dart)
-4. Update main.dart to initialize DI
-5. Update pubspec.yaml with required dependencies
-6. Regenerate DI files (build_runner)
-
-**Files typically involved**:
-- `frontend/lib/core/di/app_module.dart`
-- `frontend/lib/core/di/injection.dart`
-- `frontend/lib/core/di/service_locator.dart`
-- `frontend/lib/main.dart`
-- `frontend/pubspec.yaml`
-
-**Example commit sequence**:
-```
-Add or update injectable annotations to services, repositories, and providers
-Create or update DI modules (e.g., app_module.dart)
-Update or create injection config (e.g., injection.dart, injection.config.dart)
-Update main.dart to initialize DI
-Update pubspec.yaml with required dependencies
-Regenerate DI files (build_runner)
-```
-
-### Ci Workflow Update For Build Runner
-
-Updates CI/CD workflow to include build_runner steps for code generation before deployment.
-
-**Frequency**: ~1 times per month
-
-**Steps**:
-1. Edit .github/workflows/deploy-frontend.yml
-2. Add or update step to run 'dart run build_runner build --delete-conflicting-outputs'
-3. Commit and push workflow changes
-
-**Files typically involved**:
-- `.github/workflows/deploy-frontend.yml`
-
-**Example commit sequence**:
-```
-Edit .github/workflows/deploy-frontend.yml
-Add or update step to run 'dart run build_runner build --delete-conflicting-outputs'
-Commit and push workflow changes
+Move provider files from frontend/lib/presentation/providers/ to frontend/lib/presentation/pages/<feature>/providers/
+Update all import statements across the frontend to reflect the new provider paths
+Test the application to ensure no broken imports or runtime errors
 ```
 
 
