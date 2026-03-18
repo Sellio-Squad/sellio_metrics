@@ -1,6 +1,3 @@
-/// Sellio Metrics — Theme Provider
-///
-/// Manages light/dark theme state.
 library;
 
 import 'package:flutter/material.dart';
