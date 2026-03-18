@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/extensions/theme_extensions.dart';
 import '../../../../design_system/design_system.dart';
-import '../../../providers/health_status_provider.dart';
+import 'package:sellio_metrics/presentation/pages/observability/providers/health_status_provider.dart';
 import '../../../../domain/entities/kv_cache_quota_status.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../widgets/common/loading_row.dart';

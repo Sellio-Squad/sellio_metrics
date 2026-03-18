@@ -11,8 +11,8 @@ import 'package:intl/intl.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../domain/entities/meet_event_entity.dart';
-import '../../providers/meet_events_provider.dart';
-import '../../providers/meetings_provider.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/providers/meet_events_provider.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
 
 class LiveEventsView extends StatefulWidget {
   const LiveEventsView({super.key});

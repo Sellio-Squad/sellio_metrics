@@ -14,14 +14,14 @@ import '../../presentation/pages/setting/settings_page.dart';
 import '../../presentation/pages/logs/logs_page.dart';
 import '../../presentation/pages/observability/observability_page.dart';
 import '../../presentation/pages/dashboard_page.dart';
-import '../../presentation/providers/leaderboard_provider.dart';
-import '../../presentation/providers/member_provider.dart';
-import '../../presentation/providers/pr_data_provider.dart';
-import '../../presentation/providers/analytics_provider.dart';
-import '../../presentation/providers/meetings_provider.dart';
-import '../../presentation/providers/meet_events_provider.dart';
-import '../../presentation/providers/health_status_provider.dart';
-import '../../presentation/providers/logs_provider.dart';
+import 'package:sellio_metrics/presentation/pages/leaderboard/providers/leaderboard_provider.dart';
+import 'package:sellio_metrics/presentation/pages/members/providers/member_provider.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/providers/pr_data_provider.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/providers/analytics_provider.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/providers/meet_events_provider.dart';
+import 'package:sellio_metrics/presentation/pages/observability/providers/health_status_provider.dart';
+import 'package:sellio_metrics/presentation/pages/logs/providers/logs_provider.dart';
 
 class AppRoute {
   final String id;
@@ -29,7 +29,6 @@ class AppRoute {
   final IconData icon;
   final String Function(AppLocalizations) labelBuilder;
   final WidgetBuilder pageBuilder;
-  final bool showDateFilter;
 
   const AppRoute({
     required this.id,
@@ -37,7 +36,6 @@ class AppRoute {
     required this.icon,
     required this.labelBuilder,
     required this.pageBuilder,
-    this.showDateFilter = true,
   });
 }
 
@@ -82,7 +80,6 @@ class AppNavigation {
       icon: LucideIcons.info,
       labelBuilder: (l10n) => l10n.navAbout,
       pageBuilder: (_) => const AboutPage(),
-      showDateFilter: false,
     ),
     AppRoute(
       id: 'meetings',
@@ -96,7 +93,6 @@ class AppNavigation {
         ],
         child: const MeetingsPage(),
       ),
-      showDateFilter: false,
     ),
     AppRoute(
       id: 'settings',
@@ -107,7 +103,6 @@ class AppNavigation {
         value: getIt<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
         child: const SettingsPage(),
       ),
-      showDateFilter: false,
     ),
     AppRoute(
       id: 'logs',
@@ -118,7 +113,6 @@ class AppNavigation {
         value: getIt<LogsProvider>()..fetchLogs(),
         child: const LogsPage(),
       ),
-      showDateFilter: false,
     ),
     AppRoute(
       id: 'observability',
@@ -129,7 +123,6 @@ class AppNavigation {
         value: getIt<HealthStatusProvider>()..fetchAll()..startAutoRefresh(),
         child: const ObservabilityPage(),
       ),
-      showDateFilter: false,
     ),
   ];
 

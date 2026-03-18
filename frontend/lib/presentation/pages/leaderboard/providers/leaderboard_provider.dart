@@ -8,9 +8,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../domain/entities/leaderboard_entry.dart';
-import '../../domain/repositories/leaderboard_repository.dart';
-import '../../core/logging/app_logger.dart';
+import '../../../../domain/entities/leaderboard_entry.dart';
+import '../../../../domain/repositories/leaderboard_repository.dart';
+import '../../../../core/logging/app_logger.dart';
 
 @injectable
 class LeaderboardProvider extends ChangeNotifier {

@@ -9,9 +9,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../domain/entities/meet_event_entity.dart';
-import '../../domain/repositories/meet_events_repository.dart';
-import '../../core/logging/app_logger.dart';
+import '../../../../domain/entities/meet_event_entity.dart';
+import '../../../../domain/repositories/meet_events_repository.dart';
+import '../../../../core/logging/app_logger.dart';
 
 @injectable
 class MeetEventsProvider extends ChangeNotifier {

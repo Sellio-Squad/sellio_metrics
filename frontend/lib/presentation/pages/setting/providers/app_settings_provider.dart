@@ -8,9 +8,9 @@ library;
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../domain/entities/repo_info.dart';
-import '../../domain/repositories/repos_repository.dart';
-import '../../core/logging/app_logger.dart';
+import '../../../../domain/entities/repo_info.dart';
+import '../../../../domain/repositories/repos_repository.dart';
+import '../../../../core/logging/app_logger.dart';
 
 @injectable
 class AppSettingsProvider extends ChangeNotifier {

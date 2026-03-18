@@ -6,7 +6,7 @@ import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import '../../../domain/entities/participant_entity.dart';
-import '../../providers/meetings_provider.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
 import '../../widgets/common/loading_screen.dart';
 
 class MeetingDetailView extends StatefulWidget {

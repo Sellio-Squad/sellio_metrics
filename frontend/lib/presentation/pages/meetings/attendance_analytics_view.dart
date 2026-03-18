@@ -5,7 +5,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
-import '../../providers/meetings_provider.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
 
 class AttendanceAnalyticsView extends StatelessWidget {
   const AttendanceAnalyticsView({super.key});

@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sellio_metrics/core/constants/layout_constants.dart';
 import '../../core/extensions/theme_extensions.dart';
-import '../../core/navigation/app_navigation.dart';
-import '../../design_system/design_system.dart';
 import '../navigation/app_bottom_nav.dart';
 import '../navigation/app_sidebar.dart';
-import '../widgets/date_filter/date_range_filter.dart';
 
 class DashboardPage extends StatelessWidget {
   final StatefulNavigationShell navigationShell;
@@ -38,25 +35,12 @@ class DashboardPage extends StatelessWidget {
   }
 
   Widget _buildDesktopLayout(BuildContext context, int selectedIndex) {
-    final currentRoute = AppNavigation.routes[selectedIndex];
-    final showDateFilter = currentRoute.showDateFilter;
-
     return Row(
       children: [
         AppSidebar(selectedIndex: selectedIndex, onItemSelected: _onItemTapped),
         Expanded(
           child: Column(
             children: [
-              if (showDateFilter) ...[
-                const SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: EdgeInsets.all(AppSpacing.lg),
-                    child: DateRangeFilter(),
-                  ),
-                ),
-                const Divider(height: 1),
-              ],
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 250),
@@ -88,20 +72,8 @@ class DashboardPage extends StatelessWidget {
   }
 
   Widget _buildMobileLayout(BuildContext context, int selectedIndex) {
-    final currentRoute = AppNavigation.routes[selectedIndex];
-    final showDateFilter = currentRoute.showDateFilter;
     return Column(
       children: [
-        if (showDateFilter) ...[
-          const SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: EdgeInsets.all(AppSpacing.md),
-              child: DateRangeFilter(),
-            ),
-          ),
-          const Divider(height: 1),
-        ],
         Expanded(
           child: KeyedSubtree(
             key: ValueKey(selectedIndex),

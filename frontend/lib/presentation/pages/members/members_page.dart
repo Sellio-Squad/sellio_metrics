@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/theme/app_theme.dart';
-import '../../providers/app_settings_provider.dart';
-import '../../providers/member_provider.dart';
+import 'package:sellio_metrics/presentation/pages/setting/providers/app_settings_provider.dart';
+import 'package:sellio_metrics/presentation/pages/members/providers/member_provider.dart';
 import '../../widgets/common/loading_screen.dart';
 import '../../widgets/common/error_screen.dart';
 import 'widgets/members_header.dart';
@@ -42,7 +42,7 @@ class _MembersPageState extends State<MembersPage> {
   void _onSettingsChanged() {
     if (!mounted) return;
     final currentRepos =
-        _settings.selectedRepos.map((r) => r.fullName).toSet();
+    _settings.selectedRepos.map((r) => r.fullName).toSet();
     if (!_setsEqual(currentRepos, _lastLoadedRepos)) {
       _loadMembers();
     }
@@ -50,7 +50,7 @@ class _MembersPageState extends State<MembersPage> {
 
   void _loadMembers() {
     final repoNames =
-        _settings.selectedRepos.map((r) => r.fullName).toList();
+    _settings.selectedRepos.map((r) => r.fullName).toList();
     _lastLoadedRepos = repoNames.toSet();
     if (repoNames.isEmpty) return;
     context.read<MemberProvider>().fetchStatuses(repoNames);
