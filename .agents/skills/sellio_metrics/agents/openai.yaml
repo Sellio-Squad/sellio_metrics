@@ -1,0 +1,6 @@
+interface:
+  display_name: "Sellio Metrics"
+  short_description: "Repo-specific patterns and workflows for sellio_metrics"
+  default_prompt: "Use the sellio_metrics repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
