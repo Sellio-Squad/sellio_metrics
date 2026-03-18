@@ -1,0 +1,278 @@
+# Instincts generated from https://github.com/Sellio-Squad/sellio_metrics
+# Generated: 2026-03-18T19:34:11.360Z
+# Version: 2.0
+
+---
+id: sellio_metrics-commit-length
+trigger: "when writing a commit message"
+confidence: 0.6
+domain: git
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Commit Length
+
+## Action
+
+Write moderate-length commit messages (~50 characters)
+
+## Evidence
+
+- Average commit message length: 51 chars
+- Based on 200 commits
+
+---
+id: sellio_metrics-naming-files
+trigger: "when creating a new file"
+confidence: 0.8
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Naming Files
+
+## Action
+
+Use snake_case naming convention
+
+## Evidence
+
+- Analyzed file naming patterns in repository
+- Dominant pattern: snake_case
+
+---
+id: sellio_metrics-import-relative
+trigger: "when importing modules"
+confidence: 0.75
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Import Relative
+
+## Action
+
+Use relative imports for project files
+
+## Evidence
+
+- Import analysis shows relative import pattern
+- Example: import { x } from '../lib/x'
+
+---
+id: sellio_metrics-export-style
+trigger: "when exporting from a module"
+confidence: 0.7
+domain: code-style
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Export Style
+
+## Action
+
+Prefer named exports
+
+## Evidence
+
+- Export pattern analysis
+- Dominant style: named
+
+---
+id: sellio_metrics-arch-feature-based
+trigger: "when adding a new feature"
+confidence: 0.85
+domain: architecture
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Arch Feature Based
+
+## Action
+
+Create a new folder in src/features/ with all related code colocated
+
+## Evidence
+
+- Feature-based module organization detected
+- Structure: src/features/[feature-name]/
+
+---
+id: sellio_metrics-test-separate
+trigger: "when writing tests"
+confidence: 0.8
+domain: testing
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Test Separate
+
+## Action
+
+Place tests in the tests/ or __tests__/ directory, mirroring src structure
+
+## Evidence
+
+- Separate test directory pattern detected
+- Tests live in dedicated test folders
+
+---
+id: sellio_metrics-workflow-feature-development
+trigger: "when implementing a new feature"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Feature Development
+
+## Action
+
+Follow the feature-development workflow:
+1. Add feature implementation
+2. Add tests for feature
+3. Update documentation
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~11x per month
+- Files: backend/src/core/*, backend/src/infra/github/*, backend/src/modules/prs/*
+
+---
+id: sellio_metrics-workflow-refactoring
+trigger: "when refactoring code"
+confidence: 0.9
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Refactoring
+
+## Action
+
+Follow the refactoring workflow:
+1. Ensure tests pass before refactor
+2. Refactor code structure
+3. Verify tests still pass
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~13x per month
+- Files: src/**/*
+
+---
+id: sellio_metrics-workflow-add-or-refactor-feature-with-new-page-and-provider
+trigger: "when doing add or refactor feature with new page and provider"
+confidence: 0.7
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Add Or Refactor Feature With New Page And Provider
+
+## Action
+
+Follow the add-or-refactor-feature-with-new-page-and-provider workflow:
+1. Create or update a page under frontend/lib/presentation/pages/<feature>/<feature>_page.dart
+2. Create or update provider under frontend/lib/presentation/pages/<feature>/providers/<feature>_provider.dart or frontend/lib/presentation/providers/<feature>_provider.dart
+3. Add or update widgets/components under frontend/lib/presentation/pages/<feature>/widgets/
+4. Update navigation in frontend/lib/core/navigation/app_navigation.dart
+5. Update or add related entities or services under frontend/lib/domain/entities/ or frontend/lib/domain/services/
+6. Update localization files if needed (frontend/lib/l10n/app_*.arb)
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~4x per month
+- Files: frontend/lib/presentation/pages/*/*_page.dart, frontend/lib/presentation/pages/*/providers/*_provider.dart, frontend/lib/presentation/pages/*/widgets/*.dart
+
+---
+id: sellio_metrics-workflow-backend-api-endpoint-or-service-expansion
+trigger: "when doing backend api endpoint or service expansion"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Backend Api Endpoint Or Service Expansion
+
+## Action
+
+Follow the backend-api-endpoint-or-service-expansion workflow:
+1. Implement or update backend service under backend/src/modules/<feature>/*.ts or backend/src/core/*.ts
+2. Update backend/src/worker.ts to register new endpoint or logic
+3. Update or add migration or schema file if database is involved (backend/migrations/*.sql)
+4. Update frontend data source under frontend/lib/data/datasources/<feature>_data_source.dart
+5. Update frontend repository under frontend/lib/data/repositories/<feature>_repository_impl.dart
+6. Update frontend provider under frontend/lib/presentation/providers/<feature>_provider.dart
+7. Update API documentation (docs/Sellio_Metrics_API.postman_collection.json) if applicable
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: backend/src/modules/*/*.ts, backend/src/core/*.ts, backend/src/worker.ts
+
+---
+id: sellio_metrics-workflow-refactor-feature-into-smaller-widgets-or-better-structure
+trigger: "when doing refactor feature into smaller widgets or better structure"
+confidence: 0.6
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Refactor Feature Into Smaller Widgets Or Better Structure
+
+## Action
+
+Follow the refactor-feature-into-smaller-widgets-or-better-structure workflow:
+1. Move or split widgets from a monolithic file into frontend/lib/presentation/pages/<feature>/widgets/*.dart
+2. Move providers into frontend/lib/presentation/pages/<feature>/providers/ or similar feature folders
+3. Update all relevant imports throughout the codebase to reflect new locations
+4. Update main feature page to use the new widgets/components
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~2x per month
+- Files: frontend/lib/presentation/pages/*/widgets/*.dart, frontend/lib/presentation/pages/*/providers/*.dart, frontend/lib/presentation/pages/*/*_page.dart
+
+---
+id: sellio_metrics-workflow-dependency-injection-infrastructure-migration
+trigger: "when doing dependency injection infrastructure migration"
+confidence: 0.55
+domain: workflow
+source: repo-analysis
+source_repo: https://github.com/Sellio-Squad/sellio_metrics
+---
+
+# Sellio_metrics Workflow Dependency Injection Infrastructure Migration
+
+## Action
+
+Follow the dependency-injection-infrastructure-migration workflow:
+1. Add or update DI-related files (e.g., frontend/lib/core/di/app_module.dart, injection.dart, service_locator.dart)
+2. Annotate or refactor services, repositories, and providers with new DI decorators/annotations
+3. Update pubspec.yaml to include new DI dependencies
+4. Update main.dart and app.dart to initialize DI on startup
+5. Update all usages of DI throughout the codebase
+
+## Evidence
+
+- Workflow detected from commit patterns
+- Frequency: ~1x per month
+- Files: frontend/lib/core/di/*.dart, frontend/lib/main.dart, frontend/lib/app.dart
+
