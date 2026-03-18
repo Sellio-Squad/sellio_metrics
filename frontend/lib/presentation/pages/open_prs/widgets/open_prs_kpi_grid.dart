@@ -1,7 +1,6 @@
 library;
 
 import 'package:flutter/material.dart';
-
 import '../../../../core/extensions/theme_extensions.dart';
 import '../../../../domain/entities/kpi_entity.dart';
 import '../../../widgets/kpi_card.dart';
@@ -32,13 +31,13 @@ class OpenPrsKpiGrid extends StatelessWidget {
             final width = constraints.maxWidth;
 
             final cards = [
-              KpiCard(
+              KpiCard.text(
                 label: l10n.kpiTotalPrs,
                 value: kpis.totalPrs.toString(),
                 icon: Icons.numbers,
                 accentColor: scheme.primary,
               ),
-              KpiCard(
+              KpiCard.text(
                 label: l10n.kpiAvgApproval,
                 value: kpis.avgApprovalTime,
                 icon: Icons.access_time,
@@ -48,28 +47,9 @@ class OpenPrsKpiGrid extends StatelessWidget {
                 label: l10n.kpiAvgPrSize,
                 icon: Icons.code,
                 accentColor: SellioColors.purple,
-                // No plain value — use richValue instead
-                richValue: TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '+${kpis.avgAdditions}',
-                      style: AppTypography.kpiValue.copyWith(
-                        color: scheme.green,
-                      ),
-                    ),
-                    TextSpan(
-                      text: ' / ',
-                      style: AppTypography.kpiValue.copyWith(
-                        color: scheme.hint,
-                      ),
-                    ),
-                    TextSpan(
-                      text: '-${kpis.avgDeletions}',
-                      style: AppTypography.kpiValue.copyWith(
-                        color: scheme.red,
-                      ),
-                    ),
-                  ],
+                value: _ColoredDiffValue(
+                  additions: kpis.avgAdditions,
+                  deletions: kpis.avgDeletions,
                 ),
               ),
             ];
@@ -120,6 +100,38 @@ class OpenPrsKpiGrid extends StatelessWidget {
           },
         ),
         const SizedBox(height: AppSpacing.xxl),
+      ],
+    );
+  }
+}
+
+class _ColoredDiffValue extends StatelessWidget {
+  final int additions;
+  final int deletions;
+
+  const _ColoredDiffValue({
+    required this.additions,
+    required this.deletions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
+    return Row(
+      children: [
+        Text(
+          '+$additions',
+          style: AppTypography.kpiValue.copyWith(color: scheme.green),
+        ),
+        Text(
+          ' / ',
+          style: AppTypography.kpiValue.copyWith(color: scheme.hint),
+        ),
+        Text(
+          '-$deletions',
+          style: AppTypography.kpiValue.copyWith(color: scheme.red),
+        ),
       ],
     );
   }

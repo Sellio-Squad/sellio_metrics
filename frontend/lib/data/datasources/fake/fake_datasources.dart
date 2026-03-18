@@ -167,7 +167,9 @@ class FakePrDataSource implements PrDataSource {
       "labels": ["feature"],
       "milestone": null,
       "draft": false,
-      "diff_stats": {"additions": 120, "deletions": 5, "changed_files": 4},
+      "diff_stats": {"additions": 1200, "deletions": 50, "changed_files": 14},
+      "body": "Adds login screen. Ref SELL-105.\n\nCheckout the demo:\nhttps://youtube.com/watch?v=123",
+      "files_changed": ["lib/main.dart", "lib/login.dart", "pubspec.yaml"],
     },
     {
       "pr_number": 2,
@@ -198,7 +200,9 @@ class FakePrDataSource implements PrDataSource {
       "labels": ["fix"],
       "milestone": null,
       "draft": false,
-      "diff_stats": {"additions": 10, "deletions": 2, "changed_files": 1},
+      "diff_stats": {"additions": 10, "deletions": 2, "changed_files": 2},
+      "body": "Fixes the crash. See screenshot below:\n![Crash Log](https://example.com/crash.png)",
+      "files_changed": ["lib/app.dart", "test/app_test.dart"],
     },
     {
       "pr_number": 3,

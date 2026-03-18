@@ -23,6 +23,7 @@ export 'components/s_progress.dart';
 export 'components/s_sidebar.dart';
 export 'components/s_checkbox.dart';
 export 'components/s_switch.dart';
+export 'components/s_breadcrumbs.dart';
 
 // ─── Icons (re-exported for convenience) ─────────────────────
 export 'package:hux/hux.dart' show LucideIcons;
