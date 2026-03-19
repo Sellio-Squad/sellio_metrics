@@ -1,22 +1,12 @@
-/// Data — LeaderboardDataSource
-///
-/// Abstract datasource interface + remote implementation.
-/// LeaderboardRepositoryImpl depends on LeaderboardDataSource (interface),
-/// not on the remote HTTP class directly.
 library;
 
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
-
 import '../../core/logging/app_logger.dart';
-
-// ─── Abstract Interface ──────────────────────────────────────
 
 abstract class LeaderboardDataSource {
   Future<List<dynamic>> fetchLeaderboard();
 }
-
-// ─── Remote Implementation ───────────────────────────────────
 
 @Injectable(as: LeaderboardDataSource, env: [Environment.prod])
 class RemoteLeaderboardDataSource implements LeaderboardDataSource {
@@ -24,8 +14,6 @@ class RemoteLeaderboardDataSource implements LeaderboardDataSource {
 
   RemoteLeaderboardDataSource(this._dio);
 
-  /// GET /api/scores/leaderboard?period=all
-  /// Uses precomputed KV snapshot — no D1 aggregation at request time.
   @override
   Future<List<dynamic>> fetchLeaderboard() async {
     const url = '/api/scores/leaderboard?period=all';
