@@ -580,7 +580,7 @@ class _ActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final hasFailed = sync.results.any((r) => !r.success);
+    final hasFailed = sync.results.any((r) => !r.success || r.zeroDiffPrNumbers.isNotEmpty);
 
     return Wrap(
       spacing: AppSpacing.sm,

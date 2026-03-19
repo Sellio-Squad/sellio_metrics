@@ -21,7 +21,7 @@ DROP TABLE IF EXISTS developers;
 
 -- ─── 1. Repos ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS repos (
-    id                TEXT PRIMARY KEY,           -- "{owner}/{name}"
+    id                INTEGER PRIMARY KEY,        -- GitHub Repo integer id (raw from API)
     owner             TEXT NOT NULL,
     name              TEXT NOT NULL,
     html_url          TEXT,
@@ -49,7 +49,7 @@ CREATE INDEX IF NOT EXISTS idx_members_login ON members(login);
 -- ─── 3. Merged PRs ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS merged_prs (
     id           INTEGER PRIMARY KEY,              -- GitHub PR integer id (raw from API)
-    repo_id      TEXT NOT NULL REFERENCES repos(id),
+    repo_id      INTEGER NOT NULL REFERENCES repos(id),
     pr_number    INTEGER NOT NULL,                 -- GitHub PR number (for display / links)
     author       TEXT NOT NULL REFERENCES members(login),
     title        TEXT,
@@ -71,7 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_merged_prs_repo_id   ON merged_prs(repo_id);
 CREATE TABLE IF NOT EXISTS pr_comments (
     id           INTEGER PRIMARY KEY,               -- GitHub comment integer id
     pr_id        INTEGER NOT NULL REFERENCES merged_prs(id),
-    repo_id      TEXT NOT NULL REFERENCES repos(id),
+    repo_id      INTEGER NOT NULL REFERENCES repos(id),
     pr_number    INTEGER NOT NULL,
     author       TEXT NOT NULL REFERENCES members(login),
     body         TEXT,
