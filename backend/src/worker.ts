@@ -353,7 +353,6 @@ async function syncOneRepo(
 
     for (const pr of mergedPrs) {
         try {
-            await cradle.rateLimitGuard.checkAndWait();
             const detail = await cachedGithubClient.getPull(owner, repoName, pr.number, false);
             enrichedPrs.push(detail);
         } catch (e: any) {
@@ -373,7 +372,6 @@ async function syncOneRepo(
     for (const login of uniqueLogins) {
         try {
             await cradle.cacheService.del(`github:user:${login}`);
-            await cradle.rateLimitGuard.checkAndWait();
             const profile = await cachedGithubClient.getUser(login);
             await d1RelationalService.upsertMember(
                 login,
