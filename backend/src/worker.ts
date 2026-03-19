@@ -389,31 +389,47 @@ async function syncOneRepo(
     }
 
     // Build PR rows.
-    // A PR is flagged as zero-diff ONLY when changed_files > 0 (something
-    // changed but we couldn't get the numbers — real data loss).
-    // PRs with changed_files == 0 are legitimate empty merges.
-    const prRows = enrichedPrs.map((pr: any) => ({
-        id:          `github:pr:${repoId}:${pr.number}`,
-        repoId,
-        prNumber:    pr.number as number,
-        githubPrId:  pr.id as number,
-        author:      pr.user.login as string,
-        title:       pr.title as string | undefined,
-        body:        pr.body as string | undefined,
-        htmlUrl:     pr.html_url as string | undefined,
-        mergedAt:    pr.merged_at as string,
-        prCreatedAt: pr.created_at as string | undefined,
-        additions:   pr.additions ?? 0,
-        deletions:   pr.deletions ?? 0,
-    }));
-
-    const { upserted, zeroDiffPrs } = await d1RelationalService.upsertMergedPrBatch(prRows);
-
-    // Exclude PRs already in fetchFailures from zeroDiffPrs to avoid double-counting
+    // id = GitHub's integer PR id (the raw pr.id from the API).
+    // Only flag as zero-diff when changed_files > 0 — those are PRs where
+    // something genuinely changed but we have no line count (real problem).
+    // PRs with changed_files == 0 are legitimate empty merges and NOT flagged.
     const fetchFailureSet = new Set(fetchFailures);
-    const realZeroDiff = zeroDiffPrs.filter((n) => !fetchFailureSet.has(n));
+    const suspectedZeroDiff: number[] = [];
 
-    const mergedPrNumbers = new Set(enrichedPrs.map((p: any) => p.number));
+    const prRows = enrichedPrs.map((pr: any) => {
+        const additions   = pr.additions ?? 0;
+        const deletions   = pr.deletions ?? 0;
+        const changedFiles = pr.changed_files ?? 0;
+
+        // Suspect: passed getPull successfully, has changed files, but zero diff
+        if (
+            additions === 0 && deletions === 0 &&
+            changedFiles > 0 &&
+            !fetchFailureSet.has(pr.number)
+        ) {
+            suspectedZeroDiff.push(pr.number);
+        }
+
+        return {
+            id:          pr.id as number,          // GitHub INTEGER PR id
+            repoId,
+            prNumber:    pr.number as number,      // PR number for display / links
+            author:      pr.user.login as string,
+            title:       pr.title as string | undefined,
+            body:        pr.body as string | undefined,
+            htmlUrl:     pr.html_url as string | undefined,
+            mergedAt:    pr.merged_at as string,
+            prCreatedAt: pr.created_at as string | undefined,
+            additions,
+            deletions,
+        };
+    });
+
+    const { upserted } = await d1RelationalService.upsertMergedPrBatch(prRows);
+
+    // Index merged PR ids for comment filtering
+    const mergedPrById = new Map(enrichedPrs.map((p: any) => [p.id as number, p.number as number]));
+    const mergedPrNumbers = new Set(enrichedPrs.map((p: any) => p.number as number));
 
     // Insert comments — only for merged PRs
     let commentsInserted = 0;
@@ -423,10 +439,13 @@ async function syncOneRepo(
         if (!author || isBot(author, comment.user?.type)) continue;
         const prNumber = parseInt(comment.issue_url?.split("/").pop() ?? "0", 10);
         if (!mergedPrNumbers.has(prNumber)) continue;
+        // Find the GitHub PR integer id for this PR number
+        const prGithubId = enrichedPrs.find((p: any) => p.number === prNumber)?.id as number | undefined;
+        if (!prGithubId) continue;
         await d1RelationalService.upsertMember(author, comment.user?.avatar_url);
         const ok = await d1RelationalService.insertComment({
-            id:          `github:comment:${repoId}:${comment.id}`,
-            prId:        `github:pr:${repoId}:${prNumber}`,
+            id:          comment.id as number,    // GitHub comment integer id
+            prId:        prGithubId,              // FK → merged_prs.id (GitHub PR integer id)
             repoId,
             prNumber,
             author,
@@ -443,10 +462,12 @@ async function syncOneRepo(
         if (!author || isBot(author, comment.user?.type)) continue;
         const prNumber = parseInt(comment.pull_request_url?.split("/").pop() ?? "0", 10);
         if (!mergedPrNumbers.has(prNumber)) continue;
+        const prGithubId = enrichedPrs.find((p: any) => p.number === prNumber)?.id as number | undefined;
+        if (!prGithubId) continue;
         await d1RelationalService.upsertMember(author, comment.user?.avatar_url);
         const ok = await d1RelationalService.insertComment({
-            id:          `github:review:${repoId}:${comment.id}`,
-            prId:        `github:pr:${repoId}:${prNumber}`,
+            id:          comment.id as number,    // GitHub comment integer id
+            prId:        prGithubId,              // FK → merged_prs.id
             repoId,
             prNumber,
             author,
@@ -472,12 +493,12 @@ async function syncOneRepo(
         commentsInserted,
         linesAdded:        totalAdded,
         linesDeleted:      totalDeleted,
-        // Zero-diff PRs: these have changed_files>0 but additions=deletions=0
-        // after getPull succeeded — could indicate a GitHub API lag.
-        // EXCLUDES PRs that failed to fetch (those are in fetchFailures).
-        zeroDiffPrs:       realZeroDiff.length,
-        zeroDiffPrNumbers: realZeroDiff,
-        // PRs where getPull threw — stored with 0+0 in DB. Retry sync to fix.
+        // Only PRs where getPull succeeded but returned 0+0 with changed_files>0.
+        // These likely have binary-only diffs or a transient GitHub lag.
+        // Retry sync to attempt fetching them again.
+        zeroDiffPrs:       suspectedZeroDiff.length,
+        zeroDiffPrNumbers: suspectedZeroDiff,
+        // PRs where getPull threw — stored with 0+0, retry sync to fix.
         fetchFailures:     fetchFailures.map((n) => `#${n}`),
     };
 }
@@ -601,7 +622,7 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
             const repoId = await cradle.d1RelationalService.upsertRepo(repoOwner, repoName, repo.html_url);
             await cradle.d1RelationalService.upsertDeveloper(creator, pr.user?.avatar_url, pr.user?.name);
             await cradle.d1RelationalService.upsertMergedPr({
-                id:          `github:pr:${repoId}:${pr.number}`,
+                id:          pr.id as number,   // GitHub integer PR id
                 repoId,
                 prNumber:    pr.number,
                 author:      creator,
@@ -625,8 +646,8 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
             const repoId = await cradle.d1RelationalService.upsertRepo(repoOwner, repoName, repo.html_url);
             await cradle.d1RelationalService.upsertDeveloper(author, comment.user?.avatar_url);
             await cradle.d1RelationalService.insertComment({
-                id:          `github:comment:${repoId}:${comment.id}`,
-                prId:        `github:pr:${repoId}:${prNumber}`,
+                id:          comment.id as number,   // GitHub integer comment id
+                prId:        (payload.pull_request?.id) as number,
                 repoId,
                 prNumber,
                 author,

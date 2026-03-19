@@ -48,16 +48,15 @@ CREATE INDEX IF NOT EXISTS idx_members_login ON members(login);
 
 -- ─── 3. Merged PRs ───────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS merged_prs (
-    id           TEXT PRIMARY KEY,               -- "github:pr:{repo_id}:{pr_number}"
+    id           INTEGER PRIMARY KEY,              -- GitHub PR integer id (raw from API)
     repo_id      TEXT NOT NULL REFERENCES repos(id),
-    pr_number    INTEGER NOT NULL,               -- GitHub PR number (display key)
-    github_pr_id INTEGER,                        -- Raw GitHub PR integer id
+    pr_number    INTEGER NOT NULL,                 -- GitHub PR number (for display / links)
     author       TEXT NOT NULL REFERENCES members(login),
     title        TEXT,
-    body         TEXT,                           -- PR description / body text
+    body         TEXT,                             -- PR description / body text
     html_url     TEXT,
     merged_at    TEXT NOT NULL,
-    pr_created_at TEXT,                          -- GitHub PR opened date
+    pr_created_at TEXT,                            -- GitHub PR opened date
     additions    INTEGER NOT NULL DEFAULT 0,
     deletions    INTEGER NOT NULL DEFAULT 0,
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
@@ -70,8 +69,8 @@ CREATE INDEX IF NOT EXISTS idx_merged_prs_repo_id   ON merged_prs(repo_id);
 
 -- ─── 4. PR Comments ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS pr_comments (
-    id           TEXT PRIMARY KEY,               -- "github:comment:{repo_id}:{comment_id}"
-    pr_id        TEXT NOT NULL REFERENCES merged_prs(id),
+    id           INTEGER PRIMARY KEY,               -- GitHub comment integer id
+    pr_id        INTEGER NOT NULL REFERENCES merged_prs(id),
     repo_id      TEXT NOT NULL REFERENCES repos(id),
     pr_number    INTEGER NOT NULL,
     author       TEXT NOT NULL REFERENCES members(login),

@@ -32,10 +32,9 @@ export interface Member {
 }
 
 export interface MergedPr {
-    id: string;           // "github:pr:{repo_id}:{pr_number}"
+    id: number;           // GitHub PR integer id (primary key)
     repoId: string;       // FK → repos.id
-    prNumber: number;     // PR number (display / query key)
-    githubPrId?: number;  // Raw GitHub PR integer id
+    prNumber: number;     // PR number (display / link)
     author: string;       // FK → members.login
     title?: string;
     body?: string;        // PR description body
@@ -47,8 +46,8 @@ export interface MergedPr {
 }
 
 export interface PrComment {
-    id: string;        // "github:comment:{repo_id}:{comment_id}"
-    prId: string;      // FK → merged_prs.id
+    id: number;        // GitHub comment integer id
+    prId: number;      // FK → merged_prs.id (GitHub PR integer id)
     repoId: string;    // FK → repos.id
     prNumber: number;
     author: string;    // FK → members.login
@@ -205,18 +204,17 @@ export class D1RelationalService {
         const result = await this.db
             .prepare(
                 `INSERT INTO merged_prs
-                     (id, repo_id, pr_number, github_pr_id, author, title, body, html_url, merged_at, pr_created_at, additions, deletions)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                     (id, repo_id, pr_number, author, title, body, html_url, merged_at, pr_created_at, additions, deletions)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
                  ON CONFLICT(repo_id, pr_number) DO UPDATE SET
-                     additions    = ?11,
-                     deletions    = ?12,
-                     github_pr_id = COALESCE(?4, github_pr_id),
-                     title        = COALESCE(?6, title),
-                     body         = COALESCE(?7, body),
-                     pr_created_at = COALESCE(?10, pr_created_at)`,
+                     additions  = ?10,
+                     deletions  = ?11,
+                     title      = COALESCE(?5, title),
+                     body       = COALESCE(?6, body),
+                     pr_created_at = COALESCE(?9, pr_created_at)`,
             )
             .bind(
-                pr.id, pr.repoId, pr.prNumber, pr.githubPrId ?? null, pr.author,
+                pr.id, pr.repoId, pr.prNumber, pr.author,
                 pr.title ?? null, pr.body ?? null, pr.htmlUrl ?? null, pr.mergedAt,
                 pr.prCreatedAt ?? null, pr.additions, pr.deletions,
             )
@@ -225,23 +223,22 @@ export class D1RelationalService {
         return result.meta.changes > 0;
     }
 
-    async upsertMergedPrBatch(prs: MergedPr[]): Promise<{ upserted: number; zeroDiffPrs: number[] }> {
-        if (!this.db || prs.length === 0) return { upserted: 0, zeroDiffPrs: [] };
+    async upsertMergedPrBatch(prs: MergedPr[]): Promise<{ upserted: number }> {
+        if (!this.db || prs.length === 0) return { upserted: 0 };
 
         const logins = [...new Set(prs.map((p) => p.author))];
         for (const login of logins) await this.upsertMember(login);
 
         const stmt = this.db.prepare(
             `INSERT INTO merged_prs
-                 (id, repo_id, pr_number, github_pr_id, author, title, body, html_url, merged_at, pr_created_at, additions, deletions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
+                 (id, repo_id, pr_number, author, title, body, html_url, merged_at, pr_created_at, additions, deletions)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
              ON CONFLICT(repo_id, pr_number) DO UPDATE SET
-                 additions    = ?11,
-                 deletions    = ?12,
-                 github_pr_id = COALESCE(?4, github_pr_id),
-                 title        = COALESCE(?6, title),
-                 body         = COALESCE(?7, body),
-                 pr_created_at = COALESCE(?10, pr_created_at)`,
+                 additions  = ?10,
+                 deletions  = ?11,
+                 title      = COALESCE(?5, title),
+                 body       = COALESCE(?6, body),
+                 pr_created_at = COALESCE(?9, pr_created_at)`,
         );
 
         let total = 0;
@@ -249,7 +246,7 @@ export class D1RelationalService {
             const chunk = prs.slice(i, i + 50);
             const results = await this.db.batch(
                 chunk.map((pr) => stmt.bind(
-                    pr.id, pr.repoId, pr.prNumber, pr.githubPrId ?? null, pr.author,
+                    pr.id, pr.repoId, pr.prNumber, pr.author,
                     pr.title ?? null, pr.body ?? null, pr.htmlUrl ?? null, pr.mergedAt,
                     pr.prCreatedAt ?? null, pr.additions, pr.deletions,
                 )),
@@ -257,12 +254,7 @@ export class D1RelationalService {
             total += results.reduce((sum, r) => sum + (r.meta.changes || 0), 0);
         }
 
-        // Collect PRs that still have zero diff after all retries — for UI reporting only
-        const zeroDiffPrs = prs
-            .filter((p) => p.additions === 0 && p.deletions === 0)
-            .map((p) => p.prNumber);
-
-        return { upserted: total, zeroDiffPrs };
+        return { upserted: total };
     }
 
     async getMergedPrs(filters: { author?: string; repoId?: string; since?: string; limit?: number } = {}): Promise<MergedPr[]> {
@@ -281,8 +273,7 @@ export class D1RelationalService {
             .all<any>();
 
         return res.results.map((r) => ({
-            id: r.id, repoId: r.repo_id, prNumber: r.pr_number,
-            githubPrId: r.github_pr_id ?? undefined,
+            id: r.id as number, repoId: r.repo_id, prNumber: r.pr_number,
             author: r.author,
             title: r.title, body: r.body, htmlUrl: r.html_url, mergedAt: r.merged_at,
             additions: r.additions, deletions: r.deletions,
