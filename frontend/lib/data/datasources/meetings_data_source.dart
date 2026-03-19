@@ -1,15 +1,9 @@
-/// Meetings Data Source — Abstract Interface + Remote Implementation
-///
-/// Handles HTTP communication with the backend meetings API.
-/// Completely separate from MetricsDataSource (Single Responsibility).
 library;
 
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
-
 import '../../core/logging/app_logger.dart';
 
-// ─── Abstract Interface ─────────────────────────────────────
 
 abstract class MeetingsDataSource {
   Future<Map<String, dynamic>> createMeeting(String title);
@@ -42,8 +36,6 @@ class AuthRequiredException implements Exception {
   @override
   String toString() => message;
 }
-
-// ─── Remote Implementation ──────────────────────────────────
 
 @Injectable(as: MeetingsDataSource, env: [Environment.prod])
 class RemoteMeetingsDataSource implements MeetingsDataSource {
