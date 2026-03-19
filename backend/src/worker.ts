@@ -113,6 +113,7 @@ function getContainer(
             const { EventsService } = await import("./modules/events/events.service");
             const { PointsRulesService } = await import("./modules/points/points-rules.service");
             const { ScoreAggregationService } = await import("./modules/scores/score-aggregation.service");
+            const { D1RelationalService } = await import("./infra/database/d1-relational.service");
             const { AttendanceService } = await import("./modules/attendance/attendance.service");
 
             const logger = createConsoleLogger();
@@ -151,6 +152,10 @@ function getContainer(
                     new D1Service({ d1Database, logger }),
                 ).singleton(),
 
+                d1RelationalService: asFunction(({ logger }: Cradle) =>
+                    new D1RelationalService({ d1Database, logger }),
+                ).singleton(),
+
                 rateLimitGuard: asFunction(({ logger, env }: Cradle) =>
                     new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold }),
                 ).singleton(),
@@ -177,8 +182,8 @@ function getContainer(
                     new PointsRulesService({ d1Service, scoresKvCache, logger }),
                 ).singleton(),
 
-                scoreAggregationService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
-                    new ScoreAggregationService({ d1Service, scoresKvCache, logger }),
+                scoreAggregationService: asFunction(({ d1RelationalService, scoresKvCache, logger }: Cradle) =>
+                    new ScoreAggregationService({ d1RelationalService, scoresKvCache, logger }),
                 ).singleton(),
 
                 attendanceService: asFunction(({ d1Service, attendanceKvCache, eventsService, logger }: Cradle) =>
@@ -268,172 +273,103 @@ async function handleOpenPrs(cradle: Cradle): Promise<Response> {
 // ─── GitHub Sync (Backfill) ───────────────────────────────
 
 /**
- * Syncs a SINGLE repository into D1 using only 4-6 API calls total,
- * regardless of how many PRs or comments the repo has.
- *
- * Strategy (avoids the 1000 subrequest limit):
- *  1. getContributorStats()       → 1 call  → lines added/deleted per developer (matches GitHub UI)
- *  2. pulls.list (paginated)      → ~2 calls → PR_CREATED + PR_MERGED events
- *  3. listAllIssueComments()      → ~2 calls → all PR/issue comments in one pass
- *  4. listAllPRReviewComments()   → ~2 calls → all inline review comments in one pass
+ * Syncs a SINGLE repository into D1 using only 4-6 API calls total.
+ * Writes to normalized relational tables: repos, developers, merged_prs, pr_comments.
  */
 async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Response> {
-    const { cachedGithubClient, eventsService, scoreAggregationService, env } = cradle;
+    const { cachedGithubClient, d1RelationalService, scoreAggregationService, env } = cradle;
     const body = await request.json().catch(() => ({})) as any;
     const owner = body.owner || env.org;
     const repoName: string | undefined = body.repo;
 
     if (!repoName) {
         return err(
-            "Missing 'repo' in request body. Sync one repo at a time. Example: { \"repo\": \"sellio_mobile\" }",
+            "Missing 'repo' in request body. Example: { \"repo\": \"sellio_mobile\" }",
             400,
         );
     }
 
-    // Optionally clear old events for this repo first (set body.clear = true)
-    if (body.clear === true) {
-        await (cradle.d1Service as any).truncateAllEvents();
-    }
-
     try {
-        const events: ScoringEvent[] = [];
-        const repoFull = `${owner}/${repoName}`;
+        // 1. Ensure repo is registered
+        const repoId = await d1RelationalService.upsertRepo(owner, repoName, `https://github.com/${owner}/${repoName}`);
 
-        // ─── Fetch everything in parallel ────────────────────────────────────
-        // Firing contributor stats FIRST (alongside other fetches) gives GitHub
-        // ~15-30 extra seconds to compute while we paginate PRs and comments.
-        // Sequential fetching gave GitHub only 3 seconds — not enough.
-        const [contributorStats, prs, issueComments, reviewComments] = await Promise.all([
-            cachedGithubClient.getContributorStats(owner, repoName),
+        // 2. Fetch everything in parallel
+        const [prs, issueComments, reviewComments] = await Promise.all([
             cachedGithubClient.listPulls(owner, repoName, "all", 100),
             cachedGithubClient.listAllIssueComments(owner, repoName),
             cachedGithubClient.listAllPRReviewComments(owner, repoName),
         ]);
 
-        // ─── 1. Contributor stats → CODE_ADDITION + CODE_DELETION ───────────
-        // Exact same data GitHub shows on /graphs/contributors.
-        // Each contributor gets ONE aggregate event per repo (not per PR).
-        if (contributorStats && Array.isArray(contributorStats)) {
-            for (const contributor of contributorStats) {
-                const login: string = contributor.author?.login;
-                if (!login || login.endsWith("[bot]")) continue;
+        // 3. Upsert merged PRs (skip opened/closed-without-merge)
+        const mergedPrs = prs.filter((pr: any) => !!pr.merged_at && !pr.user?.login?.endsWith("[bot]"));
+        const prRows = mergedPrs.map((pr: any) => ({
+            id: `github:pr:${repoId}:${pr.number}`,
+            repoId,
+            prNumber: pr.number,
+            author: pr.user.login,
+            title: pr.title,
+            htmlUrl: pr.html_url,
+            mergedAt: pr.merged_at,
+            additions: pr.additions ?? 0,
+            deletions: pr.deletions ?? 0,
+        }));
+        const { upserted } = await d1RelationalService.upsertMergedPrBatch(prRows);
 
-                // Sum additions and deletions across all weeks
-                let totalAdditions = 0;
-                let totalDeletions = 0;
-                for (const week of contributor.weeks ?? []) {
-                    totalAdditions += week.a ?? 0;
-                    totalDeletions += week.d ?? 0;
-                }
-
-                if (totalAdditions > 0) {
-                    events.push({
-                        id: `github:code_additions:${repoFull}:${login}`,
-                        developerId: login,
-                        eventType: EventType.CODE_ADDITION,
-                        source: "github",
-                        sourceId: `https://github.com/${repoFull}/graphs/contributors`,
-                        eventTimestamp: new Date().toISOString(),
-                        metadata: { repo: repoFull, lines: totalAdditions },
-                    });
-                }
-                if (totalDeletions > 0) {
-                    events.push({
-                        id: `github:code_deletions:${repoFull}:${login}`,
-                        developerId: login,
-                        eventType: EventType.CODE_DELETION,
-                        source: "github",
-                        sourceId: `https://github.com/${repoFull}/graphs/contributors`,
-                        eventTimestamp: new Date().toISOString(),
-                        metadata: { repo: repoFull, lines: totalDeletions },
-                    });
-                }
-            }
-        }
-
-        for (const pr of prs) {
-            const creator: string = pr.user?.login;
-            if (!creator || creator.endsWith("[bot]")) continue;
-
-            events.push({
-                id: `github:pr_created:${repoFull}:${pr.number}:${creator}`,
-                developerId: creator,
-                eventType: EventType.PR_CREATED,
-                source: "github",
-                sourceId: pr.html_url,
-                eventTimestamp: pr.created_at,
-                metadata: { pr_number: pr.number, title: pr.title, repo: repoFull },
-            });
-
-            if (pr.merged_at) {
-                events.push({
-                    id: `github:pr_merged:${repoFull}:${pr.number}:${creator}`,
-                    developerId: creator,
-                    eventType: EventType.PR_MERGED,
-                    source: "github",
-                    sourceId: pr.html_url,
-                    eventTimestamp: pr.merged_at,
-                    metadata: { pr_number: pr.number, title: pr.title, repo: repoFull },
-                });
-            }
-        }
+        // 4. Insert comments — only for merged PRs (FK constraint)
+        const mergedPrNumbers = new Set(mergedPrs.map((p: any) => p.number));
+        let commentsInserted = 0;
 
         for (const comment of issueComments) {
             const author: string = comment.user?.login;
             if (!author || author.endsWith("[bot]")) continue;
-            events.push({
-                id: `github:comment:${repoName}:${comment.id}:${author}`,
-                developerId: author,
-                eventType: EventType.COMMENT,
-                source: "github",
-                sourceId: comment.html_url,
-                eventTimestamp: comment.created_at,
-                metadata: { repo: repoFull },
+            // Extract PR number from the issue URL (issue_url: .../issues/42)
+            const prNumber = parseInt(comment.issue_url?.split("/").pop() ?? "0", 10);
+            if (!mergedPrNumbers.has(prNumber)) continue;
+            const ok = await d1RelationalService.insertComment({
+                id: `github:comment:${repoId}:${comment.id}`,
+                prId: `github:pr:${repoId}:${prNumber}`,
+                repoId,
+                prNumber,
+                author,
+                body: comment.body,
+                commentType: "issue",
+                htmlUrl: comment.html_url,
+                commentedAt: comment.created_at,
             });
+            if (ok) commentsInserted++;
         }
 
         for (const comment of reviewComments) {
             const author: string = comment.user?.login;
             if (!author || author.endsWith("[bot]")) continue;
-            events.push({
-                id: `github:review_comment:${repoName}:${comment.id}:${author}`,
-                developerId: author,
-                eventType: EventType.COMMENT,
-                source: "github",
-                sourceId: comment.html_url,
-                eventTimestamp: comment.created_at,
-                metadata: { repo: repoFull, pr_number: comment.pull_request_url?.split("/").pop() },
+            const prNumber = parseInt(comment.pull_request_url?.split("/").pop() ?? "0", 10);
+            if (!mergedPrNumbers.has(prNumber)) continue;
+            const ok = await d1RelationalService.insertComment({
+                id: `github:review:${repoId}:${comment.id}`,
+                prId: `github:pr:${repoId}:${prNumber}`,
+                repoId,
+                prNumber,
+                author,
+                body: comment.body,
+                commentType: "review",
+                htmlUrl: comment.html_url,
+                commentedAt: comment.created_at,
             });
+            if (ok) commentsInserted++;
         }
 
-        // ─── Ingest ──────────────────────────────────────────────────────────
-        let inserted = 0;
-        let duplicates = 0;
-        if (events.length > 0) {
-            const result = await eventsService.ingestBatch(events);
-            inserted = result.inserted;
-            duplicates = result.duplicates;
-        }
-
-        // Precompute snapshots so leaderboard reflects new data immediately
+        // 5. Full leaderboard recompute after a sync
         await scoreAggregationService.precomputeSnapshots();
 
-        const statsOk = contributorStats != null && contributorStats.length > 0;
         return json({
-            ok: true,
-            repo: repoFull,
+            ok: true, repo: `${owner}/${repoName}`,
             prsFound: prs.length,
-            mergedPrs: prs.filter((p: any) => !!p.merged_at).length,
+            mergedPrs: mergedPrs.length,
+            prsUpserted: upserted,
             issueComments: issueComments.length,
             reviewComments: reviewComments.length,
-            eventsGenerated: events.length,
-            eventsInserted: inserted,
-            duplicates,
-            lineStatsSource: statsOk
-                ? `GitHub contributor stats (${contributorStats!.length} contributors)`
-                : "GitHub stats unavailable — re-sync this repo in a few minutes",
+            commentsInserted,
         });
-
     } catch (e: any) {
         return err(`Sync failed: ${e.message}`, 500);
     }
@@ -469,111 +405,72 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
     const repo = payload?.repository;
     if (!repo?.full_name) return json({ ignored: true, reason: "no repo" });
 
-    // Invalidate open PRs cache on any PR or review event — next dashboard load gets fresh data
-    // Key: `github:open_prs:{org}` (managed by OpenPrsService.invalidateCache)
     const org = repo.owner?.login || repo.full_name.split("/")[0] || cradle.env.org;
+    const repoOwner = repo.owner?.login || org;
+    const repoName = repo.name;
+
+    // Invalidate open PRs cache
     if (event === "pull_request" || event === "pull_request_review") {
         cradle.openPrsService.invalidateCache(org).catch((e: any) =>
             cradle.logger.warn({ err: e.message, org }, "Failed to invalidate open-prs cache")
         );
     }
 
-    // Ingest events into D1 (event-driven scoring)
-    const events: ScoringEvent[] = [];
     const action = payload?.action;
+    const affectedDevelopers = new Set<string>();
 
-    if (event === "pull_request" && payload.pull_request) {
+    // ── PR Merged ────────────────────────────────────────────────────
+    if (event === "pull_request" && payload.pull_request && action === "closed" && payload.pull_request.merged) {
         const pr = payload.pull_request;
-        const creator = pr.user?.login;
-        if (!creator) return json({ ok: true, event, reason: "no user" });
-
-        if (action === "opened" || action === "reopened") {
-            events.push({
-                id: `github:pr_created:${repo.full_name}:${pr.number}:${creator}`,
-                developerId: creator,
-                eventType: EventType.PR_CREATED,
-                source: "github",
-                sourceId: pr.html_url,
-                eventTimestamp: pr.created_at,
-                metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
+        const creator: string = pr.user?.login;
+        if (creator && !creator.endsWith("[bot]")) {
+            // Ensure repo is registered
+            const repoId = await cradle.d1RelationalService.upsertRepo(repoOwner, repoName, repo.html_url);
+            await cradle.d1RelationalService.upsertMergedPr({
+                id: `github:pr:${repoId}:${pr.number}`,
+                repoId,
+                prNumber: pr.number,
+                author: creator,
+                title: pr.title,
+                htmlUrl: pr.html_url,
+                mergedAt: pr.merged_at || pr.closed_at || new Date().toISOString(),
+                additions: pr.additions ?? 0,
+                deletions: pr.deletions ?? 0,
             });
-        }
-
-        if (action === "closed" && pr.merged) {
-            const mergeTs = pr.merged_at || pr.closed_at || new Date().toISOString();
-            events.push({
-                id: `github:pr_merged:${repo.full_name}:${pr.number}:${creator}`,
-                developerId: creator,
-                eventType: EventType.PR_MERGED,
-                source: "github",
-                sourceId: pr.html_url,
-                eventTimestamp: mergeTs,
-                metadata: { pr_number: pr.number, title: pr.title, repo: repo.full_name },
-            });
-            // Capture final line counts at merge time
-            if (typeof pr.additions === "number" && pr.additions > 0) {
-                events.push({
-                    id: `github:code_additions:${repo.full_name}:${pr.number}:${creator}`,
-                    developerId: creator,
-                    eventType: EventType.CODE_ADDITION,
-                    source: "github",
-                    sourceId: pr.html_url,
-                    eventTimestamp: mergeTs,
-                    metadata: { pr_number: pr.number, repo: repo.full_name, lines: pr.additions },
-                });
-            }
-            if (typeof pr.deletions === "number" && pr.deletions > 0) {
-                events.push({
-                    id: `github:code_deletions:${repo.full_name}:${pr.number}:${creator}`,
-                    developerId: creator,
-                    eventType: EventType.CODE_DELETION,
-                    source: "github",
-                    sourceId: pr.html_url,
-                    eventTimestamp: mergeTs,
-                    metadata: { pr_number: pr.number, repo: repo.full_name, lines: pr.deletions },
-                });
-            }
+            affectedDevelopers.add(creator);
         }
     }
 
-    // pull_request_review events have been explicitly requested to be removed.
-
-    if ((event === "issue_comment" || event === "pull_request_review_comment") && payload.comment) {
+    // ── Comments (issue + review) ────────────────────────────────────
+    if ((event === "issue_comment" || event === "pull_request_review_comment") && payload.comment && action === "created") {
         const comment = payload.comment;
-        const author = comment.user?.login;
-        // Skip bots entirely — they should not earn points or appear on the leaderboard
-        if (author && action === "created" && !author.endsWith("[bot]")) {
+        const author: string = comment.user?.login;
+        if (author && !author.endsWith("[bot]")) {
             const prNumber = payload.issue?.number || payload.pull_request?.number;
-            events.push({
-                id: `github:comment:${repo.full_name}:${comment.id}:${author}`,
-                developerId: author,
-                eventType: EventType.COMMENT,
-                source: "github",
-                sourceId: comment.html_url,
-                eventTimestamp: comment.created_at,
-                metadata: { pr_number: prNumber, repo: repo.full_name },
+            const repoId = await cradle.d1RelationalService.upsertRepo(repoOwner, repoName, repo.html_url);
+            await cradle.d1RelationalService.insertComment({
+                id: `github:comment:${repoId}:${comment.id}`,
+                prId: `github:pr:${repoId}:${prNumber}`,
+                repoId,
+                prNumber,
+                author,
+                body: comment.body,
+                commentType: event === "pull_request_review_comment" ? "review" : "issue",
+                htmlUrl: comment.html_url,
+                commentedAt: comment.created_at,
             });
+            affectedDevelopers.add(author);
         }
     }
 
-    // Ingest all events
-    let ingested = 0;
-    let duplicates = 0;
-    if (events.length > 0) {
-        const result = await cradle.eventsService.ingestBatch(events);
-        ingested = result.inserted;
-        duplicates = result.duplicates;
-
-        // Refresh the leaderboard snapshot in the background so scores update
-        // immediately without blocking the webhook response (fire-and-forget).
-        if (ingested > 0) {
-            cradle.scoreAggregationService.precomputeSnapshots().catch((e: any) =>
-                cradle.logger.warn({ err: e.message }, "Failed to refresh leaderboard after webhook")
-            );
-        }
+    // ── Incremental snapshot update (only affected developers) ───────
+    if (affectedDevelopers.size > 0) {
+        cradle.scoreAggregationService.precomputeSnapshots([...affectedDevelopers]).catch((e: any) =>
+            cradle.logger.warn({ err: e.message }, "Failed to patch leaderboard snapshot after webhook")
+        );
     }
 
-    return json({ ok: true, event, repo: repo.full_name, eventsIngested: ingested, duplicates });
+    return json({ ok: true, event, repo: repo.full_name, affectedDevelopers: [...affectedDevelopers] });
 }
 
 // ─── Points Rules Handlers ──────────────────────────────────
@@ -658,20 +555,17 @@ async function handleDeleteDeveloper(cradle: Cradle, developerId: string): Promi
 async function handleMembers(cradle: Cradle): Promise<Response> {
     try {
         const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
-        // 30 day window for strictly active vs inactive flag
         const sinceDate = new Date();
         sinceDate.setDate(sinceDate.getDate() - 30);
         const thirtyDaysAgo = sinceDate.getTime();
 
-        // Get absolute last active dates directly from D1 using optimized query
-        const activityMap = await cradle.eventsService.getLastActiveDates();
+        // Pull last active dates from relational tables (not flat events)
+        const activityMap = await cradle.d1RelationalService.getLastActiveDates();
 
         const mappedMembers = orgMembers.map((m: any) => {
-            // Be case-insensitive during lookups just in case
             const developerIdMatch = Object.keys(activityMap).find((k) => k.toLowerCase() === m.login.toLowerCase());
             const lastActive = developerIdMatch ? activityMap[developerIdMatch] : null;
             const isActive = !!lastActive && new Date(lastActive).getTime() >= thirtyDaysAgo;
-            
             return {
                 developer: m.login,
                 avatarUrl: m.avatar_url,
@@ -680,7 +574,6 @@ async function handleMembers(cradle: Cradle): Promise<Response> {
             };
         });
 
-        // Sort: Active first, then by last active date desc, then by name
         mappedMembers.sort((a: any, b: any) => {
             if (a.isActive && !b.isActive) return -1;
             if (!a.isActive && b.isActive) return 1;

@@ -7,6 +7,7 @@
 
 import type { CacheService, KVNamespace } from "../infra/cache/cache.service";
 import type { D1Service } from "../infra/database/d1.service";
+import type { D1RelationalService } from "../infra/database/d1-relational.service";
 import type { RateLimitGuard } from "../infra/github/rate-limit-guard";
 import type { CachedGitHubClient } from "../infra/github/cached-github.client";
 import type { ReposService } from "../modules/repos/repos.service";
@@ -44,6 +45,7 @@ export interface Cradle {
 
     // Infrastructure — D1
     d1Service: D1Service;
+    d1RelationalService: D1RelationalService;
 
     // Repos
     reposService: ReposService;

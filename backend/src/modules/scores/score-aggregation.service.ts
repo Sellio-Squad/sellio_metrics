@@ -1,29 +1,31 @@
 /**
- * Scores Module — Score Aggregation Service
+ * Scores Module — Score Aggregation Service (Relational)
  *
- * On-demand leaderboard aggregation from D1 (events JOIN point_rules).
- * Results cached in SCORES_KV for fast reads.
+ * Computes leaderboards from the normalized relational tables
+ * (merged_prs, pr_comment_summary, meeting_attendance) using
+ * D1RelationalService.
  *
- * Periods precomputed by Cron (every 6h) and after every sync/webhook:
- *   - leaderboard:all          — all time
- *   - leaderboard:month        — current calendar month (UTC)
- *   - leaderboard:week         — current Mon–Sun week (UTC)
+ * Supports incremental updates — only refreshes the affected developer's
+ * entry in the cached snapshot when called from a webhook.
+ *
+ * Periods:
+ *   leaderboard:all   — all time
+ *   leaderboard:month — current calendar month (UTC)
+ *   leaderboard:week  — current Mon–Sun week (UTC)
  */
 
-import type { D1Service } from "../../infra/database/d1.service";
+import type { D1RelationalService, RelationalLeaderboardEntry } from "../../infra/database/d1-relational.service";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { Logger } from "../../core/logger";
-import type { AggregatedLeaderboardEntry } from "../../core/event-types";
 
-/** Cache TTL for leaderboard snapshots (6 hours — refreshed by cron) */
+/** Cache TTL for leaderboard snapshots (6 hours — also refreshed by cron) */
 const LEADERBOARD_CACHE_TTL = 6 * 60 * 60;
-/** Lock TTL — 30 seconds max */
 const LOCK_TTL = 30;
 
 export type LeaderboardPeriod = "all" | "month" | "week";
 
 export interface LeaderboardResult {
-    entries: AggregatedLeaderboardEntry[];
+    entries: RelationalLeaderboardEntry[];
     cachedAt: string;
     period: LeaderboardPeriod;
     since: string | null;
@@ -42,7 +44,7 @@ function periodBounds(period: LeaderboardPeriod): { since: string | null; until:
     }
 
     // week — Monday-based ISO week
-    const day = now.getUTCDay(); // 0=Sun
+    const day = now.getUTCDay();
     const mondayOffset = day === 0 ? 6 : day - 1;
     const since = new Date(
         Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - mondayOffset),
@@ -50,7 +52,6 @@ function periodBounds(period: LeaderboardPeriod): { since: string | null; until:
     return { since, until: null };
 }
 
-/** Stable KV key for a named period — never changes mid-period */
 function periodCacheKey(period: LeaderboardPeriod): string {
     return `leaderboard:${period}`;
 }
@@ -58,78 +59,108 @@ function periodCacheKey(period: LeaderboardPeriod): string {
 // ─── Service ─────────────────────────────────────────────
 
 export class ScoreAggregationService {
-    private readonly d1: D1Service;
+    private readonly d1: D1RelationalService;
     private readonly scoresKv: CacheService;
     private readonly logger: Logger;
 
     constructor({
-        d1Service,
+        d1RelationalService,
         scoresKvCache,
         logger,
     }: {
-        d1Service: D1Service;
+        d1RelationalService: D1RelationalService;
         scoresKvCache: CacheService;
         logger: Logger;
     }) {
-        this.d1 = d1Service;
+        this.d1 = d1RelationalService;
         this.scoresKv = scoresKvCache;
         this.logger = logger.child({ module: "score-aggregation" });
     }
 
     /**
-     * Get leaderboard for a named period (all | month | week).
-     * Served directly from KV cache if available; otherwise computed from D1 and cached.
+     * Get leaderboard for a named period.
+     * Served from KV cache if available, otherwise computed and cached.
      */
     async getLeaderboard(period: LeaderboardPeriod = "all", limit = 50): Promise<LeaderboardResult> {
         const cacheKey = periodCacheKey(period);
-
         const cached = await this.scoresKv.get<LeaderboardResult>(cacheKey);
         if (cached?.data) {
             this.logger.info({ period }, "Leaderboard served from KV cache");
             return cached.data;
         }
-
-        // Cache miss — compute and cache
         return this.computeAndCachePeriod(period, limit);
     }
 
     /**
-     * Precompute ALL three leaderboard snapshots and write them to KV.
-     * Called by: Cron Trigger (every 6h), POST /api/sync/github, webhook handler.
+     * Precompute ALL three leaderboard snapshots.
+     * Called by: Cron (every 6h), POST /api/sync/github, full refresh.
      *
-     * Each period gets a STABLE key (leaderboard:all, leaderboard:month, leaderboard:week)
-     * so clients never need to derive date bounds — they just request by period name.
+     * @param developerLogins — optional array of logins to update INCREMENTALLY.
+     *   If provided, only those developers' entries are refreshed in the cached snapshot.
+     *   This avoids a full D1 UNION ALL query for every single webhook call.
      */
-    async precomputeSnapshots(): Promise<void> {
-        this.logger.info("Precomputing leaderboard snapshots (all, month, week)");
-
-        await Promise.all([
-            this.computeAndCachePeriod("all", 50),
-            this.computeAndCachePeriod("month", 50),
-            this.computeAndCachePeriod("week", 50),
-        ]);
-
-        this.logger.info("All leaderboard snapshots updated");
+    async precomputeSnapshots(developerLogins?: string[]): Promise<void> {
+        if (developerLogins && developerLogins.length > 0) {
+            // ── Incremental update — only patch affected developers ──────────
+            this.logger.info({ developers: developerLogins }, "Incremental leaderboard update");
+            await Promise.all([
+                this.patchDevelopersInSnapshot("all", developerLogins),
+                this.patchDevelopersInSnapshot("month", developerLogins),
+                this.patchDevelopersInSnapshot("week", developerLogins),
+            ]);
+        } else {
+            // ── Full recompute — called by cron or full sync ─────────────────
+            this.logger.info("Full leaderboard snapshot recompute (all, month, week)");
+            await Promise.all([
+                this.computeAndCachePeriod("all", 50),
+                this.computeAndCachePeriod("month", 50),
+                this.computeAndCachePeriod("week", 50),
+            ]);
+            this.logger.info("All leaderboard snapshots updated");
+        }
     }
 
     /**
-     * Get score for a single developer (reads from any existing snapshot).
+     * Patch one or more developers inside an existing cached snapshot.
+     * Fetches fresh data per developer and splices it in — O(n) per developer.
      */
-    async getDeveloperScore(
-        developerId: string,
-        period: LeaderboardPeriod = "all",
-    ): Promise<{ developerId: string; totalPoints: number; eventCounts: Record<string, number> } | null> {
-        const snapshot = await this.getLeaderboard(period);
-        const entry = snapshot.entries.find((e) => e.developer_id === developerId);
-        if (!entry) return null;
-        return {
-            developerId: entry.developer_id,
-            totalPoints: entry.total_points,
-            eventCounts: entry.event_counts,
-        };
+    private async patchDevelopersInSnapshot(
+        period: LeaderboardPeriod,
+        developerLogins: string[],
+    ): Promise<void> {
+        const cacheKey = periodCacheKey(period);
+        const cached = await this.scoresKv.get<LeaderboardResult>(cacheKey);
+
+        if (!cached?.data) {
+            // No snapshot yet — do a full recompute instead
+            await this.computeAndCachePeriod(period, 50);
+            return;
+        }
+
+        const { since, until } = periodBounds(period);
+        const snapshot = cached.data;
+
+        for (const login of developerLogins) {
+            const freshEntry = await this.d1.getDeveloperLeaderboardEntry(login, since ?? undefined, until ?? undefined);
+
+            // Remove old entry (if any)
+            snapshot.entries = snapshot.entries.filter((e) => e.developer_login !== login);
+
+            // Add fresh entry (if they have any activity)
+            if (freshEntry && freshEntry.total_points > 0) {
+                snapshot.entries.push(freshEntry);
+            }
+        }
+
+        // Re-sort descending by points
+        snapshot.entries.sort((a, b) => b.total_points - a.total_points);
+        snapshot.cachedAt = new Date().toISOString();
+
+        await this.scoresKv.set(cacheKey, snapshot, LEADERBOARD_CACHE_TTL);
+        this.logger.info({ period, developers: developerLogins }, "Incremental snapshot patch saved");
     }
 
-    // ─── Private ────────────────────────────────────────────
+    // ─── Private ─────────────────────────────────────────────
 
     private async computeAndCachePeriod(
         period: LeaderboardPeriod,
@@ -140,7 +171,6 @@ export class ScoreAggregationService {
 
         const locked = await this.tryAcquireLock(lockKey);
         if (!locked) {
-            // Another request is already computing — wait briefly and try cache again
             await new Promise((r) => setTimeout(r, 600));
             const retryCache = await this.scoresKv.get<LeaderboardResult>(cacheKey);
             if (retryCache?.data) return retryCache.data;
@@ -148,11 +178,7 @@ export class ScoreAggregationService {
 
         try {
             const { since, until } = periodBounds(period);
-            const entries = await this.d1.getLeaderboard(
-                since ?? undefined,
-                until ?? undefined,
-                limit,
-            );
+            const entries = await this.d1.getLeaderboard(since ?? undefined, until ?? undefined, limit);
 
             const result: LeaderboardResult = {
                 entries,
@@ -184,8 +210,6 @@ export class ScoreAggregationService {
     private async releaseLock(lockKey: string): Promise<void> {
         try {
             await this.scoresKv.del(lockKey);
-        } catch {
-            // Expires via TTL
-        }
+        } catch { /* expires via TTL */ }
     }
 }

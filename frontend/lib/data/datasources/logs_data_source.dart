@@ -1,7 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
-
-import '../../data/datasources/fake/fake_logs.dart'; // Retaining the types
+import '../../data/datasources/fake/fake_logs.dart';
 
 @injectable
 class LogsDataSource {
