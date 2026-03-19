@@ -20,13 +20,15 @@ export interface Repo {
     name: string;
     htmlUrl?: string;
     description?: string;
+    githubCreatedAt?: string;
+    pushedAt?: string;
 }
 
 export interface Developer {
     login: string;
     avatarUrl?: string;
     displayName?: string;
-    isBot: boolean;
+    joinedAt?: string;
 }
 
 export interface MergedPr {
@@ -37,6 +39,7 @@ export interface MergedPr {
     title?: string;
     htmlUrl?: string;
     mergedAt: string;
+    prCreatedAt?: string; // GitHub PR opened date
     additions: number;
     deletions: number;
 }
@@ -103,16 +106,26 @@ export class D1RelationalService {
      * Ensure a repo exists. Idempotent — safe to call before every PR insert.
      * Returns the repo id ("{owner}/{name}").
      */
-    async upsertRepo(owner: string, name: string, htmlUrl?: string): Promise<string> {
+    async upsertRepo(
+        owner: string,
+        name: string,
+        opts: { htmlUrl?: string; description?: string; githubCreatedAt?: string; pushedAt?: string } = {},
+    ): Promise<string> {
         if (!this.db) return `${owner}/${name}`;
         const id = `${owner}/${name}`;
         await this.db
             .prepare(
-                `INSERT INTO repos (id, owner, name, html_url)
-                 VALUES (?1, ?2, ?3, ?4)
-                 ON CONFLICT(owner, name) DO UPDATE SET html_url = COALESCE(?4, html_url)`,
+                `INSERT INTO repos (id, owner, name, html_url, description, github_created_at, pushed_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+                 ON CONFLICT(owner, name) DO UPDATE SET
+                     html_url         = COALESCE(?4, html_url),
+                     description      = COALESCE(?5, description),
+                     github_created_at = COALESCE(?6, github_created_at),
+                     pushed_at        = COALESCE(?7, pushed_at)`,
             )
-            .bind(id, owner, name, htmlUrl ?? null)
+            .bind(id, owner, name,
+                opts.htmlUrl ?? null, opts.description ?? null,
+                opts.githubCreatedAt ?? null, opts.pushedAt ?? null)
             .run();
         return id;
     }
@@ -130,28 +143,30 @@ export class D1RelationalService {
 
     // ─── Developer Registry ──────────────────────────────────
 
-    async upsertDeveloper(login: string, avatarUrl?: string, displayName?: string): Promise<void> {
+    async upsertDeveloper(login: string, avatarUrl?: string, displayName?: string, joinedAt?: string): Promise<void> {
         if (!this.db || !login) return;
-        const isBot = login.endsWith("[bot]") ? 1 : 0;
+        // Bots are always filtered before calling this; we never store them.
         await this.db
             .prepare(
-                `INSERT INTO developers (login, avatar_url, display_name, is_bot)
+                `INSERT INTO developers (login, avatar_url, display_name, joined_at)
                  VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT(login) DO UPDATE SET
                      avatar_url   = COALESCE(?2, avatar_url),
-                     display_name = COALESCE(?3, display_name)`,
+                     display_name = COALESCE(?3, display_name),
+                     joined_at    = COALESCE(?4, joined_at)`,
             )
-            .bind(login, avatarUrl ?? null, displayName ?? null, isBot)
+            .bind(login, avatarUrl ?? null, displayName ?? null, joinedAt ?? null)
             .run();
     }
 
     async getDevelopers(): Promise<Developer[]> {
         if (!this.db) return [];
         const res = await this.db
-            .prepare("SELECT login, avatar_url, display_name, is_bot FROM developers WHERE is_bot = 0 ORDER BY login")
+            .prepare("SELECT login, avatar_url, display_name, joined_at FROM developers ORDER BY login")
             .all<any>();
         return res.results.map((r) => ({
-            login: r.login, avatarUrl: r.avatar_url, displayName: r.display_name, isBot: r.is_bot === 1,
+            login: r.login, avatarUrl: r.avatar_url,
+            displayName: r.display_name, joinedAt: r.joined_at,
         }));
     }
 
@@ -182,12 +197,15 @@ export class D1RelationalService {
 
         const result = await this.db
             .prepare(
-                `INSERT INTO merged_prs (id, repo_id, pr_number, author, title, html_url, merged_at, additions, deletions)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                `INSERT INTO merged_prs (id, repo_id, pr_number, author, title, html_url, merged_at, pr_created_at, additions, deletions)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
                  ON CONFLICT(repo_id, pr_number) DO UPDATE SET
-                     additions = ?8, deletions = ?9, title = COALESCE(?5, title)`,
+                     additions    = ?9,
+                     deletions    = ?10,
+                     title        = COALESCE(?5, title),
+                     pr_created_at = COALESCE(?8, pr_created_at)`,
             )
-            .bind(pr.id, pr.repoId, pr.prNumber, pr.author, pr.title ?? null, pr.htmlUrl ?? null, pr.mergedAt, pr.additions, pr.deletions)
+            .bind(pr.id, pr.repoId, pr.prNumber, pr.author, pr.title ?? null, pr.htmlUrl ?? null, pr.mergedAt, pr.prCreatedAt ?? null, pr.additions, pr.deletions)
             .run();
 
         return result.meta.changes > 0;
@@ -200,17 +218,20 @@ export class D1RelationalService {
         for (const login of logins) await this.upsertDeveloper(login);
 
         const stmt = this.db.prepare(
-            `INSERT INTO merged_prs (id, repo_id, pr_number, author, title, html_url, merged_at, additions, deletions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+            `INSERT INTO merged_prs (id, repo_id, pr_number, author, title, html_url, merged_at, pr_created_at, additions, deletions)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
              ON CONFLICT(repo_id, pr_number) DO UPDATE SET
-                 additions = ?8, deletions = ?9, title = COALESCE(?5, title)`,
+                 additions    = ?9,
+                 deletions    = ?10,
+                 title        = COALESCE(?5, title),
+                 pr_created_at = COALESCE(?8, pr_created_at)`,
         );
 
         let total = 0;
         for (let i = 0; i < prs.length; i += 50) {
             const chunk = prs.slice(i, i + 50);
             const results = await this.db.batch(
-                chunk.map((pr) => stmt.bind(pr.id, pr.repoId, pr.prNumber, pr.author, pr.title ?? null, pr.htmlUrl ?? null, pr.mergedAt, pr.additions, pr.deletions)),
+                chunk.map((pr) => stmt.bind(pr.id, pr.repoId, pr.prNumber, pr.author, pr.title ?? null, pr.htmlUrl ?? null, pr.mergedAt, pr.prCreatedAt ?? null, pr.additions, pr.deletions)),
             );
             total += results.reduce((sum, r) => sum + (r.meta.changes || 0), 0);
         }

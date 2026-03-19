@@ -158,6 +158,22 @@ export class CachedGitHubClient {
     }
 
     /**
+     * Get a user's full profile — includes name (display_name) and created_at (joined_at).
+     * Cached for 24h since profiles rarely change.
+     */
+    async getUser(login: string): Promise<any> {
+        const cacheKey = `github:user:${login}`;
+        const cached = await this.cache.get<any>(cacheKey);
+        if (cached) return cached.data;
+
+        await this.guard.checkAndWait();
+        const response = await this.github.rest.users.getByUsername({ username: login });
+        if (response?.headers) this.guard.updateFromHeaders(response.headers as Record<string, string | undefined>);
+        await this.cache.set(cacheKey, response.data, 24 * 60 * 60);
+        return response.data;
+    }
+
+    /**
      * Get contributor stats for a repo.
      * Returns GitHub-computed total additions + deletions per contributor
      * (same numbers shown on github.com/org/repo/graphs/contributors).

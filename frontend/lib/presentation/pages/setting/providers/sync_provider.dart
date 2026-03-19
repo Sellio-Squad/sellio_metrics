@@ -20,6 +20,9 @@ class RepoSyncResult {
   final String? error;
   final int? prsUpserted;
   final int? commentsInserted;
+  final int? linesAdded;
+  final int? linesDeleted;
+  final int? zeroDiffPrs;
 
   const RepoSyncResult({
     required this.repo,
@@ -27,6 +30,9 @@ class RepoSyncResult {
     this.error,
     this.prsUpserted,
     this.commentsInserted,
+    this.linesAdded,
+    this.linesDeleted,
+    this.zeroDiffPrs,
   });
 }
 
@@ -125,6 +131,9 @@ class SyncProvider extends ChangeNotifier {
             success: true,
             prsUpserted: body['prsUpserted'] as int?,
             commentsInserted: body['commentsInserted'] as int?,
+            linesAdded: body['linesAdded'] as int?,
+            linesDeleted: body['linesDeleted'] as int?,
+            zeroDiffPrs: body['zeroDiffPrs'] as int?,
           ));
         } catch (e) {
           appLogger.error('SyncProvider', 'Failed to sync ${repo.name}', null);
