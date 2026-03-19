@@ -335,99 +335,84 @@ async function syncOneRepo(
     );
 
     // Fetch individual PR details for REAL additions/deletions + body text.
-    // The list API always returns additions=0 deletions=0 — only the single-PR
-    // endpoint returns the real diff stats AND the PR body.
     //
-    // GitHub sometimes returns 0 additions/deletions on the first call even
-    // though changed_files > 0 (diff computation lag). We retry up to 3 times
-    // with a 1.5 s gap, same pattern as contributor stats.
-    // Batched in groups of 8 to stay well within rate limits.
+    // IMPORTANT: The list API always returns additions=0, deletions=0.
+    // Only the single-PR endpoint (GET /repos/:owner/:repo/pulls/:number)
+    // has the real diff stats and the PR body/description.
+    //
+    // We call them SEQUENTIALLY (not in parallel) with a rate-limit check
+    // before each request. Parallel batches caused secondary-rate-limit
+    // 429 errors from GitHub, making ALL PRs fall back to 0+0 diff.
+    //
+    // No setTimeout retry delays — those block the Worker CPU and don't
+    // help against secondary rate limits. Instead we rely on the
+    // RateLimitGuard.checkAndWait() which reads the x-ratelimit-remaining
+    // header and pauses when needed.
     const enrichedPrs: any[] = [];
     const fetchFailures: number[] = [];
-    const MAX_DIFF_RETRIES = 3;
-    const RETRY_DELAY_MS   = 1500;
 
-    for (let i = 0; i < mergedPrs.length; i += 8) {
-        const batch = mergedPrs.slice(i, i + 8);
-        const details = await Promise.all(
-            batch.map(async (pr: any) => {
-                for (let attempt = 0; attempt < MAX_DIFF_RETRIES; attempt++) {
-                    try {
-                        const detail = await cachedGithubClient.getPull(owner, repoName, pr.number, false);
-                        const hasRealDiff =
-                            (detail.additions ?? 0) > 0 || (detail.deletions ?? 0) > 0;
-                        const noFiles = (detail.changed_files ?? 0) === 0;
-
-                        // If we have real diff data, or the PR genuinely has no changes, accept it
-                        if (hasRealDiff || noFiles) return detail;
-
-                        // Zero diff despite changed_files > 0 — retry after delay
-                        if (attempt < MAX_DIFF_RETRIES - 1) {
-                            cradle.logger.debug(
-                                { prNumber: pr.number, attempt, changedFiles: detail.changed_files },
-                                "getPull returned zero diff — retrying after delay",
-                            );
-                            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-                        } else {
-                            // All retries exhausted — accept whatever we got and flag it
-                            cradle.logger.warn(
-                                { prNumber: pr.number, changedFiles: detail.changed_files },
-                                "getPull still zero diff after all retries — storing as-is",
-                            );
-                            fetchFailures.push(pr.number);
-                            return detail;
-                        }
-                    } catch (e: any) {
-                        cradle.logger.warn(
-                            { prNumber: pr.number, err: e.message },
-                            "getPull threw — using list-API PR (additions/deletions will be 0)",
-                        );
-                        fetchFailures.push(pr.number);
-                        return pr; // fall back to list-API entry
-                    }
-                }
-                return pr; // should not reach here, but TypeScript needs a return
-            }),
-        );
-        enrichedPrs.push(...details);
+    for (const pr of mergedPrs) {
+        try {
+            await cradle.rateLimitGuard.checkAndWait();
+            const detail = await cachedGithubClient.getPull(owner, repoName, pr.number, false);
+            enrichedPrs.push(detail);
+        } catch (e: any) {
+            cradle.logger.warn(
+                { prNumber: pr.number, err: e.message },
+                "getPull failed — falling back to list-API entry (additions/deletions will be 0)",
+            );
+            fetchFailures.push(pr.number);
+            enrichedPrs.push(pr); // list-API entry — has no additions/deletions
+        }
     }
 
-    // Fetch full member profiles (display_name + joined_at)
+    // Fetch full member profiles (display_name + joined_at).
+    // Sequential + one cache-bust per login so we always store the GitHub
+    // display name ("name" field from GET /users/{username}).
     const uniqueLogins = [...new Set(enrichedPrs.map((pr: any) => pr.user?.login).filter(Boolean))] as string[];
     for (const login of uniqueLogins) {
         try {
             await cradle.cacheService.del(`github:user:${login}`);
+            await cradle.rateLimitGuard.checkAndWait();
             const profile = await cachedGithubClient.getUser(login);
             await d1RelationalService.upsertMember(
                 login,
                 profile.avatar_url ?? undefined,
-                profile.name ?? undefined,
-                profile.created_at ?? undefined,
+                profile.name ?? undefined,       // GitHub display name e.g. "zeinab"
+                profile.created_at ?? undefined, // GitHub joined date
             );
         } catch (e: any) {
-            cradle.logger.warn({ login, err: e.message }, "getUser failed — storing login+avatar only");
+            cradle.logger.warn({ login, err: e.message }, "getUser failed — storing login only");
             const pr = enrichedPrs.find((p: any) => p.user?.login === login);
             await d1RelationalService.upsertMember(login, pr?.user?.avatar_url);
         }
     }
 
-    // Build PR rows — use GitHub's integer pr.id as the stable DB primary key.
+    // Build PR rows.
+    // A PR is flagged as zero-diff ONLY when changed_files > 0 (something
+    // changed but we couldn't get the numbers — real data loss).
+    // PRs with changed_files == 0 are legitimate empty merges.
     const prRows = enrichedPrs.map((pr: any) => ({
-        id:           `github:pr:${repoId}:${pr.number}`,
+        id:          `github:pr:${repoId}:${pr.number}`,
         repoId,
-        prNumber:     pr.number as number,
-        githubPrId:   pr.id as number,
-        author:       pr.user.login as string,
-        title:        pr.title as string | undefined,
-        body:         pr.body as string | undefined,
-        htmlUrl:      pr.html_url as string | undefined,
-        mergedAt:     pr.merged_at as string,
-        prCreatedAt:  pr.created_at as string | undefined,
-        additions:    pr.additions ?? 0,
-        deletions:    pr.deletions ?? 0,
+        prNumber:    pr.number as number,
+        githubPrId:  pr.id as number,
+        author:      pr.user.login as string,
+        title:       pr.title as string | undefined,
+        body:        pr.body as string | undefined,
+        htmlUrl:     pr.html_url as string | undefined,
+        mergedAt:    pr.merged_at as string,
+        prCreatedAt: pr.created_at as string | undefined,
+        additions:   pr.additions ?? 0,
+        deletions:   pr.deletions ?? 0,
     }));
 
     const { upserted, zeroDiffPrs } = await d1RelationalService.upsertMergedPrBatch(prRows);
+
+    // Exclude PRs already in fetchFailures from zeroDiffPrs to avoid double-counting
+    const fetchFailureSet = new Set(fetchFailures);
+    const realZeroDiff = zeroDiffPrs.filter((n) => !fetchFailureSet.has(n));
+
     const mergedPrNumbers = new Set(enrichedPrs.map((p: any) => p.number));
 
     // Insert comments — only for merged PRs
@@ -478,19 +463,22 @@ async function syncOneRepo(
 
     return {
         ok: true,
-        repo:             `${owner}/${repoName}`,
-        prsFound:         prs.length,
-        mergedPrs:        mergedPrs.length,
-        prsUpserted:      upserted,
-        issueComments:    issueComments.length,
-        reviewComments:   reviewComments.length,
+        repo:              `${owner}/${repoName}`,
+        prsFound:          prs.length,
+        mergedPrs:         mergedPrs.length,
+        prsUpserted:       upserted,
+        issueComments:     issueComments.length,
+        reviewComments:    reviewComments.length,
         commentsInserted,
-        linesAdded:       totalAdded,
-        linesDeleted:     totalDeleted,
-        // zero-diff PRs after retries — shown in UI for awareness, not stored in DB
-        zeroDiffPrs:      zeroDiffPrs.length,
-        zeroDiffPrNumbers: zeroDiffPrs,
-        fetchFailures:    fetchFailures.map((n) => `#${n}`),
+        linesAdded:        totalAdded,
+        linesDeleted:      totalDeleted,
+        // Zero-diff PRs: these have changed_files>0 but additions=deletions=0
+        // after getPull succeeded — could indicate a GitHub API lag.
+        // EXCLUDES PRs that failed to fetch (those are in fetchFailures).
+        zeroDiffPrs:       realZeroDiff.length,
+        zeroDiffPrNumbers: realZeroDiff,
+        // PRs where getPull threw — stored with 0+0 in DB. Retry sync to fix.
+        fetchFailures:     fetchFailures.map((n) => `#${n}`),
     };
 }
 
@@ -694,20 +682,28 @@ async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Respon
         result = await cradle.scoreAggregationService.getLeaderboard("all", limit);
     }
 
-    // The new schema uses developer_login; attach avatar from org members for the frontend.
+    // Enrich each entry with avatar_url (from GitHub org API) and
+    // display_name (from members DB — populated during sync via GET /users/{login}).
     try {
-        const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
-        const avatarMap  = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
-        const botLogins  = new Set(orgMembers.filter((m: any) => isBot(m.login, m.type)).map((m: any) => m.login));
+        const [orgMembers, dbMembers] = await Promise.all([
+            cradle.cachedGithubClient.listOrgMembers(cradle.env.org),
+            cradle.d1RelationalService.getMembers(),
+        ]);
+
+        const avatarMap      = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
+        const displayNameMap = new Map(dbMembers.map((m) => [m.login, m.displayName]));
+        const botLogins      = new Set(orgMembers.filter((m: any) => isBot(m.login, m.type)).map((m: any) => m.login));
 
         result.entries = result.entries
             .filter((e: any) => !isBot(e.developer_login ?? e.developer_id ?? "", undefined) && !botLogins.has(e.developer_login))
             .map((e: any) => ({
                 ...e,
-                avatarUrl: avatarMap.get(e.developer_login) || `https://github.com/${e.developer_login}.png`,
+                // Display name: prefer DB value (from GitHub profile), else login
+                displayName: displayNameMap.get(e.developer_login) ?? e.developer_login,
+                avatarUrl:   avatarMap.get(e.developer_login) || `https://github.com/${e.developer_login}.png`,
             }));
     } catch (e: any) {
-        cradle.logger.warn({ err: e.message }, "Failed to enrich leaderboard with avatarUrls");
+        cradle.logger.warn({ err: e.message }, "Failed to enrich leaderboard with member profiles");
     }
 
     return json(result);
@@ -730,25 +726,34 @@ async function handleDeleteDeveloper(cradle: Cradle, developerId: string): Promi
 
 async function handleMembers(cradle: Cradle): Promise<Response> {
     try {
-        const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
+        const [orgMembers, dbMembers] = await Promise.all([
+            cradle.cachedGithubClient.listOrgMembers(cradle.env.org),
+            cradle.d1RelationalService.getMembers(),
+        ]);
+
+        // Build a lookup: login → display_name (from GET /users/{login} during sync)
+        const displayNameMap = new Map(dbMembers.map((m) => [m.login, m.displayName]));
+
         const sinceDate = new Date();
         sinceDate.setDate(sinceDate.getDate() - 30);
         const thirtyDaysAgo = sinceDate.getTime();
 
-        // Pull last active dates from relational tables (not flat events)
         const activityMap = await cradle.d1RelationalService.getLastActiveDates();
 
-        const mappedMembers = orgMembers.map((m: any) => {
-            const developerIdMatch = Object.keys(activityMap).find((k) => k.toLowerCase() === m.login.toLowerCase());
-            const lastActive = developerIdMatch ? activityMap[developerIdMatch] : null;
-            const isActive = !!lastActive && new Date(lastActive).getTime() >= thirtyDaysAgo;
-            return {
-                developer: m.login,
-                avatarUrl: m.avatar_url,
-                isActive,
-                lastActiveDate: lastActive
-            };
-        });
+        const mappedMembers = orgMembers
+            .filter((m: any) => !isBot(m.login, m.type))
+            .map((m: any) => {
+                const activityKey = Object.keys(activityMap).find((k) => k.toLowerCase() === m.login.toLowerCase());
+                const lastActive  = activityKey ? activityMap[activityKey] : null;
+                const isActive    = !!lastActive && new Date(lastActive).getTime() >= thirtyDaysAgo;
+                return {
+                    developer:     m.login,
+                    displayName:   displayNameMap.get(m.login) ?? null,  // real name from sync
+                    avatarUrl:     m.avatar_url,
+                    isActive,
+                    lastActiveDate: lastActive,
+                };
+            });
 
         mappedMembers.sort((a: any, b: any) => {
             if (a.isActive && !b.isActive) return -1;
