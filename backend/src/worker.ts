@@ -331,6 +331,11 @@ async function syncOneRepo(
         ]);
     }
 
+    // Filter to merged PRs, skipping bots
+    const mergedPrs = prs.filter((pr: any) =>
+        !!pr.merged_at && !isBot(pr.user?.login ?? "", pr.user?.type),
+    );
+
     // Upsert repo with full metadata
     const repoMeta = orgRepos.find((r: any) => r.name === repoName);
     if (!repoMeta?.id) throw new Error(`Repo metadata id missing for ${owner}/${repoName}`);
@@ -345,32 +350,37 @@ async function syncOneRepo(
     });
 
     // Filter to merged PRs, skipping bots
-    const mergedPrs = prs.filter((pr: any) =>
-        !!pr.merged_at && !isBot(pr.user?.login ?? "", pr.user?.type),
-    );
+    const existingMergedPrs = await d1RelationalService.getMergedPrs({ repoId: repoMeta.id as number, limit: 1000 });
+    const existingMap = new Map(existingMergedPrs.map(p => [p.prNumber, p]));
 
-    // Fetch individual PR details for REAL additions/deletions + body text.
-    //
-    // IMPORTANT: The list API always returns additions=0, deletions=0.
-    // Only the single-PR endpoint (GET /repos/:owner/:repo/pulls/:number)
-    // has the real diff stats and the PR body/description.
-    //
-    // We call them SEQUENTIALLY (not in parallel) with a rate-limit check
-    // before each request. Parallel batches caused secondary-rate-limit
-    // 429 errors from GitHub, making ALL PRs fall back to 0+0 diff.
-    //
-    // No setTimeout retry delays — those block the Worker CPU and don't
-    // help against secondary rate limits. Instead we rely on the
-    // RateLimitGuard.checkAndWait() which reads the x-ratelimit-remaining
-    // header and pauses when needed.
     const enrichedPrs: any[] = [];
     const fetchFailures: number[] = [];
+
+    // Fetch PR details sequentially or carefully to avoid Cloudflare execution timeouts
+    // but limit concurrency to respect GitHub abuse detection.
+    const prsToDeepFetch = mergedPrs.filter((pr: any) => {
+        const existing = existingMap.get(pr.number);
+        // Deep fetch if it's not in DB, OR if it's in DB but has 0 additions + deletions 
+        // (meaning it was a fetch failure backup or real zero diff)
+        return !existing || (existing.additions === 0 && existing.deletions === 0);
+    });
+
+    const prsNotDeepFetched = mergedPrs.filter((pr: any) => !prsToDeepFetch.includes(pr)).map((pr: any) => {
+        const existing = existingMap.get(pr.number);
+        if (existing) {
+            pr.additions = existing.additions;
+            pr.deletions = existing.deletions;
+            pr.changed_files = 1; // dummy positive to avoid zero diff flags
+        }
+        return pr;
+    });
+    enrichedPrs.push(...prsNotDeepFetched); // Add PRs that don't need deep fetching
 
     // Fetch PR details in parallel chunks to avoid Cloudflare execution timeouts
     // but limit concurrency (e.g. 5) to respect GitHub abuse detection.
     const chunkSize = 5;
-    for (let i = 0; i < mergedPrs.length; i += chunkSize) {
-        const chunk = mergedPrs.slice(i, i + chunkSize);
+    for (let i = 0; i < prsToDeepFetch.length; i += chunkSize) {
+        const chunk = prsToDeepFetch.slice(i, i + chunkSize);
         
         await Promise.all(chunk.map(async (pr: any) => {
             try {
