@@ -2,7 +2,7 @@
  * Sellio Metrics — D1 Relational Service
  *
  * Handles CRUD on the normalized relational tables:
- *   repos, developers, merged_prs, pr_comments,
+ *   repos, members, merged_prs, pr_comments,
  *   meeting_sessions, meeting_attendance
  *
  * Leaderboard uses UNION ALL across domain tables, scored
@@ -24,7 +24,7 @@ export interface Repo {
     pushedAt?: string;
 }
 
-export interface Developer {
+export interface Member {
     login: string;
     avatarUrl?: string;
     displayName?: string;
@@ -32,11 +32,13 @@ export interface Developer {
 }
 
 export interface MergedPr {
-    id: string;        // "github:pr:{repo_id}:{pr_number}"
-    repoId: string;    // FK → repos.id
-    prNumber: number;
-    author: string;    // FK → developers.login
+    id: string;           // "github:pr:{repo_id}:{pr_number}"
+    repoId: string;       // FK → repos.id
+    prNumber: number;     // PR number (display / query key)
+    githubPrId?: number;  // Raw GitHub PR integer id
+    author: string;       // FK → members.login
     title?: string;
+    body?: string;        // PR description body
     htmlUrl?: string;
     mergedAt: string;
     prCreatedAt?: string; // GitHub PR opened date
@@ -49,7 +51,7 @@ export interface PrComment {
     prId: string;      // FK → merged_prs.id
     repoId: string;    // FK → repos.id
     prNumber: number;
-    author: string;    // FK → developers.login
+    author: string;    // FK → members.login
     body?: string;
     commentType: "issue" | "review";
     htmlUrl?: string;
@@ -141,14 +143,14 @@ export class D1RelationalService {
         }));
     }
 
-    // ─── Developer Registry ──────────────────────────────────
+    // ─── Member Registry ─────────────────────────────────────
 
-    async upsertDeveloper(login: string, avatarUrl?: string, displayName?: string, joinedAt?: string): Promise<void> {
+    async upsertMember(login: string, avatarUrl?: string, displayName?: string, joinedAt?: string): Promise<void> {
         if (!this.db || !login) return;
         // Bots are always filtered before calling this; we never store them.
         await this.db
             .prepare(
-                `INSERT INTO developers (login, avatar_url, display_name, joined_at)
+                `INSERT INTO members (login, avatar_url, display_name, joined_at)
                  VALUES (?1, ?2, ?3, ?4)
                  ON CONFLICT(login) DO UPDATE SET
                      avatar_url   = COALESCE(?2, avatar_url),
@@ -159,10 +161,15 @@ export class D1RelationalService {
             .run();
     }
 
-    async getDevelopers(): Promise<Developer[]> {
+    /** @deprecated Use upsertMember. Kept for backward-compat call sites. */
+    async upsertDeveloper(login: string, avatarUrl?: string, displayName?: string, joinedAt?: string): Promise<void> {
+        return this.upsertMember(login, avatarUrl, displayName, joinedAt);
+    }
+
+    async getMembers(): Promise<Member[]> {
         if (!this.db) return [];
         const res = await this.db
-            .prepare("SELECT login, avatar_url, display_name, joined_at FROM developers ORDER BY login")
+            .prepare("SELECT login, avatar_url, display_name, joined_at FROM members ORDER BY login")
             .all<any>();
         return res.results.map((r) => ({
             login: r.login, avatarUrl: r.avatar_url,
@@ -193,49 +200,69 @@ export class D1RelationalService {
 
     async upsertMergedPr(pr: MergedPr): Promise<boolean> {
         if (!this.db) return false;
-        await this.upsertDeveloper(pr.author);
+        await this.upsertMember(pr.author);
 
         const result = await this.db
             .prepare(
-                `INSERT INTO merged_prs (id, repo_id, pr_number, author, title, html_url, merged_at, pr_created_at, additions, deletions)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+                `INSERT INTO merged_prs
+                     (id, repo_id, pr_number, github_pr_id, author, title, body, html_url, merged_at, pr_created_at, additions, deletions)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
                  ON CONFLICT(repo_id, pr_number) DO UPDATE SET
-                     additions    = ?9,
-                     deletions    = ?10,
-                     title        = COALESCE(?5, title),
-                     pr_created_at = COALESCE(?8, pr_created_at)`,
+                     additions    = ?11,
+                     deletions    = ?12,
+                     github_pr_id = COALESCE(?4, github_pr_id),
+                     title        = COALESCE(?6, title),
+                     body         = COALESCE(?7, body),
+                     pr_created_at = COALESCE(?10, pr_created_at)`,
             )
-            .bind(pr.id, pr.repoId, pr.prNumber, pr.author, pr.title ?? null, pr.htmlUrl ?? null, pr.mergedAt, pr.prCreatedAt ?? null, pr.additions, pr.deletions)
+            .bind(
+                pr.id, pr.repoId, pr.prNumber, pr.githubPrId ?? null, pr.author,
+                pr.title ?? null, pr.body ?? null, pr.htmlUrl ?? null, pr.mergedAt,
+                pr.prCreatedAt ?? null, pr.additions, pr.deletions,
+            )
             .run();
 
         return result.meta.changes > 0;
     }
 
-    async upsertMergedPrBatch(prs: MergedPr[]): Promise<{ upserted: number }> {
-        if (!this.db || prs.length === 0) return { upserted: 0 };
+    async upsertMergedPrBatch(prs: MergedPr[]): Promise<{ upserted: number; zeroDiffPrs: number[] }> {
+        if (!this.db || prs.length === 0) return { upserted: 0, zeroDiffPrs: [] };
 
         const logins = [...new Set(prs.map((p) => p.author))];
-        for (const login of logins) await this.upsertDeveloper(login);
+        for (const login of logins) await this.upsertMember(login);
 
         const stmt = this.db.prepare(
-            `INSERT INTO merged_prs (id, repo_id, pr_number, author, title, html_url, merged_at, pr_created_at, additions, deletions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)
+            `INSERT INTO merged_prs
+                 (id, repo_id, pr_number, github_pr_id, author, title, body, html_url, merged_at, pr_created_at, additions, deletions)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
              ON CONFLICT(repo_id, pr_number) DO UPDATE SET
-                 additions    = ?9,
-                 deletions    = ?10,
-                 title        = COALESCE(?5, title),
-                 pr_created_at = COALESCE(?8, pr_created_at)`,
+                 additions    = ?11,
+                 deletions    = ?12,
+                 github_pr_id = COALESCE(?4, github_pr_id),
+                 title        = COALESCE(?6, title),
+                 body         = COALESCE(?7, body),
+                 pr_created_at = COALESCE(?10, pr_created_at)`,
         );
 
         let total = 0;
         for (let i = 0; i < prs.length; i += 50) {
             const chunk = prs.slice(i, i + 50);
             const results = await this.db.batch(
-                chunk.map((pr) => stmt.bind(pr.id, pr.repoId, pr.prNumber, pr.author, pr.title ?? null, pr.htmlUrl ?? null, pr.mergedAt, pr.prCreatedAt ?? null, pr.additions, pr.deletions)),
+                chunk.map((pr) => stmt.bind(
+                    pr.id, pr.repoId, pr.prNumber, pr.githubPrId ?? null, pr.author,
+                    pr.title ?? null, pr.body ?? null, pr.htmlUrl ?? null, pr.mergedAt,
+                    pr.prCreatedAt ?? null, pr.additions, pr.deletions,
+                )),
             );
             total += results.reduce((sum, r) => sum + (r.meta.changes || 0), 0);
         }
-        return { upserted: total };
+
+        // Collect PRs that still have zero diff after all retries — for UI reporting only
+        const zeroDiffPrs = prs
+            .filter((p) => p.additions === 0 && p.deletions === 0)
+            .map((p) => p.prNumber);
+
+        return { upserted: total, zeroDiffPrs };
     }
 
     async getMergedPrs(filters: { author?: string; repoId?: string; since?: string; limit?: number } = {}): Promise<MergedPr[]> {
@@ -254,8 +281,10 @@ export class D1RelationalService {
             .all<any>();
 
         return res.results.map((r) => ({
-            id: r.id, repoId: r.repo_id, prNumber: r.pr_number, author: r.author,
-            title: r.title, htmlUrl: r.html_url, mergedAt: r.merged_at,
+            id: r.id, repoId: r.repo_id, prNumber: r.pr_number,
+            githubPrId: r.github_pr_id ?? undefined,
+            author: r.author,
+            title: r.title, body: r.body, htmlUrl: r.html_url, mergedAt: r.merged_at,
             additions: r.additions, deletions: r.deletions,
         }));
     }
@@ -264,22 +293,11 @@ export class D1RelationalService {
 
     /**
      * Insert a comment row. Uses INSERT OR IGNORE — idempotent via comment id.
-     * Skips silently if the parent PR does not exist yet (unmerged PR).
      */
     async insertComment(comment: PrComment): Promise<boolean> {
         if (!this.db) return false;
 
-        const prExists = await this.db
-            .prepare("SELECT id FROM merged_prs WHERE id = ?1")
-            .bind(comment.prId)
-            .first<{ id: string }>();
-
-        if (!prExists) {
-            this.logger.info({ prId: comment.prId, author: comment.author }, "Comment skipped — PR not merged yet");
-            return false;
-        }
-
-        await this.upsertDeveloper(comment.author);
+        await this.upsertMember(comment.author);
 
         const result = await this.db
             .prepare(
@@ -353,7 +371,7 @@ export class D1RelationalService {
 
     async upsertMeetingAttendance(record: MeetingAttendance): Promise<void> {
         if (!this.db) return;
-        await this.upsertDeveloper(record.developerLogin);
+        await this.upsertMember(record.developerLogin);
         await this.db
             .prepare(
                 `INSERT INTO meeting_attendance
@@ -476,7 +494,7 @@ export class D1RelationalService {
         return all.find((e) => e.developer_login === login) ?? null;
     }
 
-    /** Admin cleanup — removes all records for a developer */
+    /** Admin cleanup — removes all records for a member */
     async deleteDeveloperData(login: string): Promise<{ prs: number; comments: number; attendance: number }> {
         if (!this.db) return { prs: 0, comments: 0, attendance: 0 };
         const [r1, r2, r3] = await this.db.batch([

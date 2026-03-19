@@ -22,16 +22,46 @@ class SyncSection extends StatelessWidget {
 
 // ── Body ─────────────────────────────────────────────────────────────
 
-class _SyncSectionBody extends StatelessWidget {
+class _SyncSectionBody extends StatefulWidget {
   const _SyncSectionBody();
+
+  @override
+  State<_SyncSectionBody> createState() => _SyncSectionBodyState();
+}
+
+class _SyncSectionBodyState extends State<_SyncSectionBody> {
+  @override
+  void initState() {
+    super.initState();
+    // Load repo list on first build
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final sync = context.read<SyncProvider>();
+      if (sync.repos.isEmpty) sync.loadRepos();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final sync = context.watch<SyncProvider>();
+    final scheme = context.colors;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Repo selector (shown when idle / done / error) ───
+        if (!sync.isRunning && sync.repos.isNotEmpty) ...[
+          _RepoSelector(sync: sync, scheme: scheme),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (!sync.isRunning && sync.repos.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            child: Text(
+              'Loading repositories…',
+              style: AppTypography.caption.copyWith(color: scheme.hint),
+            ),
+          ),
+
         // ── Overall progress bar ─────────────────────────────
         AnimatedSize(
           duration: const Duration(milliseconds: 350),
@@ -44,12 +74,109 @@ class _SyncSectionBody extends StatelessWidget {
               : const SizedBox.shrink(),
         ),
 
-        // ── Per-repo list ────────────────────────────────────
-        if (sync.repos.isNotEmpty && sync.status != SyncStatus.idle)
+        // ── Per-repo list (progress view) ────────────────────
+        if (sync.status == SyncStatus.running)
+          _RepoList(sync: sync),
+
+        // ── Per-repo results (done view) ─────────────────────
+        if (sync.status == SyncStatus.done || sync.status == SyncStatus.error)
           _RepoList(sync: sync),
 
         // ── Action buttons ───────────────────────────────────
         _ActionRow(sync: sync),
+      ],
+    );
+  }
+}
+
+// ── Repo Selector ────────────────────────────────────────────────────
+
+class _RepoSelector extends StatelessWidget {
+  final SyncProvider sync;
+  final dynamic scheme;
+  const _RepoSelector({required this.sync, required this.scheme});
+
+  @override
+  Widget build(BuildContext context) {
+    final allSelected = sync.selectedRepoNames.length == sync.repos.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Select repos to sync (${sync.selectedRepoNames.length}/${sync.repos.length})',
+              style: AppTypography.caption.copyWith(color: scheme.hint),
+            ),
+            const Spacer(),
+            TextButton(
+              onPressed: allSelected ? sync.deselectAll : sync.selectAll,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: Text(
+                allSelected ? 'Deselect all' : 'Select all',
+                style: AppTypography.caption.copyWith(
+                  color: scheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Container(
+          decoration: BoxDecoration(
+            color: scheme.surfaceLow,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: scheme.stroke),
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            padding: EdgeInsets.zero,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: sync.repos.length,
+            separatorBuilder: (_, __) => Divider(color: scheme.stroke, height: 1),
+            itemBuilder: (context, i) {
+              final repo = sync.repos[i];
+              final selected = sync.selectedRepoNames.contains(repo.fullName);
+              return InkWell(
+                onTap: () => sync.toggleRepoSelection(repo),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                  child: Row(
+                    children: [
+                      SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: Checkbox(
+                          value: selected,
+                          onChanged: (_) => sync.toggleRepoSelection(repo),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          repo.name,
+                          style: AppTypography.caption.copyWith(
+                            color: selected ? scheme.title : scheme.hint,
+                            fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
       ],
     );
   }
@@ -104,6 +231,7 @@ class _SyncSummaryRow extends StatelessWidget {
     final totalCmt   = results.fold(0, (s, r) => s + (r.commentsInserted ?? 0));
     final totalAdd   = results.fold(0, (s, r) => s + (r.linesAdded ?? 0));
     final totalDel   = results.fold(0, (s, r) => s + (r.linesDeleted ?? 0));
+    final totalWarn  = results.fold(0, (s, r) => s + r.zeroDiffPrNumbers.length + r.fetchFailures.length);
 
     return Wrap(
       spacing: AppSpacing.sm,
@@ -113,6 +241,12 @@ class _SyncSummaryRow extends StatelessWidget {
         _Chip(icon: Icons.add_circle_outline, label: '+$totalAdd lines', color: scheme.green),
         _Chip(icon: Icons.remove_circle_outline, label: '-$totalDel lines', color: scheme.red),
         _Chip(icon: Icons.comment_outlined, label: '$totalCmt comments', color: scheme.secondary),
+        if (totalWarn > 0)
+          _Chip(
+            icon: Icons.warning_amber_rounded,
+            label: '$totalWarn PRs with zero diff (retried)',
+            color: Colors.orange,
+          ),
       ],
     );
   }
@@ -154,11 +288,19 @@ class _RepoList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Show only the repos that were / are being synced
+    final displayRepos = sync.status == SyncStatus.running
+        ? sync.selectedRepos
+        : sync.results.map((r) => r.repo).toList();
+
     return Column(
       children: [
-        ...List.generate(sync.repos.length, (i) {
-          final repo      = sync.repos[i];
-          final result    = sync.results.length > i ? sync.results[i] : null;
+        ...List.generate(displayRepos.length, (i) {
+          final repo   = displayRepos[i];
+          final result = sync.results.cast<RepoSyncResult?>()
+              .firstWhere(
+                  (r) => r?.repo.fullName == repo.fullName,
+                  orElse: () => null);
           final isCurrent = sync.status == SyncStatus.running && i == sync.currentIndex;
           final isDone    = result != null;
           final isError   = isDone && !result.success;
@@ -178,6 +320,7 @@ class _RepoList extends StatelessWidget {
     );
   }
 }
+
 
 // ── Individual Repo Row ──────────────────────────────────────────────
 
@@ -331,22 +474,47 @@ class _RepoStats extends StatelessWidget {
       (Icons.comment_outlined, '${result.commentsInserted ?? 0} comments', scheme.hint),
     ];
 
+    // Build warning label listing affected PR numbers
+    final allBadPrs = [
+      ...result.zeroDiffPrNumbers.map((n) => '#$n'),
+      ...result.fetchFailures,
+    ];
+
     return Wrap(
       spacing: 8,
       runSpacing: 4,
-      children: items.map((item) {
-        final (icon, label, color) = item;
-        return Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 11, color: color),
-            const SizedBox(width: 2),
-            Text(label,
-                style: AppTypography.caption.copyWith(
-                    color: color, fontWeight: FontWeight.w500)),
-          ],
-        );
-      }).toList(),
+      children: [
+        ...items.map((item) {
+          final (icon, label, color) = item;
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 11, color: color),
+              const SizedBox(width: 2),
+              Text(label,
+                  style: AppTypography.caption.copyWith(
+                      color: color, fontWeight: FontWeight.w500)),
+            ],
+          );
+        }),
+        // Warning chip shown only when some PRs still have zero diff after retries
+        if (allBadPrs.isNotEmpty)
+          Tooltip(
+            message: 'Zero diff after retries: ${allBadPrs.join(', ')}\nRetry sync to attempt again.',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.warning_amber_rounded, size: 11, color: Colors.orange),
+                const SizedBox(width: 2),
+                Text(
+                  '${allBadPrs.length} need retry',
+                  style: AppTypography.caption.copyWith(
+                      color: Colors.orange, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -412,8 +580,14 @@ class _ActionRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    return Row(
+    final hasFailed = sync.results.any((r) => !r.success);
+
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
+        // ── Primary sync / syncing button ─────────────────────
         SButton(
           onPressed: sync.isRunning
               ? null
@@ -428,27 +602,43 @@ class _ActionRow extends StatelessWidget {
               else
                 const Icon(Icons.cloud_sync_outlined, size: 16),
               const SizedBox(width: AppSpacing.sm),
-              Text(sync.isRunning ? 'Syncing…' : 'Sync All Repos'),
+              Text(sync.isRunning ? 'Syncing…' : 'Sync Selected Repos'),
             ],
           ),
         ),
+
+        // ── Retry failed repos ────────────────────────────────
+        if (!sync.isRunning && hasFailed)
+          SButton(
+            variant: SButtonVariant.outline,
+            onPressed: () => context.read<SyncProvider>().retryFailed(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: const [
+                Icon(Icons.replay, size: 14),
+                SizedBox(width: 4),
+                Text('Retry Failed'),
+              ],
+            ),
+          ),
+
+        // ── Reset ─────────────────────────────────────────────
         if (sync.status == SyncStatus.done || sync.status == SyncStatus.error) ...[
-          const SizedBox(width: AppSpacing.sm),
           SButton(
             variant: SButtonVariant.outline,
             onPressed: () => context.read<SyncProvider>().reset(),
             child: const Text('Reset'),
           ),
         ],
-        // Global error
-        if (sync.status == SyncStatus.error && sync.globalError != null) ...[
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
+
+        // ── Global error ──────────────────────────────────────
+        if (sync.status == SyncStatus.error && sync.globalError != null)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
             child: Text(sync.globalError!,
                 style: AppTypography.caption.copyWith(color: scheme.red),
                 maxLines: 2),
           ),
-        ],
       ],
     );
   }

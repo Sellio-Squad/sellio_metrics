@@ -288,168 +288,273 @@ function isBot(login: string, userType?: string): boolean {
 }
 
 /**
- * Syncs a SINGLE repository into D1:
+ * Syncs a single repository into D1:
  *  - Repo metadata (description, created_at, pushed_at) from listOrgRepos
- *  - Merged PRs with real additions/deletions (individual PR API calls in parallel)
+ *  - Merged PRs with real additions/deletions (individual PR API calls batched)
+ *  - PR body (description text — may contain images / videos)
  *  - PR comments (issue + review) with full body
- *  - Developer avatar_url + display_name from GitHub
+ *  - Member avatar_url + display_name from GitHub
  *  - Robust bot filtering (type=Bot, [bot] suffix, known-bot list)
+ *  - diff_warning flag when additions+deletions == 0 (possible fetch failure)
+ *
+ * Accepts:
+ *   body.owner  — GitHub org (defaults to env.org)
+ *   body.repo   — repo name (required for single-repo call)
+ *   body.repos  — array of repo names to sync in one shot (alternative to body.repo)
+ */
+async function syncOneRepo(
+    cradle: Cradle,
+    owner: string,
+    repoName: string,
+    orgRepos: any[],
+): Promise<object> {
+    const { cachedGithubClient, d1RelationalService } = cradle;
+
+    // Bust repo cache so fresh data is fetched
+    await cradle.cacheService.del(`github:repos:${owner}`);
+
+    // Fetch PRs + all comments in parallel
+    const [prs, issueComments, reviewComments] = await Promise.all([
+        cachedGithubClient.listPulls(owner, repoName, "all", 100),
+        cachedGithubClient.listAllIssueComments(owner, repoName),
+        cachedGithubClient.listAllPRReviewComments(owner, repoName),
+    ]);
+
+    // Upsert repo with full metadata
+    const repoMeta = orgRepos.find((r: any) => r.name === repoName);
+    const repoId = await d1RelationalService.upsertRepo(owner, repoName, {
+        htmlUrl:         repoMeta?.html_url ?? `https://github.com/${owner}/${repoName}`,
+        description:     repoMeta?.description ?? undefined,
+        githubCreatedAt: repoMeta?.created_at ?? undefined,
+        pushedAt:        repoMeta?.pushed_at ?? undefined,
+    });
+
+    // Filter to merged PRs, skipping bots
+    const mergedPrs = prs.filter((pr: any) =>
+        !!pr.merged_at && !isBot(pr.user?.login ?? "", pr.user?.type),
+    );
+
+    // Fetch individual PR details for REAL additions/deletions + body text.
+    // The list API always returns additions=0 deletions=0 — only the single-PR
+    // endpoint returns the real diff stats AND the PR body.
+    //
+    // GitHub sometimes returns 0 additions/deletions on the first call even
+    // though changed_files > 0 (diff computation lag). We retry up to 3 times
+    // with a 1.5 s gap, same pattern as contributor stats.
+    // Batched in groups of 8 to stay well within rate limits.
+    const enrichedPrs: any[] = [];
+    const fetchFailures: number[] = [];
+    const MAX_DIFF_RETRIES = 3;
+    const RETRY_DELAY_MS   = 1500;
+
+    for (let i = 0; i < mergedPrs.length; i += 8) {
+        const batch = mergedPrs.slice(i, i + 8);
+        const details = await Promise.all(
+            batch.map(async (pr: any) => {
+                for (let attempt = 0; attempt < MAX_DIFF_RETRIES; attempt++) {
+                    try {
+                        const detail = await cachedGithubClient.getPull(owner, repoName, pr.number, false);
+                        const hasRealDiff =
+                            (detail.additions ?? 0) > 0 || (detail.deletions ?? 0) > 0;
+                        const noFiles = (detail.changed_files ?? 0) === 0;
+
+                        // If we have real diff data, or the PR genuinely has no changes, accept it
+                        if (hasRealDiff || noFiles) return detail;
+
+                        // Zero diff despite changed_files > 0 — retry after delay
+                        if (attempt < MAX_DIFF_RETRIES - 1) {
+                            cradle.logger.debug(
+                                { prNumber: pr.number, attempt, changedFiles: detail.changed_files },
+                                "getPull returned zero diff — retrying after delay",
+                            );
+                            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+                        } else {
+                            // All retries exhausted — accept whatever we got and flag it
+                            cradle.logger.warn(
+                                { prNumber: pr.number, changedFiles: detail.changed_files },
+                                "getPull still zero diff after all retries — storing as-is",
+                            );
+                            fetchFailures.push(pr.number);
+                            return detail;
+                        }
+                    } catch (e: any) {
+                        cradle.logger.warn(
+                            { prNumber: pr.number, err: e.message },
+                            "getPull threw — using list-API PR (additions/deletions will be 0)",
+                        );
+                        fetchFailures.push(pr.number);
+                        return pr; // fall back to list-API entry
+                    }
+                }
+                return pr; // should not reach here, but TypeScript needs a return
+            }),
+        );
+        enrichedPrs.push(...details);
+    }
+
+    // Fetch full member profiles (display_name + joined_at)
+    const uniqueLogins = [...new Set(enrichedPrs.map((pr: any) => pr.user?.login).filter(Boolean))] as string[];
+    for (const login of uniqueLogins) {
+        try {
+            await cradle.cacheService.del(`github:user:${login}`);
+            const profile = await cachedGithubClient.getUser(login);
+            await d1RelationalService.upsertMember(
+                login,
+                profile.avatar_url ?? undefined,
+                profile.name ?? undefined,
+                profile.created_at ?? undefined,
+            );
+        } catch (e: any) {
+            cradle.logger.warn({ login, err: e.message }, "getUser failed — storing login+avatar only");
+            const pr = enrichedPrs.find((p: any) => p.user?.login === login);
+            await d1RelationalService.upsertMember(login, pr?.user?.avatar_url);
+        }
+    }
+
+    // Build PR rows — use GitHub's integer pr.id as the stable DB primary key.
+    const prRows = enrichedPrs.map((pr: any) => ({
+        id:           `github:pr:${repoId}:${pr.number}`,
+        repoId,
+        prNumber:     pr.number as number,
+        githubPrId:   pr.id as number,
+        author:       pr.user.login as string,
+        title:        pr.title as string | undefined,
+        body:         pr.body as string | undefined,
+        htmlUrl:      pr.html_url as string | undefined,
+        mergedAt:     pr.merged_at as string,
+        prCreatedAt:  pr.created_at as string | undefined,
+        additions:    pr.additions ?? 0,
+        deletions:    pr.deletions ?? 0,
+    }));
+
+    const { upserted, zeroDiffPrs } = await d1RelationalService.upsertMergedPrBatch(prRows);
+    const mergedPrNumbers = new Set(enrichedPrs.map((p: any) => p.number));
+
+    // Insert comments — only for merged PRs
+    let commentsInserted = 0;
+
+    for (const comment of issueComments) {
+        const author: string = comment.user?.login;
+        if (!author || isBot(author, comment.user?.type)) continue;
+        const prNumber = parseInt(comment.issue_url?.split("/").pop() ?? "0", 10);
+        if (!mergedPrNumbers.has(prNumber)) continue;
+        await d1RelationalService.upsertMember(author, comment.user?.avatar_url);
+        const ok = await d1RelationalService.insertComment({
+            id:          `github:comment:${repoId}:${comment.id}`,
+            prId:        `github:pr:${repoId}:${prNumber}`,
+            repoId,
+            prNumber,
+            author,
+            body:        comment.body,
+            commentType: "issue",
+            htmlUrl:     comment.html_url,
+            commentedAt: comment.created_at,
+        });
+        if (ok) commentsInserted++;
+    }
+
+    for (const comment of reviewComments) {
+        const author: string = comment.user?.login;
+        if (!author || isBot(author, comment.user?.type)) continue;
+        const prNumber = parseInt(comment.pull_request_url?.split("/").pop() ?? "0", 10);
+        if (!mergedPrNumbers.has(prNumber)) continue;
+        await d1RelationalService.upsertMember(author, comment.user?.avatar_url);
+        const ok = await d1RelationalService.insertComment({
+            id:          `github:review:${repoId}:${comment.id}`,
+            prId:        `github:pr:${repoId}:${prNumber}`,
+            repoId,
+            prNumber,
+            author,
+            body:        comment.body,
+            commentType: "review",
+            htmlUrl:     comment.html_url,
+            commentedAt: comment.created_at,
+        });
+        if (ok) commentsInserted++;
+    }
+
+    const totalAdded   = enrichedPrs.reduce((s: number, p: any) => s + (p.additions ?? 0), 0);
+    const totalDeleted = enrichedPrs.reduce((s: number, p: any) => s + (p.deletions ?? 0), 0);
+
+    return {
+        ok: true,
+        repo:             `${owner}/${repoName}`,
+        prsFound:         prs.length,
+        mergedPrs:        mergedPrs.length,
+        prsUpserted:      upserted,
+        issueComments:    issueComments.length,
+        reviewComments:   reviewComments.length,
+        commentsInserted,
+        linesAdded:       totalAdded,
+        linesDeleted:     totalDeleted,
+        // zero-diff PRs after retries — shown in UI for awareness, not stored in DB
+        zeroDiffPrs:      zeroDiffPrs.length,
+        zeroDiffPrNumbers: zeroDiffPrs,
+        fetchFailures:    fetchFailures.map((n) => `#${n}`),
+    };
+}
+
+/**
+ * POST /api/sync/github
+ *
+ * Body options:
+ *   { "repo": "sellio_mobile" }                       — sync one repo
+ *   { "repos": ["sellio_mobile", "sellio_app"] }      — sync specific repos
+ *   { "owner": "my-org", "repo": "myrepo" }           — sync with explicit org
  */
 async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Response> {
-    const { cachedGithubClient, d1RelationalService, scoreAggregationService, env } = cradle;
+    const { cachedGithubClient, scoreAggregationService, env } = cradle;
     const body = await request.json().catch(() => ({})) as any;
     const owner = body.owner || env.org;
-    const repoName: string | undefined = body.repo;
 
-    if (!repoName) {
-        return err("Missing 'repo' in request body. Example: { \"repo\": \"sellio_mobile\" }", 400);
+    // Support both single repo (body.repo) and multi-repo (body.repos)
+    let repoNames: string[] = [];
+    if (Array.isArray(body.repos) && body.repos.length > 0) {
+        repoNames = body.repos as string[];
+    } else if (typeof body.repo === "string" && body.repo) {
+        repoNames = [body.repo];
+    } else {
+        return err(
+            "Request body must contain 'repo' (string) or 'repos' (string[]). " +
+            'Example: { "repos": ["sellio_mobile", "sellio_app"] }',
+            400,
+        );
     }
 
     try {
-        // 1. Fetch repo metadata + PRs + comments in parallel
-        const [orgRepos, prs, issueComments, reviewComments] = await Promise.all([
-            cachedGithubClient.listOrgRepos(owner),
-            cachedGithubClient.listPulls(owner, repoName, "all", 100),
-            cachedGithubClient.listAllIssueComments(owner, repoName),
-            cachedGithubClient.listAllPRReviewComments(owner, repoName),
-        ]);
+        // Fetch org repo list once — shared across all repos in the batch
+        const orgRepos = await cachedGithubClient.listOrgRepos(owner);
 
-        // 2. Upsert repo with full metadata
-        const repoMeta = orgRepos.find((r: any) => r.name === repoName);
-        const repoId = await d1RelationalService.upsertRepo(owner, repoName, {
-            htmlUrl:         repoMeta?.html_url ?? `https://github.com/${owner}/${repoName}`,
-            description:     repoMeta?.description ?? undefined,
-            githubCreatedAt: repoMeta?.created_at ?? undefined,
-            pushedAt:        repoMeta?.pushed_at ?? undefined,
-        });
+        const repoResults: any[] = [];
+        let anyError = false;
 
-        // 3. Filter to merged PRs, skipping bots
-        const mergedPrs = prs.filter((pr: any) =>
-            !!pr.merged_at && !isBot(pr.user?.login ?? "", pr.user?.type),
-        );
-
-        // 4. Fetch individual PR details for real additions/deletions
-        //    list API always returns 0 — only the single-PR endpoint has these fields.
-        //    Batched in groups of 10 to stay within rate limits.
-        const enrichedPrs: any[] = [];
-        for (let i = 0; i < mergedPrs.length; i += 10) {
-            const batch = mergedPrs.slice(i, i + 10);
-            const details = await Promise.all(
-                batch.map(async (pr: any) => {
-                    try {
-                        const detail = await cachedGithubClient.getPull(owner, repoName, pr.number, false);
-                        // Sanity check: if detail returned 0 additions AND 0 deletions AND
-                        // the PR had changed_files > 0, the fetch might have failed silently.
-                        // Use the detail if it has usable data, otherwise keep list PR.
-                        return detail;
-                    } catch {
-                        cradle.logger.warn({ prNumber: pr.number }, "getPull failed — additions/deletions will be 0");
-                        return pr;
-                    }
-                }),
-            );
-            enrichedPrs.push(...details);
-        }
-
-        // 5. Fetch full user profiles for display_name + joined_at
-        //    PR objects only contain Simple User (no name field) — need GET /users/{login}.
-        //    Cached per-user for 24h so repeated syncs are cheap.
-        const uniqueLogins = [...new Set(enrichedPrs.map((pr: any) => pr.user?.login).filter(Boolean))] as string[];
-        await Promise.all(uniqueLogins.map(async (login) => {
+        for (const repoName of repoNames) {
             try {
-                const profile = await cachedGithubClient.getUser(login);
-                await d1RelationalService.upsertDeveloper(
-                    login,
-                    profile.avatar_url,
-                    profile.name ?? undefined,    // display name
-                    profile.created_at ?? undefined, // GitHub joined date
-                );
-            } catch {
-                // Fallback: upsert with just avatar from PR data
-                const pr = enrichedPrs.find((p: any) => p.user?.login === login);
-                await d1RelationalService.upsertDeveloper(login, pr?.user?.avatar_url);
+                const result = await syncOneRepo(cradle, owner, repoName, orgRepos);
+                repoResults.push(result);
+            } catch (e: any) {
+                cradle.logger.error({ repo: repoName, err: e.message }, "Repo sync failed");
+                repoResults.push({
+                    ok: false,
+                    repo: `${owner}/${repoName}`,
+                    error: e.message,
+                });
+                anyError = true;
             }
-        }));
-
-        // 6. Batch upsert merged PRs with real line counts
-        const prRows = enrichedPrs.map((pr: any) => ({
-            id:           `github:pr:${repoId}:${pr.number}`,
-            repoId,
-            prNumber:     pr.number,
-            author:       pr.user.login,
-            title:        pr.title,
-            htmlUrl:      pr.html_url,
-            mergedAt:     pr.merged_at,
-            prCreatedAt:  pr.created_at,
-            additions:    pr.additions ?? 0,
-            deletions:    pr.deletions ?? 0,
-        }));
-
-        const { upserted } = await d1RelationalService.upsertMergedPrBatch(prRows);
-        const mergedPrNumbers = new Set(enrichedPrs.map((p: any) => p.number));
-
-        // 7. Insert comments — only for merged PRs
-        let commentsInserted = 0;
-
-        for (const comment of issueComments) {
-            const author: string = comment.user?.login;
-            if (!author || isBot(author, comment.user?.type)) continue;
-            const prNumber = parseInt(comment.issue_url?.split("/").pop() ?? "0", 10);
-            if (!mergedPrNumbers.has(prNumber)) continue;
-            await d1RelationalService.upsertDeveloper(author, comment.user?.avatar_url);
-            const ok = await d1RelationalService.insertComment({
-                id:          `github:comment:${repoId}:${comment.id}`,
-                prId:        `github:pr:${repoId}:${prNumber}`,
-                repoId,
-                prNumber,
-                author,
-                body:        comment.body,
-                commentType: "issue",
-                htmlUrl:     comment.html_url,
-                commentedAt: comment.created_at,
-            });
-            if (ok) commentsInserted++;
         }
 
-        for (const comment of reviewComments) {
-            const author: string = comment.user?.login;
-            if (!author || isBot(author, comment.user?.type)) continue;
-            const prNumber = parseInt(comment.pull_request_url?.split("/").pop() ?? "0", 10);
-            if (!mergedPrNumbers.has(prNumber)) continue;
-            await d1RelationalService.upsertDeveloper(author, comment.user?.avatar_url);
-            const ok = await d1RelationalService.insertComment({
-                id:          `github:review:${repoId}:${comment.id}`,
-                prId:        `github:pr:${repoId}:${prNumber}`,
-                repoId,
-                prNumber,
-                author,
-                body:        comment.body,
-                commentType: "review",
-                htmlUrl:     comment.html_url,
-                commentedAt: comment.created_at,
-            });
-            if (ok) commentsInserted++;
-        }
-
-        // 8. Refresh leaderboard
+        // Refresh leaderboard snapshots after all repos synced
         await scoreAggregationService.precomputeSnapshots();
 
-        const totalAdded   = enrichedPrs.reduce((s: number, p: any) => s + (p.additions ?? 0), 0);
-        const totalDeleted = enrichedPrs.reduce((s: number, p: any) => s + (p.deletions ?? 0), 0);
-        const zeroPrs      = enrichedPrs.filter((p: any) => (p.additions ?? 0) === 0 && (p.deletions ?? 0) === 0).length;
+        if (repoNames.length === 1) {
+            // Single-repo call — return flat response for backward compat
+            return json(repoResults[0]);
+        }
 
+        // Multi-repo call — return array
         return json({
-            ok: true,
-            repo:             `${owner}/${repoName}`,
-            prsFound:         prs.length,
-            mergedPrs:        mergedPrs.length,
-            prsUpserted:      upserted,
-            issueComments:    issueComments.length,
-            reviewComments:   reviewComments.length,
-            commentsInserted,
-            linesAdded:       totalAdded,
-            linesDeleted:     totalDeleted,
-            zeroDiffPrs:      zeroPrs,   // PRs with no line changes (legit or fetch failure)
+            ok: !anyError,
+            syncedRepos: repoResults,
         });
     } catch (e: any) {
         return err(`Sync failed: ${e.message}`, 500);
@@ -578,43 +683,31 @@ async function handleUpdatePointRule(cradle: Cradle, request: Request): Promise<
 // ─── Scores Leaderboard Handler ──────────────────────────────────
 
 async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Response> {
-    // Accept ?period=all|month|week  (preferred — served from precomputed KV snapshot)
-    // Legacy ?since=...&until=... still works as a fallback for custom ranges.
     const periodParam = url.searchParams.get("period") as "all" | "month" | "week" | null;
     const validPeriod = ["all", "month", "week"].includes(periodParam ?? "") ? periodParam! : null;
 
     let result;
     if (validPeriod) {
-        // Fast path: serve precomputed KV snapshot by period name
         result = await cradle.scoreAggregationService.getLeaderboard(validPeriod);
     } else {
-        // Legacy path: arbitrary date range — falls through to D1 if not cached
-        const since = url.searchParams.get("since") || undefined;
-        const until = url.searchParams.get("until") || undefined;
         const limit = parseInt(url.searchParams.get("limit") || "50", 10);
         result = await cradle.scoreAggregationService.getLeaderboard("all", limit);
-        if (since || until) {
-            // For custom ranges compute directly (rare / debug use-case)
-            const entries = await cradle.d1Service.getLeaderboard(since, until, limit);
-            result = { entries, cachedAt: new Date().toISOString(), period: "all" as const, since: since ?? null, until: until ?? null };
-        }
     }
 
+    // The new schema uses developer_login; attach avatar from org members for the frontend.
     try {
         const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
-        const avatarMap = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
-        // Only include members that belong to the org's GitHub member list
-        const memberLogins = new Set(orgMembers.map((m: any) => m.login as string));
+        const avatarMap  = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
+        const botLogins  = new Set(orgMembers.filter((m: any) => isBot(m.login, m.type)).map((m: any) => m.login));
 
         result.entries = result.entries
-            // Exclude non-members AND bot accounts (suffix: [bot])
-            .filter((entry: any) => memberLogins.has(entry.developer_id) && !entry.developer_id.endsWith("[bot]"))
-            .map((entry: any) => ({
-                ...entry,
-                avatarUrl: avatarMap.get(entry.developer_id) || `https://github.com/${entry.developer_id}.png`
+            .filter((e: any) => !isBot(e.developer_login ?? e.developer_id ?? "", undefined) && !botLogins.has(e.developer_login))
+            .map((e: any) => ({
+                ...e,
+                avatarUrl: avatarMap.get(e.developer_login) || `https://github.com/${e.developer_login}.png`,
             }));
     } catch (e: any) {
-        cradle.logger.warn({ err: e.message }, "Failed to fetch avatarUrls for leaderboard");
+        cradle.logger.warn({ err: e.message }, "Failed to enrich leaderboard with avatarUrls");
     }
 
     return json(result);
