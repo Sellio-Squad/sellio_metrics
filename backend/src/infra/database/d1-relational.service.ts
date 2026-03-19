@@ -264,20 +264,11 @@ export class D1RelationalService {
 
     /**
      * Insert a comment row. Uses INSERT OR IGNORE — idempotent via comment id.
-     * Skips silently if the parent PR does not exist yet (unmerged PR).
+     * The caller (handleGitHubSync) already filters to merged-PR comment numbers,
+     * so no prExists check is needed here.
      */
     async insertComment(comment: PrComment): Promise<boolean> {
         if (!this.db) return false;
-
-        const prExists = await this.db
-            .prepare("SELECT id FROM merged_prs WHERE id = ?1")
-            .bind(comment.prId)
-            .first<{ id: string }>();
-
-        if (!prExists) {
-            this.logger.info({ prId: comment.prId, author: comment.author }, "Comment skipped — PR not merged yet");
-            return false;
-        }
 
         await this.upsertDeveloper(comment.author);
 

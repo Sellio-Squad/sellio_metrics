@@ -306,7 +306,10 @@ async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Respo
     }
 
     try {
-        // 1. Fetch repo metadata + PRs + comments in parallel
+        // 1. Bust repo+user caches so we always get fresh data from GitHub (not 24h stale)
+        await cradle.cacheService.del(`github:repos:${owner}`);
+
+        // 2. Fetch repo metadata + PRs + comments in parallel
         const [orgRepos, prs, issueComments, reviewComments] = await Promise.all([
             cachedGithubClient.listOrgRepos(owner),
             cachedGithubClient.listPulls(owner, repoName, "all", 100),
@@ -351,25 +354,27 @@ async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Respo
             enrichedPrs.push(...details);
         }
 
-        // 5. Fetch full user profiles for display_name + joined_at
-        //    PR objects only contain Simple User (no name field) — need GET /users/{login}.
-        //    Cached per-user for 24h so repeated syncs are cheap.
+        // 5. Fetch full user profiles sequentially — parallel calls cause rate-limit errors
+        //    GET /users/{login} returns name (display_name) + created_at (joined_at).
+        //    Each call is checked against the rate-limit guard and cached for 24h.
         const uniqueLogins = [...new Set(enrichedPrs.map((pr: any) => pr.user?.login).filter(Boolean))] as string[];
-        await Promise.all(uniqueLogins.map(async (login) => {
+        for (const login of uniqueLogins) {
             try {
+                // Bypass the 24h KV cache so we always get fresh data during sync
+                await cradle.cacheService.del(`github:user:${login}`);
                 const profile = await cachedGithubClient.getUser(login);
                 await d1RelationalService.upsertDeveloper(
                     login,
-                    profile.avatar_url,
-                    profile.name ?? undefined,    // display name
+                    profile.avatar_url ?? undefined,
+                    profile.name ?? undefined,       // GitHub display name
                     profile.created_at ?? undefined, // GitHub joined date
                 );
-            } catch {
-                // Fallback: upsert with just avatar from PR data
+            } catch (e: any) {
+                cradle.logger.warn({ login, err: e.message }, "getUser failed — storing login+avatar only");
                 const pr = enrichedPrs.find((p: any) => p.user?.login === login);
                 await d1RelationalService.upsertDeveloper(login, pr?.user?.avatar_url);
             }
-        }));
+        }
 
         // 6. Batch upsert merged PRs with real line counts
         const prRows = enrichedPrs.map((pr: any) => ({
@@ -578,43 +583,31 @@ async function handleUpdatePointRule(cradle: Cradle, request: Request): Promise<
 // ─── Scores Leaderboard Handler ──────────────────────────────────
 
 async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Response> {
-    // Accept ?period=all|month|week  (preferred — served from precomputed KV snapshot)
-    // Legacy ?since=...&until=... still works as a fallback for custom ranges.
     const periodParam = url.searchParams.get("period") as "all" | "month" | "week" | null;
     const validPeriod = ["all", "month", "week"].includes(periodParam ?? "") ? periodParam! : null;
 
     let result;
     if (validPeriod) {
-        // Fast path: serve precomputed KV snapshot by period name
         result = await cradle.scoreAggregationService.getLeaderboard(validPeriod);
     } else {
-        // Legacy path: arbitrary date range — falls through to D1 if not cached
-        const since = url.searchParams.get("since") || undefined;
-        const until = url.searchParams.get("until") || undefined;
         const limit = parseInt(url.searchParams.get("limit") || "50", 10);
         result = await cradle.scoreAggregationService.getLeaderboard("all", limit);
-        if (since || until) {
-            // For custom ranges compute directly (rare / debug use-case)
-            const entries = await cradle.d1Service.getLeaderboard(since, until, limit);
-            result = { entries, cachedAt: new Date().toISOString(), period: "all" as const, since: since ?? null, until: until ?? null };
-        }
     }
 
+    // The new schema uses developer_login; attach avatar from org members for the frontend.
     try {
         const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
-        const avatarMap = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
-        // Only include members that belong to the org's GitHub member list
-        const memberLogins = new Set(orgMembers.map((m: any) => m.login as string));
+        const avatarMap  = new Map(orgMembers.map((m: any) => [m.login, m.avatar_url]));
+        const botLogins  = new Set(orgMembers.filter((m: any) => isBot(m.login, m.type)).map((m: any) => m.login));
 
         result.entries = result.entries
-            // Exclude non-members AND bot accounts (suffix: [bot])
-            .filter((entry: any) => memberLogins.has(entry.developer_id) && !entry.developer_id.endsWith("[bot]"))
-            .map((entry: any) => ({
-                ...entry,
-                avatarUrl: avatarMap.get(entry.developer_id) || `https://github.com/${entry.developer_id}.png`
+            .filter((e: any) => !isBot(e.developer_login ?? e.developer_id ?? "", undefined) && !botLogins.has(e.developer_login))
+            .map((e: any) => ({
+                ...e,
+                avatarUrl: avatarMap.get(e.developer_login) || `https://github.com/${e.developer_login}.png`,
             }));
     } catch (e: any) {
-        cradle.logger.warn({ err: e.message }, "Failed to fetch avatarUrls for leaderboard");
+        cradle.logger.warn({ err: e.message }, "Failed to enrich leaderboard with avatarUrls");
     }
 
     return json(result);
