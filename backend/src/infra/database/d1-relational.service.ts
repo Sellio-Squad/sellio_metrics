@@ -15,7 +15,7 @@ import type { D1Database } from "./d1.service";
 // ─── Domain Types ────────────────────────────────────────────
 
 export interface Repo {
-    id: string;        // "{owner}/{name}"
+    id: number;        // GitHub Repo integer id
     owner: string;
     name: string;
     htmlUrl?: string;
@@ -33,7 +33,7 @@ export interface Member {
 
 export interface MergedPr {
     id: number;           // GitHub PR integer id (primary key)
-    repoId: string;       // FK → repos.id
+    repoId: number;       // FK → repos.id
     prNumber: number;     // PR number (display / link)
     author: string;       // FK → members.login
     title?: string;
@@ -48,7 +48,7 @@ export interface MergedPr {
 export interface PrComment {
     id: number;        // GitHub comment integer id
     prId: number;      // FK → merged_prs.id (GitHub PR integer id)
-    repoId: string;    // FK → repos.id
+    repoId: number;    // FK → repos.id
     prNumber: number;
     author: string;    // FK → members.login
     body?: string;
@@ -105,15 +105,15 @@ export class D1RelationalService {
 
     /**
      * Ensure a repo exists. Idempotent — safe to call before every PR insert.
-     * Returns the repo id ("{owner}/{name}").
+     * Returns the repo id (GitHub Integer).
      */
     async upsertRepo(
+        id: number,
         owner: string,
         name: string,
         opts: { htmlUrl?: string; description?: string; githubCreatedAt?: string; pushedAt?: string } = {},
-    ): Promise<string> {
-        if (!this.db) return `${owner}/${name}`;
-        const id = `${owner}/${name}`;
+    ): Promise<number> {
+        if (!this.db) return id;
         await this.db
             .prepare(
                 `INSERT INTO repos (id, owner, name, html_url, description, github_created_at, pushed_at)
@@ -137,7 +137,7 @@ export class D1RelationalService {
             .prepare("SELECT id, owner, name, html_url, description FROM repos ORDER BY owner, name")
             .all<any>();
         return res.results.map((r) => ({
-            id: r.id, owner: r.owner, name: r.name,
+            id: r.id as number, owner: r.owner, name: r.name,
             htmlUrl: r.html_url, description: r.description,
         }));
     }
@@ -257,7 +257,7 @@ export class D1RelationalService {
         return { upserted: total };
     }
 
-    async getMergedPrs(filters: { author?: string; repoId?: string; since?: string; limit?: number } = {}): Promise<MergedPr[]> {
+    async getMergedPrs(filters: { author?: string; repoId?: number; since?: string; limit?: number } = {}): Promise<MergedPr[]> {
         if (!this.db) return [];
         const conditions: string[] = [];
         const params: unknown[] = [];
@@ -273,7 +273,7 @@ export class D1RelationalService {
             .all<any>();
 
         return res.results.map((r) => ({
-            id: r.id as number, repoId: r.repo_id, prNumber: r.pr_number,
+            id: r.id as number, repoId: r.repo_id as number, prNumber: r.pr_number,
             author: r.author,
             title: r.title, body: r.body, htmlUrl: r.html_url, mergedAt: r.merged_at,
             additions: r.additions, deletions: r.deletions,
@@ -325,7 +325,7 @@ export class D1RelationalService {
 
     private mapComment(r: any): PrComment {
         return {
-            id: r.id, prId: r.pr_id, repoId: r.repo_id, prNumber: r.pr_number,
+            id: r.id as number, prId: r.pr_id as number, repoId: r.repo_id as number, prNumber: r.pr_number,
             author: r.author, body: r.body, commentType: r.comment_type,
             htmlUrl: r.html_url, commentedAt: r.commented_at,
         };

@@ -307,22 +307,37 @@ async function syncOneRepo(
     owner: string,
     repoName: string,
     orgRepos: any[],
+    targetPrNumbers?: number[],
 ): Promise<object> {
-    const { cachedGithubClient, d1RelationalService } = cradle;
+    const { cachedGithubClient, d1RelationalService, logger } = cradle;
 
     // Bust repo cache so fresh data is fetched
     await cradle.cacheService.del(`github:repos:${owner}`);
 
-    // Fetch PRs + all comments in parallel
-    const [prs, issueComments, reviewComments] = await Promise.all([
-        cachedGithubClient.listPulls(owner, repoName, "all", 100),
-        cachedGithubClient.listAllIssueComments(owner, repoName),
-        cachedGithubClient.listAllPRReviewComments(owner, repoName),
-    ]);
+    // If we only want to retry specific PRs, we can skip fetching the full PR list
+    // and just pretend "listPulls" returned objects with those PR numbers.
+    let prs: any[] = [];
+    let issueComments: any[] = [];
+    let reviewComments: any[] = [];
+    
+    if (targetPrNumbers && targetPrNumbers.length > 0) {
+        logger.info({ repo: repoName, count: targetPrNumbers.length }, "Performing targeted PR sync");
+        prs = targetPrNumbers.map((num) => ({ number: num, merged_at: "mock", user: {} }));
+    } else {
+        [prs, issueComments, reviewComments] = await Promise.all([
+            cachedGithubClient.listPulls(owner, repoName, "all", 100),
+            cachedGithubClient.listAllIssueComments(owner, repoName),
+            cachedGithubClient.listAllPRReviewComments(owner, repoName),
+        ]);
+    }
 
     // Upsert repo with full metadata
     const repoMeta = orgRepos.find((r: any) => r.name === repoName);
-    const repoId = await d1RelationalService.upsertRepo(owner, repoName, {
+    if (!repoMeta?.id) throw new Error(`Repo metadata id missing for ${owner}/${repoName}`);
+    const repoId = await d1RelationalService.upsertRepo(
+        repoMeta.id as number,
+        owner, 
+        repoName, {
         htmlUrl:         repoMeta?.html_url ?? `https://github.com/${owner}/${repoName}`,
         description:     repoMeta?.description ?? undefined,
         githubCreatedAt: repoMeta?.created_at ?? undefined,
@@ -351,17 +366,29 @@ async function syncOneRepo(
     const enrichedPrs: any[] = [];
     const fetchFailures: number[] = [];
 
-    for (const pr of mergedPrs) {
-        try {
-            const detail = await cachedGithubClient.getPull(owner, repoName, pr.number, false);
-            enrichedPrs.push(detail);
-        } catch (e: any) {
-            cradle.logger.warn(
-                { prNumber: pr.number, err: e.message },
-                "getPull failed — falling back to list-API entry (additions/deletions will be 0)",
-            );
-            fetchFailures.push(pr.number);
-            enrichedPrs.push(pr); // list-API entry — has no additions/deletions
+    // Fetch PR details in parallel chunks to avoid Cloudflare execution timeouts
+    // but limit concurrency (e.g. 5) to respect GitHub abuse detection.
+    const chunkSize = 5;
+    for (let i = 0; i < mergedPrs.length; i += chunkSize) {
+        const chunk = mergedPrs.slice(i, i + chunkSize);
+        
+        await Promise.all(chunk.map(async (pr: any) => {
+            try {
+                const detail = await cachedGithubClient.getPull(owner, repoName, pr.number, false);
+                enrichedPrs.push(detail);
+            } catch (e: any) {
+                cradle.logger.warn(
+                    { prNumber: pr.number, err: e.message },
+                    "getPull failed — falling back to list-API entry (additions/deletions will be 0)"
+                );
+                fetchFailures.push(pr.number);
+                enrichedPrs.push(pr); // list-API entry — has no additions/deletions
+            }
+        }));
+        
+        // Brief pause after each chunk to avoid Secondary Rate limits.
+        if (i + chunkSize < mergedPrs.length) {
+            await new Promise(r => setTimeout(r, 600));
         }
     }
 
@@ -498,6 +525,7 @@ async function syncOneRepo(
         zeroDiffPrNumbers: suspectedZeroDiff,
         // PRs where getPull threw — stored with 0+0, retry sync to fix.
         fetchFailures:     fetchFailures.map((n) => `#${n}`),
+        debugPrs:          prRows.slice(0, 3), // DEBUGGING
     };
 }
 
@@ -537,7 +565,7 @@ async function handleGitHubSync(cradle: Cradle, request: Request): Promise<Respo
 
         for (const repoName of repoNames) {
             try {
-                const result = await syncOneRepo(cradle, owner, repoName, orgRepos);
+                const result = await syncOneRepo(cradle, owner, repoName, orgRepos, body.prNumbers);
                 repoResults.push(result);
             } catch (e: any) {
                 cradle.logger.error({ repo: repoName, err: e.message }, "Repo sync failed");
@@ -617,7 +645,7 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
         const pr = payload.pull_request;
         const creator: string = pr.user?.login;
         if (creator && !isBot(creator, pr.user?.type)) {
-            const repoId = await cradle.d1RelationalService.upsertRepo(repoOwner, repoName, repo.html_url);
+            const repoId = await cradle.d1RelationalService.upsertRepo(repo.id as number, repoOwner, repoName, { htmlUrl: repo.html_url });
             await cradle.d1RelationalService.upsertDeveloper(creator, pr.user?.avatar_url, pr.user?.name);
             await cradle.d1RelationalService.upsertMergedPr({
                 id:          pr.id as number,   // GitHub integer PR id
@@ -641,7 +669,7 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
         const author: string = comment.user?.login;
         if (author && !isBot(author, comment.user?.type)) {
             const prNumber = payload.issue?.number || payload.pull_request?.number;
-            const repoId = await cradle.d1RelationalService.upsertRepo(repoOwner, repoName, repo.html_url);
+            const repoId = await cradle.d1RelationalService.upsertRepo(repo.id as number, repoOwner, repoName, { htmlUrl: repo.html_url });
             await cradle.d1RelationalService.upsertDeveloper(author, comment.user?.avatar_url);
             await cradle.d1RelationalService.insertComment({
                 id:          comment.id as number,   // GitHub integer comment id

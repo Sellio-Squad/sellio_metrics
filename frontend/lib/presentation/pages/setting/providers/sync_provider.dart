@@ -189,32 +189,38 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Retry only the repos that failed in the last sync run.
+  /// Retry only the repos that failed in the last sync run, or have zero diff PRs.
   Future<void> retryFailed() async {
     if (_status == SyncStatus.running) return;
 
-    final failedRepos = _results
-        .where((r) => !r.success)
-        .map((r) => r.repo)
-        .toList();
+    final reposToRetry = <RepoInfo, List<int>>{};
+    
+    for (var r in _results) {
+      if (!r.success) {
+        reposToRetry[r.repo] = [];
+      } else if (r.zeroDiffPrNumbers.isNotEmpty) {
+        reposToRetry[r.repo] = r.zeroDiffPrNumbers;
+      }
+    }
 
-    if (failedRepos.isEmpty) return;
+    if (reposToRetry.isEmpty) return;
 
-    // Remove failed results so we can re-add them
-    _results.removeWhere((r) => !r.success);
+    // Remove old results so we can re-add them
+    _results.removeWhere((r) => !r.success || r.zeroDiffPrNumbers.isNotEmpty);
     _status = SyncStatus.running;
     _currentIndex = -1;
     _globalError = null;
     notifyListeners();
 
     try {
-      for (var i = 0; i < failedRepos.length; i++) {
+      final entries = reposToRetry.entries.toList();
+      for (var i = 0; i < entries.length; i++) {
         _currentIndex = i;
         notifyListeners();
-        await _syncRepo(failedRepos[i]);
+        await _syncRepo(entries[i].key, prNumbers: entries[i].value);
         notifyListeners();
       }
-      _currentIndex = failedRepos.length;
+      _currentIndex = entries.length;
       _status = SyncStatus.done;
     } catch (e, stack) {
       _globalError = e.toString();
@@ -225,7 +231,7 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _syncRepo(RepoInfo repo) async {
+  Future<void> _syncRepo(RepoInfo repo, {List<int>? prNumbers}) async {
     try {
       final parts = repo.fullName.split('/');
       final owner = parts.length == 2 ? parts[0] : null;
@@ -236,6 +242,7 @@ class SyncProvider extends ChangeNotifier {
         data: {
           'repo': repoName,
           if (owner != null) 'owner': owner,
+          if (prNumbers != null && prNumbers.isNotEmpty) 'prNumbers': prNumbers,
         },
       );
 
