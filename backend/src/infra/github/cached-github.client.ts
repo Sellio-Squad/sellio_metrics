@@ -98,14 +98,31 @@ export class CachedGitHubClient {
 
     /**
      * Search all open PRs for an entire organization.
+     * Cached for 10 minutes — multiple simultaneous dashboard users share one result
+     * instead of each triggering a separate GitHub API call.
+     * Cache is flushed by the webhook handler when a PR is opened/closed/merged.
      */
     async searchOpenPrsForOrg(org: string, perPage: number = 100): Promise<any[]> {
+        const cacheKey = `github:open-prs:${org}`;
+        const cached = await this.cache.get<any[]>(cacheKey);
+        if (cached) return cached.data;
+
         await this.guard.checkAndWait();
         const results = await this.github.paginate(
             this.github.rest.search.issuesAndPullRequests,
-            { q: `is:pr is:open org:${org}`, per_page: perPage }
+            { q: `is:pr is:open org:${org}`, per_page: perPage },
         );
+
+        // Cache for 10 minutes (600s)
+        await this.cache.set(cacheKey, results, 600);
         return results;
+    }
+
+    /** Flush the open-PRs cache (call after webhook events that change PR state) */
+    async flushOpenPrsCache(org: string): Promise<void> {
+        try {
+            await this.cache.del(`github:open-prs:${org}`);
+        } catch { /* ignore */ }
     }
 
     /**

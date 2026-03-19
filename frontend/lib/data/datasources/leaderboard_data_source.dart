@@ -24,10 +24,11 @@ class RemoteLeaderboardDataSource implements LeaderboardDataSource {
 
   RemoteLeaderboardDataSource(this._dio);
 
-  /// GET /api/scores/leaderboard
+  /// GET /api/scores/leaderboard?period=all
+  /// Uses precomputed KV snapshot — no D1 aggregation at request time.
   @override
   Future<List<dynamic>> fetchLeaderboard() async {
-    final url = '/api/scores/leaderboard';
+    const url = '/api/scores/leaderboard?period=all';
     appLogger.network('LeaderboardDataSource', 'GET', Uri.parse(_dio.options.baseUrl + url));
 
     final response = await _dio.get(url);
