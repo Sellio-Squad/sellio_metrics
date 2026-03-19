@@ -477,7 +477,7 @@ class _RepoStats extends StatelessWidget {
     // Build warning label listing affected PR numbers
     final allBadPrs = [
       ...result.zeroDiffPrNumbers.map((n) => '#$n'),
-      ...result.fetchFailures,
+      ...result.fetchFailures.map((s) => s.startsWith('#') ? s : '#$s'),
     ];
 
     return Wrap(
@@ -499,17 +499,35 @@ class _RepoStats extends StatelessWidget {
         }),
         // Warning chip shown only when some PRs still have zero diff after retries
         if (allBadPrs.isNotEmpty)
-          Tooltip(
-            message: 'Zero diff after retries: ${allBadPrs.join(', ')}\nRetry sync to attempt again.',
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.orange.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.warning_amber_rounded, size: 11, color: Colors.orange),
-                const SizedBox(width: 2),
-                Text(
-                  '${allBadPrs.length} need retry',
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.warning_amber_rounded, size: 12, color: Colors.orange),
+                    const SizedBox(width: 4),
+                    Text(
+                      '${allBadPrs.length} PRs have 0 diff (Need Retry or Binary/Empty):',
+                      style: AppTypography.caption.copyWith(
+                          color: Colors.orange, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 2),
+                SelectableText(
+                  allBadPrs.join(', '),
                   style: AppTypography.caption.copyWith(
-                      color: Colors.orange, fontWeight: FontWeight.w600),
+                      color: Colors.orange.shade700,
+                      fontWeight: FontWeight.w500,
+                      height: 1.3),
                 ),
               ],
             ),
