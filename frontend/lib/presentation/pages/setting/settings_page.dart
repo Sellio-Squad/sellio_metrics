@@ -1,6 +1,8 @@
 library;
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../core/di/injection.dart';
 import '../../../core/extensions/theme_extensions.dart';
 import '../../../design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
@@ -8,6 +10,8 @@ import 'widgets/settings_section.dart';
 import 'widgets/repository_selector.dart';
 import 'widgets/theme_toggle.dart';
 import 'widgets/language_toggle.dart';
+import 'widgets/sync_section.dart';
+import 'providers/sync_provider.dart';
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -28,6 +32,19 @@ class SettingsPage extends StatelessWidget {
               style: AppTypography.headline.copyWith(color: scheme.title),
             ),
             const SizedBox(height: AppSpacing.xxl),
+
+            // GitHub Sync
+            SettingsSection(
+              title: 'GitHub Data Sync',
+              icon: Icons.cloud_sync_outlined,
+              children: [
+                ChangeNotifierProvider(
+                  create: (_) => getIt<SyncProvider>(),
+                  child: const SyncSection(),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xl),
 
             // Repository Selection
             SettingsSection(
