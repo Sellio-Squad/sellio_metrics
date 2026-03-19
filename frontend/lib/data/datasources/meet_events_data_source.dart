@@ -1,7 +1,3 @@
-/// Meet Events Data Source — HTTP + SSE communication with backend.
-///
-/// Provides methods for subscriptions, event listing, and SSE streaming.
-/// Uses dart:html EventSource for real-time updates in Flutter Web.
 library;
 
 import 'dart:async';
@@ -12,8 +8,6 @@ import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
 
 import '../../core/logging/app_logger.dart';
-
-// ─── Abstract Interface ─────────────────────────────────────
 
 abstract class MeetEventsDataSource {
   /// Subscribe to Workspace Events for a meeting space.
