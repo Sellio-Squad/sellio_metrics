@@ -469,10 +469,13 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
     const repo = payload?.repository;
     if (!repo?.full_name) return json({ ignored: true, reason: "no repo" });
 
-    // Flush Open-PRs cache on any PR event — next request gets fresh data
+    // Invalidate open PRs cache on any PR or review event — next dashboard load gets fresh data
+    // Key: `github:open_prs:{org}` (managed by OpenPrsService.invalidateCache)
     const org = repo.owner?.login || repo.full_name.split("/")[0] || cradle.env.org;
-    if (event === "pull_request") {
-        cradle.cachedGithubClient.flushOpenPrsCache(org).catch(() => {});
+    if (event === "pull_request" || event === "pull_request_review") {
+        cradle.openPrsService.invalidateCache(org).catch((e: any) =>
+            cradle.logger.warn({ err: e.message, org }, "Failed to invalidate open-prs cache")
+        );
     }
 
     // Ingest events into D1 (event-driven scoring)
