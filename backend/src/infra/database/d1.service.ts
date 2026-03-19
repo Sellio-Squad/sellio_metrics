@@ -198,7 +198,14 @@ export class D1Service {
     }
 
     /**
-     * Get the most recent event timestamp for all developers.
+     * Get the most recent REAL activity timestamp for all developers.
+     *
+     * CODE_ADDITION and CODE_DELETION events are intentionally excluded here because
+     * they use `new Date()` (the sync time) as their timestamp — not the actual time
+     * the developer was active. Including them would make every developer appear active
+     * on the day the sync was run, regardless of when they last contributed.
+     *
+     * Only PR_CREATED, PR_MERGED, COMMENT, CHECK_IN etc. carry genuine activity timestamps.
      */
     async getLastActiveDates(): Promise<Record<string, string>> {
         if (!this.db) return {};
@@ -206,6 +213,7 @@ export class D1Service {
         const result = await this.db.prepare(
             `SELECT developer_id, MAX(event_timestamp) as last_active
              FROM events
+             WHERE event_type NOT IN ('CODE_ADDITION', 'CODE_DELETION')
              GROUP BY developer_id`
         ).all();
 

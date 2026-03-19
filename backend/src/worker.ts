@@ -469,11 +469,11 @@ async function handleWebhook(cradle: Cradle, request: Request): Promise<Response
     const repo = payload?.repository;
     if (!repo?.full_name) return json({ ignored: true, reason: "no repo" });
 
-    // Invalidate open PRs cache immediately (it's completely dynamic)
+    // Flush Open-PRs cache on any PR event — next request gets fresh data
     const org = repo.owner?.login || repo.full_name.split("/")[0] || cradle.env.org;
-    cradle.openPrsService.invalidateCache(org).catch((e: any) => 
-        cradle.logger.error({ err: e.message, org }, "Failed to invalidate open-prs cache in webhook")
-    );
+    if (event === "pull_request") {
+        cradle.cachedGithubClient.flushOpenPrsCache(org).catch(() => {});
+    }
 
     // Ingest events into D1 (event-driven scoring)
     const events: ScoringEvent[] = [];
@@ -592,14 +592,30 @@ async function handleUpdatePointRule(cradle: Cradle, request: Request): Promise<
     return json({ ok: true, rule });
 }
 
-// ─── Scores Leaderboard Handler ─────────────────────────────
+// ─── Scores Leaderboard Handler ──────────────────────────────────
 
 async function handleScoresLeaderboard(cradle: Cradle, url: URL): Promise<Response> {
-    const since = url.searchParams.get("since") || undefined;
-    const until = url.searchParams.get("until") || undefined;
-    const limit = parseInt(url.searchParams.get("limit") || "50", 10);
+    // Accept ?period=all|month|week  (preferred — served from precomputed KV snapshot)
+    // Legacy ?since=...&until=... still works as a fallback for custom ranges.
+    const periodParam = url.searchParams.get("period") as "all" | "month" | "week" | null;
+    const validPeriod = ["all", "month", "week"].includes(periodParam ?? "") ? periodParam! : null;
 
-    const result = await cradle.scoreAggregationService.getLeaderboard(since, until, limit);
+    let result;
+    if (validPeriod) {
+        // Fast path: serve precomputed KV snapshot by period name
+        result = await cradle.scoreAggregationService.getLeaderboard(validPeriod);
+    } else {
+        // Legacy path: arbitrary date range — falls through to D1 if not cached
+        const since = url.searchParams.get("since") || undefined;
+        const until = url.searchParams.get("until") || undefined;
+        const limit = parseInt(url.searchParams.get("limit") || "50", 10);
+        result = await cradle.scoreAggregationService.getLeaderboard("all", limit);
+        if (since || until) {
+            // For custom ranges compute directly (rare / debug use-case)
+            const entries = await cradle.d1Service.getLeaderboard(since, until, limit);
+            result = { entries, cachedAt: new Date().toISOString(), period: "all" as const, since: since ?? null, until: until ?? null };
+        }
+    }
 
     try {
         const orgMembers = await cradle.cachedGithubClient.listOrgMembers(cradle.env.org);
