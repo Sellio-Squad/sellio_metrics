@@ -41,8 +41,8 @@ export interface MergedPr {
     htmlUrl?: string;
     mergedAt: string;
     prCreatedAt?: string; // GitHub PR opened date
-    additions: number;
-    deletions: number;
+    additions: number | null;
+    deletions: number | null;
 }
 
 export interface PrComment {

@@ -57,8 +57,8 @@ CREATE TABLE IF NOT EXISTS merged_prs (
     html_url     TEXT,
     merged_at    TEXT NOT NULL,
     pr_created_at TEXT,                            -- GitHub PR opened date
-    additions    INTEGER NOT NULL DEFAULT 0,
-    deletions    INTEGER NOT NULL DEFAULT 0,
+    additions    INTEGER,
+    deletions    INTEGER,
     created_at   TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(repo_id, pr_number)
 );

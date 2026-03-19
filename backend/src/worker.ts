@@ -354,15 +354,15 @@ async function syncOneRepo(
     const existingMap = new Map(existingMergedPrs.map(p => [p.prNumber, p]));
 
     const enrichedPrs: any[] = [];
-    const fetchFailures: number[] = [];
+    const fetchFailures: { prNumber: number, error: string }[] = [];
 
     // Fetch PR details sequentially or carefully to avoid Cloudflare execution timeouts
     // but limit concurrency to respect GitHub abuse detection.
     const prsToDeepFetch = mergedPrs.filter((pr: any) => {
         const existing = existingMap.get(pr.number);
-        // Deep fetch if it's not in DB, OR if it's in DB but has 0 additions + deletions 
-        // (meaning it was a fetch failure backup or real zero diff)
-        return !existing || (existing.additions === 0 && existing.deletions === 0);
+        // Deep fetch if it's not in DB, OR if it's in DB but has null additions
+        // (meaning it was a fetch failure backup, not a true zero diff)
+        return !existing || existing.additions === null;
     });
 
     const prsNotDeepFetched = mergedPrs.filter((pr: any) => !prsToDeepFetch.includes(pr)).map((pr: any) => {
@@ -389,10 +389,12 @@ async function syncOneRepo(
             } catch (e: any) {
                 cradle.logger.warn(
                     { prNumber: pr.number, err: e.message },
-                    "getPull failed — falling back to list-API entry (additions/deletions will be 0)"
+                    "getPull failed — falling back to list-API entry (additions/deletions will be null)"
                 );
-                fetchFailures.push(pr.number);
-                enrichedPrs.push(pr); // list-API entry — has no additions/deletions
+                fetchFailures.push({ prNumber: pr.number, error: e.message });
+                pr.additions = null;
+                pr.deletions = null;
+                enrichedPrs.push(pr); // list-API entry — explicitly sets null for diff stats
             }
         }));
         
@@ -425,25 +427,9 @@ async function syncOneRepo(
 
     // Build PR rows.
     // id = GitHub's integer PR id (the raw pr.id from the API).
-    // Only flag as zero-diff when changed_files > 0 — those are PRs where
-    // something genuinely changed but we have no line count (real problem).
-    // PRs with changed_files == 0 are legitimate empty merges and NOT flagged.
-    const fetchFailureSet = new Set(fetchFailures);
-    const suspectedZeroDiff: number[] = [];
-
     const prRows = enrichedPrs.map((pr: any) => {
-        const additions   = pr.additions ?? 0;
-        const deletions   = pr.deletions ?? 0;
-        const changedFiles = pr.changed_files ?? 0;
-
-        // Suspect: passed getPull successfully, has changed files, but zero diff
-        if (
-            additions === 0 && deletions === 0 &&
-            changedFiles > 0 &&
-            !fetchFailureSet.has(pr.number)
-        ) {
-            suspectedZeroDiff.push(pr.number);
-        }
+        const additions   = pr.additions; // Can be null
+        const deletions   = pr.deletions; // Can be null
 
         return {
             id:          pr.id as number,          // GitHub INTEGER PR id
@@ -514,8 +500,12 @@ async function syncOneRepo(
         if (ok) commentsInserted++;
     }
 
-    const totalAdded   = enrichedPrs.reduce((s: number, p: any) => s + (p.additions ?? 0), 0);
-    const totalDeleted = enrichedPrs.reduce((s: number, p: any) => s + (p.deletions ?? 0), 0);
+    let totalAdded = 0;
+    let totalDeleted = 0;
+    for (const r of prRows) {
+        if (r.additions) totalAdded += r.additions;
+        if (r.deletions) totalDeleted += r.deletions;
+    }
 
     return {
         ok: true,
@@ -528,13 +518,7 @@ async function syncOneRepo(
         commentsInserted,
         linesAdded:        totalAdded,
         linesDeleted:      totalDeleted,
-        // Only PRs where getPull succeeded but returned 0+0 with changed_files>0.
-        // These likely have binary-only diffs or a transient GitHub lag.
-        // Retry sync to attempt fetching them again.
-        zeroDiffPrs:       suspectedZeroDiff.length,
-        zeroDiffPrNumbers: suspectedZeroDiff,
-        // PRs where getPull threw — stored with 0+0, retry sync to fix.
-        fetchFailures:     fetchFailures.map((n) => `#${n}`),
+        fetchFailures:     fetchFailures,
         debugPrs:          prRows.slice(0, 3), // DEBUGGING
     };
 }
