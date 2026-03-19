@@ -231,7 +231,7 @@ class _SyncSummaryRow extends StatelessWidget {
     final totalCmt   = results.fold(0, (s, r) => s + (r.commentsInserted ?? 0));
     final totalAdd   = results.fold(0, (s, r) => s + (r.linesAdded ?? 0));
     final totalDel   = results.fold(0, (s, r) => s + (r.linesDeleted ?? 0));
-    final totalWarn  = results.fold(0, (s, r) => s + r.zeroDiffPrNumbers.length + r.fetchFailures.length);
+    final totalWarn  = results.fold<int>(0, (s, r) => s + r.fetchFailures.length);
 
     return Wrap(
       spacing: AppSpacing.sm,
@@ -244,7 +244,7 @@ class _SyncSummaryRow extends StatelessWidget {
         if (totalWarn > 0)
           _Chip(
             icon: Icons.warning_amber_rounded,
-            label: '$totalWarn PRs with zero diff (retried)',
+            label: '$totalWarn API fetch failures',
             color: Colors.orange,
           ),
       ],
@@ -474,11 +474,7 @@ class _RepoStats extends StatelessWidget {
       (Icons.comment_outlined, '${result.commentsInserted ?? 0} comments', scheme.hint),
     ];
 
-    // Build warning label listing affected PR numbers
-    final allBadPrs = [
-      ...result.zeroDiffPrNumbers.map((n) => '#$n'),
-      ...result.fetchFailures.map((s) => s.startsWith('#') ? s : '#$s'),
-    ];
+    final fetchFailures = result.fetchFailures;
 
     return Wrap(
       spacing: 8,
@@ -497,14 +493,14 @@ class _RepoStats extends StatelessWidget {
             ],
           );
         }),
-        // Warning chip shown only when some PRs still have zero diff after retries
-        if (allBadPrs.isNotEmpty)
+        // Warning chip shown only when some PRs failed to fetch API payload
+        if (fetchFailures.isNotEmpty)
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
             decoration: BoxDecoration(
-              color: Colors.orange.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-              border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+              color: scheme.red.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: scheme.red.withValues(alpha: 0.2)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -512,23 +508,31 @@ class _RepoStats extends StatelessWidget {
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.warning_amber_rounded, size: 12, color: Colors.orange),
-                    const SizedBox(width: 4),
+                    Icon(Icons.warning_amber_rounded, size: 14, color: scheme.red),
+                    const SizedBox(width: 6),
                     Text(
-                      '${allBadPrs.length} PRs have 0 diff (Need Retry or Binary/Empty):',
+                      '${fetchFailures.length} PRs failed to fetch deep payload data:',
                       style: AppTypography.caption.copyWith(
-                          color: Colors.orange, fontWeight: FontWeight.w600),
+                          color: scheme.red, fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                SelectableText(
-                  allBadPrs.join(', '),
-                  style: AppTypography.caption.copyWith(
-                      color: Colors.orange.shade700,
-                      fontWeight: FontWeight.w500,
-                      height: 1.3),
-                ),
+                const SizedBox(height: 4),
+                ...fetchFailures.map((failure) {
+                  final pr = failure['prNumber'];
+                  final error = failure['error'];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 2.0),
+                    child: SelectableText(
+                      '#$pr: $error',
+                      style: AppTypography.caption.copyWith(
+                          color: scheme.red.withValues(alpha: 0.8),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 11,
+                          height: 1.3),
+                    ),
+                  );
+                }),
               ],
             ),
           ),

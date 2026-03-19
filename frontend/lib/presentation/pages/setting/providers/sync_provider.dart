@@ -23,10 +23,7 @@ class RepoSyncResult {
   final int? commentsInserted;
   final int? linesAdded;
   final int? linesDeleted;
-  // PRs that still had 0 additions+deletions after all retries (PR numbers)
-  final List<int> zeroDiffPrNumbers;
-  // PR numbers (#N) that threw an error during getPull (fell back to list-API)
-  final List<String> fetchFailures;
+  final List<Map<String, dynamic>> fetchFailures;
 
   const RepoSyncResult({
     required this.repo,
@@ -36,13 +33,11 @@ class RepoSyncResult {
     this.commentsInserted,
     this.linesAdded,
     this.linesDeleted,
-    this.zeroDiffPrNumbers = const [],
     this.fetchFailures = const [],
   });
 
-  /// True if any PRs may have incorrect zero-diff data.
-  bool get hasWarnings =>
-      zeroDiffPrNumbers.isNotEmpty || fetchFailures.isNotEmpty;
+  /// True if there were PRs that failed to fetch deep payload data
+  bool get hasWarnings => fetchFailures.isNotEmpty;
 }
 
 @injectable
@@ -198,15 +193,15 @@ class SyncProvider extends ChangeNotifier {
     for (var r in _results) {
       if (!r.success) {
         reposToRetry[r.repo] = [];
-      } else if (r.zeroDiffPrNumbers.isNotEmpty) {
-        reposToRetry[r.repo] = r.zeroDiffPrNumbers;
+      } else if (r.fetchFailures.isNotEmpty) {
+        reposToRetry[r.repo] = r.fetchFailures.map((e) => e['prNumber'] as int).toList();
       }
     }
 
     if (reposToRetry.isEmpty) return;
 
     // Remove old results so we can re-add them
-    _results.removeWhere((r) => !r.success || r.zeroDiffPrNumbers.isNotEmpty);
+    _results.removeWhere((r) => !r.success || r.fetchFailures.isNotEmpty);
     _status = SyncStatus.running;
     _currentIndex = -1;
     _globalError = null;
@@ -247,12 +242,8 @@ class SyncProvider extends ChangeNotifier {
       );
 
       final body = response.data as Map<String, dynamic>;
-      final zeroDiffNumbers = (body['zeroDiffPrNumbers'] as List<dynamic>?)
-              ?.map((e) => (e as num).toInt())
-              .toList() ??
-          [];
       final fetchFailures = (body['fetchFailures'] as List<dynamic>?)
-              ?.map((e) => e.toString())
+              ?.map((e) => e as Map<String, dynamic>)
               .toList() ??
           [];
 
@@ -263,7 +254,6 @@ class SyncProvider extends ChangeNotifier {
         commentsInserted: body['commentsInserted'] as int?,
         linesAdded: body['linesAdded'] as int?,
         linesDeleted: body['linesDeleted'] as int?,
-        zeroDiffPrNumbers: zeroDiffNumbers,
         fetchFailures: fetchFailures,
       ));
     } catch (e) {
