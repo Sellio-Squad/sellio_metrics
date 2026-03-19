@@ -111,12 +111,71 @@ export class CachedGitHubClient {
     }
 
     /**
-     * Get full PR details — NO intermediate cache.
+     * Get full PR details — includes additions, deletions, changed_files, body.
+     *
+     * IMPORTANT: Always calls checkAndWait() internally so callers don't
+     * need to manage rate limits themselves.
+     *
+     * GitHub's secondary rate limit (abuse detection) fires based on
+     * request *frequency*, not just remaining quota. We add a minimum
+     * 300 ms gap between calls to stay inside GitHub's tolerated burst.
      */
     async getPull(owner: string, repo: string, pullNumber: number, _isOpen: boolean): Promise<any> {
-        const response = await this.github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
-        if (response?.headers) this.guard.updateFromHeaders(response.headers as Record<string, string | undefined>);
-        return response.data;
+        const MAX_RETRIES = 3;
+        let attempt = 0;
+
+        while (attempt < MAX_RETRIES) {
+            try {
+                await this.guard.checkAndWait();
+
+                // Minimum inter-request delay to avoid secondary rate limit (abuse detection).
+                // 300ms = ~3 req/s which is well within GitHub's undocumented ~5 req/s limit.
+                // If attempt > 0, we apply exponential backoff.
+                const delayMs = attempt === 0 ? 300 : 1000 * Math.pow(2, attempt);
+                await new Promise((r) => setTimeout(r, delayMs));
+
+                const response = await this.github.rest.pulls.get({ owner, repo, pull_number: pullNumber });
+                if (response?.headers) {
+                    this.guard.updateFromHeaders(response.headers as Record<string, string | undefined>);
+                }
+                
+                const data = response.data;
+                const additions = data.additions ?? 0;
+                const deletions = data.deletions ?? 0;
+                const changedFiles = data.changed_files ?? 0;
+                
+                // GitHub can sometimes lag in computing the diffs in the background.
+                // If changed_files > 0 but additions+deletions == 0, we retry.
+                if (changedFiles > 0 && additions === 0 && deletions === 0 && attempt < MAX_RETRIES - 1) {
+                    this.logger.warn({ prNumber: pullNumber, attempt }, "getPull returned zero diff but changed_files > 0 — retrying (diff computation lag)");
+                    attempt++;
+                    continue;
+                }
+
+                return data;
+            } catch (error: any) {
+                const status = error.status || error.response?.status;
+                const isSecondaryRateLimit = status === 403 && error.message?.toLowerCase().includes("secondary rate limit");
+                const isServerError = status >= 500 && status < 600;
+                
+                if ((isSecondaryRateLimit || isServerError) && attempt < MAX_RETRIES - 1) {
+                    this.logger.warn(
+                        { prNumber: pullNumber, attempt, status, errMsg: error.message },
+                        "getPull encountered transient error — retrying"
+                    );
+                    attempt++;
+                    continue;
+                }
+                
+                this.logger.error(
+                    { prNumber: pullNumber, status, errMsg: error.message },
+                    "getPull failed permanently after retries"
+                );
+                throw error;
+            }
+        }
+        
+        throw new Error(`Failed to fetch PR #${pullNumber} after ${MAX_RETRIES} attempts`);
     }
 
     /**
