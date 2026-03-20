@@ -8,31 +8,32 @@ import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
 import { syncOneRepo } from "./sync.service";
 
-interface SyncBody {
-    owner?: string;
-    repo?:  string;
-    repos?: string[];
-    prNumbers?: number[];
-}
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
+
+const syncSchema = z.object({
+    owner: z.string().optional(),
+    repo:  z.string().optional(),
+    repos: z.array(z.string()).optional(),
+    prNumbers: z.array(z.number()).optional(),
+}).refine(data => data.repo || (data.repos && data.repos.length > 0), {
+    message: "Body must contain 'repo' (string) or 'repos' (string[]). Example: { \"repos\": [\"sellio_mobile\"] }",
+    path: ["repo", "repos"],
+});
+
+type SyncBody = z.infer<typeof syncSchema>;
 
 const sync = new Hono<HonoEnv>();
 
-sync.post("/github", safe(async (c) => {
+sync.post("/github", zValidator("json", syncSchema), safe(async (c) => {
     const cradle = useCradle(c);
-    const body   = await c.req.json<SyncBody>().catch(() => ({} as SyncBody));
+    const body   = c.req.valid("json") as SyncBody;
     const owner  = body.owner || cradle.env.org;
 
     const repoNames: string[] =
         Array.isArray(body.repos) && body.repos.length > 0 ? body.repos :
         typeof body.repo === "string" && body.repo        ? [body.repo] :
         [];
-
-    if (repoNames.length === 0) {
-        return c.json(
-            { error: "Body must contain 'repo' (string) or 'repos' (string[]). Example: { \"repos\": [\"sellio_mobile\"] }" },
-            400,
-        );
-    }
 
     const orgRepos = await cradle.cachedGithubClient.listOrgRepos(owner);
     const results: any[] = [];

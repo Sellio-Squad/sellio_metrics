@@ -9,18 +9,21 @@ import { useCradle, safe } from "../../lib/route-helpers";
 import { isBot } from "../../lib/bot-filter";
 import type { LeaderboardPeriod } from "./score-aggregation.service";
 
-const VALID_PERIODS = new Set<string>(["all", "month", "week"]);
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
+
+const leaderboardQuerySchema = z.object({
+    period: z.enum(["all", "month", "week"]).optional().default("all"),
+    limit: z.coerce.number().int().min(1).default(50),
+});
+type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;
 
 const scores = new Hono<HonoEnv>();
 
-scores.get("/leaderboard", safe(async (c) => {
+scores.get("/leaderboard", zValidator("query", leaderboardQuerySchema), safe(async (c) => {
     const { scoreAggregationService, cachedGithubClient, developerRepo, env } = useCradle(c);
 
-    const periodParam = c.req.query("period") ?? "";
-    const period: LeaderboardPeriod = VALID_PERIODS.has(periodParam)
-        ? (periodParam as LeaderboardPeriod)
-        : "all";
-    const limit = parseInt(c.req.query("limit") || "50", 10);
+    const { period, limit } = c.req.valid("query") as LeaderboardQuery;
 
     const result = await scoreAggregationService.getLeaderboard(period, limit);
 

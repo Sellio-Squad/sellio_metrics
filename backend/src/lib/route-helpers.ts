@@ -8,12 +8,13 @@
 
 import type { Context } from "hono";
 import type { HonoEnv } from "../core/hono-env";
+import type { Cradle } from "../core/container";
 import { AppError } from "../core/app-error";
 
 // ─── Cradle accessor ──────────────────────────────────────────
 
 /** One-liner access to the DI cradle from any Hono context. */
-export const useCradle = (c: Context<HonoEnv>) => c.get("cradle");
+export const useCradle = (c: Context<any, any, any>): Cradle => c.get("cradle");
 
 // ─── Async error wrapper ──────────────────────────────────────
 
@@ -29,12 +30,12 @@ type Handler = (c: Context<HonoEnv>) => Promise<Response | void>;
  *     return c.json(data);
  *   }));
  */
-export const safe =
-    (fn: Handler) =>
-    async (c: Context<HonoEnv>): Promise<Response> => {
+export const safe = <C extends Context<any, any, any>>(
+    fn: (c: C) => Promise<Response | void> | Response | void
+) => async (c: C): Promise<Response> => {
         try {
             const result = await fn(c);
-            return result ?? c.json({ ok: true });
+            return (result as Response) ?? c.json({ ok: true });
         } catch (e: any) {
             if (e instanceof AppError) {
                 return c.json({
@@ -42,7 +43,8 @@ export const safe =
                     ...(e.details && { details: e.details })
                 }, e.statusCode as any);
             }
-            c.get("cradle").logger?.warn?.({ err: e?.message }, "Unhandled route error");
+            const cradle = c.get("cradle") as Cradle | undefined;
+            cradle?.logger?.warn?.({ err: e?.message }, "Unhandled route error");
             return c.json({ error: e?.message || "Internal Server Error" }, 500);
         }
     };

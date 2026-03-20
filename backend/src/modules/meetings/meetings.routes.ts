@@ -17,8 +17,11 @@ import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe, oauthSuccessHtml, oauthErrorHtml, oauthFailHtml } from "../../lib/route-helpers";
 import { AppError } from "../../core/app-error";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
 
-interface CreateMeetingBody { title: string; }
+const createMeetingSchema = z.object({ title: z.string() });
+type CreateMeetingBody = z.infer<typeof createMeetingSchema>;
 
 const meetings = new Hono<HonoEnv>();
 
@@ -67,7 +70,7 @@ meetings.get("/", safe(async (c) =>
     c.json(await useCradle(c).meetingsService.listMeetings()),
 ));
 
-meetings.post("/", safe(async (c) => {
+meetings.post("/", zValidator("json", createMeetingSchema), safe(async (c) => {
     const { meetingsService } = useCradle(c);
     if (!(await meetingsService.isReady())) {
         return c.json(
@@ -75,7 +78,7 @@ meetings.post("/", safe(async (c) => {
             401,
         );
     }
-    const body = await c.req.json<CreateMeetingBody>();
+    const body = c.req.valid("json") as CreateMeetingBody;
     return c.json(await meetingsService.createMeeting(body.title));
 }));
 
