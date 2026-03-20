@@ -11,5 +11,6 @@ import type { Cradle } from "./container";
 export interface HonoEnv {
     Variables: {
         cradle: Cradle;
+        rawBody?: string;
     };
 }
