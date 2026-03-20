@@ -14,11 +14,11 @@ developers.delete("/:developerId/events", safe(async (c) => {
     const developerId = c.req.param("developerId");
     if (!developerId) throw new AppError("Missing developerId", 400);
 
-    const { d1Service, scoreAggregationService } = useCradle(c);
-    const deleted = await d1Service.deleteEventsByDeveloper(developerId);
+    const { scoresRepo, scoreAggregationService } = useCradle(c);
+    const deleted = await scoresRepo.deleteDeveloperData(developerId);
     await scoreAggregationService.precomputeSnapshots();
 
-    return c.json({ ok: true, developerId, eventsDeleted: deleted });
+    return c.json({ ok: true, developerId, eventsDeleted: deleted.prs + deleted.comments + deleted.attendance });
 }));
 
 export default developers;

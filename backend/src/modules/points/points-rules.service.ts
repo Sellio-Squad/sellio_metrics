@@ -6,10 +6,16 @@
  * Logs every rule change for audit/debugging.
  */
 
-import type { D1Service } from "../../infra/database/d1.service";
+import type { D1Service, PointRule } from "../../infra/database/d1.service";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { Logger } from "../../core/logger";
-import type { PointRule, RuleChangeLogEntry } from "../../core/event-types";
+
+export interface RuleChangeLogEntry {
+    eventType: string;
+    oldPoints: number;
+    newPoints: number;
+    changedAt: string;
+}
 
 const RULES_KV_KEY = "point_rules:all";
 const RULE_CHANGE_LOG_KEY = "rule_change_log";
