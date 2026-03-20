@@ -73,9 +73,14 @@ export async function syncOneRepo(
             : undefined;
     }
 
-    log.info({ since: mostRecentMergedAt ?? "all-time" }, "Starting GraphQL sync");
+    // In incremental mode: only fetch the 3 newest pages (150 PRs) — enough for
+    // any normal sprint between syncs. Force mode fetches all 20 pages.
+    // The DB upsert is idempotent so re-syncing known PRs is safe.
+    const maxPages = force ? 20 : (mostRecentMergedAt ? 3 : 20);
 
-    const gqlResult = await gql.fetchMergedPRs(owner, repoName, { since: mostRecentMergedAt });
+    log.info({ mode: force ? "force" : "incremental", maxPages }, "Starting GraphQL sync");
+
+    const gqlResult = await gql.fetchMergedPRs(owner, repoName, { maxPages });
     allPrs        = gqlResult.pullRequests;
     totalCostUsed = gqlResult.totalCostUsed;
     pagesLoaded   = gqlResult.pagesLoaded;

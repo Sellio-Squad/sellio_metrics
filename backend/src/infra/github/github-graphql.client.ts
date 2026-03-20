@@ -46,8 +46,10 @@ export interface GqlComment {
 }
 
 export interface GqlReview {
-    state:  string;
-    author: GqlAuthor | null;
+    state:       string;
+    body:        string;
+    submittedAt: string;
+    author:      GqlAuthor | null;
 }
 
 export interface GqlPullRequest {
@@ -116,6 +118,8 @@ const COMMENT_FIELDS = `
 
 const REVIEW_FIELDS = `
     state
+    body
+    submittedAt
     author { login avatarUrl }
 `;
 

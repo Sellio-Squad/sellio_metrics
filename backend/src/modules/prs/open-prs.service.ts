@@ -19,6 +19,7 @@ import { GitHubApiError } from "../../core/errors";
 import { GitHubGraphQLClient } from "../../infra/github/github-graphql.client";
 import type { GqlOpenPr } from "../../infra/github/github-graphql.client";
 import { toISOWeek, minutesBetween } from "../../core/utils/date";
+import { isBot } from "../../lib/bot-filter";
 
 export class OpenPrsService {
     private readonly github: CachedGitHubClient;
@@ -122,15 +123,34 @@ export class OpenPrsService {
             avatar_url: pr.author?.avatarUrl ?? "",
         };
 
-        // Flatten all comments (timeline + review threads)
+        // Flatten all comments (timeline + review threads), excluding bots
         const allComments: Array<{ login: string; id: number; date: string; avatarUrl: string }> = [];
         for (const c of pr.comments.nodes) {
-            if (c.author?.login) allComments.push({ login: c.author.login, id: c.databaseId, date: c.createdAt, avatarUrl: c.author.avatarUrl });
+            if (!c.author?.login) continue;
+            if (isBot(c.author.login)) continue;          // ← filter bot comments
+            allComments.push({ login: c.author.login, id: c.databaseId, date: c.createdAt, avatarUrl: c.author.avatarUrl });
         }
         for (const thread of pr.reviewThreads.nodes) {
             for (const c of thread.comments.nodes) {
-                if (c.author?.login) allComments.push({ login: c.author.login, id: c.databaseId, date: c.createdAt, avatarUrl: c.author.avatarUrl });
+                if (!c.author?.login) continue;
+                if (isBot(c.author.login)) continue;      // ← filter bot review comments
+                allComments.push({ login: c.author.login, id: c.databaseId, date: c.createdAt, avatarUrl: c.author.avatarUrl });
             }
+        }
+
+        // Also include non-empty review body text as comments (e.g. "Great job Israa" during approval)
+        // These live in review.body, NOT in comments or reviewThreads
+        let syntheticId = -1;
+        for (const review of pr.reviews.nodes) {
+            const body = review.body?.trim();
+            if (!body || !review.author?.login) continue;
+            if (isBot(review.author.login)) continue;
+            allComments.push({
+                login:     review.author.login,
+                id:        syntheticId--,            // negative IDs mark synthetic entries
+                date:      review.submittedAt ?? pr.updatedAt,
+                avatarUrl: review.author.avatarUrl,
+            });
         }
 
         // Group comments by author
@@ -148,6 +168,11 @@ export class OpenPrsService {
             }
         }
 
+        // Sort each author's comments chronologically
+        for (const g of byAuthor.values()) {
+            g.comments.sort((a, b) => a.created_at.localeCompare(b.created_at));
+        }
+
         const commentGroups = [...byAuthor.values()].map((g) => ({
             author:          g.author,
             comments:        g.comments,
@@ -156,11 +181,14 @@ export class OpenPrsService {
             count:           g.comments.length,
         }));
 
-        const approvals = approvedReviews.map((r) => ({
-            reviewer:     { login: r.author?.login ?? "", id: 0, url: "", avatar_url: r.author?.avatarUrl ?? "" },
-            submitted_at: (r as any).submittedAt ?? pr.updatedAt,
-            commit_id:    "",
-        }));
+        // Filter bots from approvals too
+        const approvals = approvedReviews
+            .filter((r) => r.author?.login && !isBot(r.author.login))
+            .map((r) => ({
+                reviewer:     { login: r.author?.login ?? "", id: 0, url: "", avatar_url: r.author?.avatarUrl ?? "" },
+                submitted_at: r.submittedAt ?? pr.updatedAt,
+                commit_id:    "",
+            }));
 
         return {
             pr_number:                          pr.number,
