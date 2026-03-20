@@ -53,7 +53,13 @@ async function buildContainer(
     const { LogsService } = await import("../modules/logs/logs.service");
     const { PointsRulesService } = await import("../modules/points/points-rules.service");
     const { ScoreAggregationService } = await import("../modules/scores/score-aggregation.service");
-    const { D1RelationalService } = await import("../infra/database/d1-relational.service");
+    const { ReposRepository } = await import("../modules/repos/repos.repository");
+    const { PrsRepository } = await import("../modules/prs/prs.repository");
+    const { CommentsRepository } = await import("../modules/prs/comments.repository");
+    const { ScoresRepository } = await import("../modules/scores/scores.repository");
+    const { DeveloperRepository } = await import("../modules/developers/developer.repository");
+    const { AttendanceRepository } = await import("../modules/attendance/attendance.repository");
+    const { MeetingsRepository } = await import("../modules/meetings/meetings.repository");
     const { AttendanceService } = await import("../modules/attendance/attendance.service");
 
     const logger = createConsoleLogger();
@@ -91,9 +97,13 @@ async function buildContainer(
             new D1Service({ d1Database, logger }),
         ).singleton(),
 
-        d1RelationalService: asFunction(({ logger }: Cradle) =>
-            new D1RelationalService({ d1Database, logger }),
-        ).singleton(),
+        developerRepo: asFunction(({ logger }: Cradle) => new DeveloperRepository(d1Database, logger)).singleton(),
+        reposRepo: asFunction(({ logger }: Cradle) => new ReposRepository(d1Database, logger)).singleton(),
+        prsRepo: asFunction(({ logger, developerRepo }: Cradle) => new PrsRepository(d1Database, logger, developerRepo)).singleton(),
+        commentsRepo: asFunction(({ logger, developerRepo }: Cradle) => new CommentsRepository(d1Database, logger, developerRepo)).singleton(),
+        scoresRepo: asFunction(({ logger }: Cradle) => new ScoresRepository(d1Database, logger)).singleton(),
+        attendanceRepo: asFunction(({ logger }: Cradle) => new AttendanceRepository(d1Database, logger)).singleton(),
+        meetingsRepo: asFunction(({ logger }: Cradle) => new MeetingsRepository(d1Database, logger)).singleton(),
 
         rateLimitGuard: asFunction(({ logger, env }: Cradle) =>
             new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold }),
@@ -114,12 +124,12 @@ async function buildContainer(
             new PointsRulesService({ d1Service, scoresKvCache, logger }),
         ).singleton(),
 
-        scoreAggregationService: asFunction(({ d1RelationalService, scoresKvCache, logger }: Cradle) =>
-            new ScoreAggregationService({ d1RelationalService, scoresKvCache, logger }),
+        scoreAggregationService: asFunction(({ scoresRepo, scoresKvCache, logger }: Cradle) =>
+            new ScoreAggregationService({ scoresRepo, scoresKvCache, logger }),
         ).singleton(),
 
-        attendanceService: asFunction(({ d1RelationalService, attendanceKvCache, logger }: Cradle) =>
-            new AttendanceService({ d1RelationalService, attendanceKvCache, logger }),
+        attendanceService: asFunction(({ attendanceRepo, developerRepo, meetingsRepo, attendanceKvCache, logger }: Cradle) =>
+            new AttendanceService({ attendanceRepo, developerRepo, meetingsRepo, attendanceKvCache, logger }),
         ).singleton(),
 
         // Google Meet

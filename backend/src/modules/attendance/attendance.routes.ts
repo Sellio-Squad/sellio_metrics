@@ -8,6 +8,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
+import { AppError } from "../../core/app-error";
 
 // ─── Request body types ───────────────────────────────────────
 
@@ -33,7 +34,7 @@ attendance.post("/check-in", safe(async (c) => {
     const { attendanceService } = useCradle(c);
     const body = await c.req.json<CheckInBody>();
 
-    if (!body.developerId) return c.json({ error: "Body must contain 'developerId'" }, 400);
+    if (!body.developerId) throw new AppError("Body must contain 'developerId'", 400);
 
     const result = await attendanceService.checkIn(body.developerId, {
         checkin_time: body.checkin_time || new Date().toISOString(),
@@ -47,7 +48,7 @@ attendance.post("/check-out", safe(async (c) => {
     const { attendanceService } = useCradle(c);
     const body = await c.req.json<CheckOutBody>();
 
-    if (!body.developerId) return c.json({ error: "Body must contain 'developerId'" }, 400);
+    if (!body.developerId) throw new AppError("Body must contain 'developerId'", 400);
 
     const result = await attendanceService.checkOut(body.developerId, {
         checkout_time: body.checkout_time || new Date().toISOString(),

@@ -14,7 +14,7 @@ const VALID_PERIODS = new Set<string>(["all", "month", "week"]);
 const scores = new Hono<HonoEnv>();
 
 scores.get("/leaderboard", safe(async (c) => {
-    const { scoreAggregationService, cachedGithubClient, d1RelationalService, env } = useCradle(c);
+    const { scoreAggregationService, cachedGithubClient, developerRepo, env } = useCradle(c);
 
     const periodParam = c.req.query("period") ?? "";
     const period: LeaderboardPeriod = VALID_PERIODS.has(periodParam)
@@ -27,7 +27,7 @@ scores.get("/leaderboard", safe(async (c) => {
     // Enrich with avatar_url and display_name — best-effort (doesn't block response on failure)
     const [orgMembers, dbMembers] = await Promise.all([
         cachedGithubClient.listOrgMembers(env.org),
-        d1RelationalService.getMembers(),
+        developerRepo.getDevelopers(),
     ]);
 
     type OrgMember = { login: string; type: string; avatar_url: string };

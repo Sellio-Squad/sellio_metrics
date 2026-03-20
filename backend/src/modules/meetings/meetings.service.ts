@@ -14,7 +14,8 @@
  */
 
 import type { GoogleMeetClient } from "../../infra/google/google-meet.client";
-import type { D1RelationalService, MeetingSession, MeetingAttendance } from "../../infra/database/d1-relational.service";
+import type { MeetingsRepository } from "./meetings.repository";
+import type { AttendanceRepository, MeetingAttendance } from "../attendance/attendance.repository";
 import type { Logger } from "../../core/logger";
 import type {
     MeetingSpace,
@@ -31,20 +32,24 @@ import { mapParticipants, aggregateAnalytics } from "./meetings.mapper";
 export class MeetingsService {
     private readonly logger: Logger;
     private readonly meetClient: GoogleMeetClient;
-    private readonly d1: D1RelationalService;
+    private readonly meetingsRepo: MeetingsRepository;
+    private readonly attendanceRepo: AttendanceRepository;
 
     constructor({
         logger,
         googleMeetClient,
-        d1RelationalService,
+        meetingsRepo,
+        attendanceRepo,
     }: {
         logger: Logger;
         googleMeetClient: GoogleMeetClient;
-        d1RelationalService: D1RelationalService;
+        meetingsRepo: MeetingsRepository;
+        attendanceRepo: AttendanceRepository;
     }) {
-        this.logger    = logger.child({ module: "meetings" });
-        this.meetClient = googleMeetClient;
-        this.d1        = d1RelationalService;
+        this.logger         = logger.child({ module: "meetings" });
+        this.meetClient     = googleMeetClient;
+        this.meetingsRepo   = meetingsRepo;
+        this.attendanceRepo = attendanceRepo;
     }
 
     // ─── OAuth2 ───────────────────────────────────────────────
@@ -70,15 +75,13 @@ export class MeetingsService {
         const space = await this.meetClient.createSpace();
         const id    = `meet_${Date.now()}`;
 
-        const session: MeetingSession = {
+        await this.meetingsRepo.upsertSession({
             id,
             spaceName:   space.spaceName,
             meetingUri:  space.meetingUri,
             meetingCode: space.meetingCode,
             title,
-        };
-
-        await this.d1.upsertMeetingSession(session);
+        });
         this.logger.info({ id, meetingUri: space.meetingUri }, "✅ Meeting created + persisted to D1");
 
         return { id, title, ...space, createdAt: new Date().toISOString(), participantCount: 0 };
@@ -87,7 +90,7 @@ export class MeetingsService {
     // ─── List ─────────────────────────────────────────────────
 
     async listMeetings(limit = 50): Promise<MeetingSpace[]> {
-        const sessions = await this.d1.getMeetingSessions(limit);
+        const sessions = await this.meetingsRepo.getSessions(limit);
         return sessions.map((s) => ({
             id:           s.id,
             title:        s.title ?? s.spaceName,
@@ -102,11 +105,11 @@ export class MeetingsService {
     // ─── Get Detail ───────────────────────────────────────────
 
     async getMeeting(id: string): Promise<MeetingDetail> {
-        const sessions = await this.d1.getMeetingSessions(500);
+        const sessions = await this.meetingsRepo.getSessions(500);
         const session  = sessions.find((s) => s.id === id);
         if (!session) throw new Error(`Meeting not found: ${id}`);
 
-        const attendanceRows = await this.d1.getAttendanceForSession(id);
+        const attendanceRows = await this.attendanceRepo.getAttendanceForSession(id);
 
         const participants: Participant[] = attendanceRows.map((a) => ({
             displayName:     a.displayName ?? a.developerLogin,
@@ -132,14 +135,14 @@ export class MeetingsService {
     // ─── End Meeting ──────────────────────────────────────────
 
     async endMeeting(id: string): Promise<void> {
-        const sessions = await this.d1.getMeetingSessions(500);
+        const sessions = await this.meetingsRepo.getSessions(500);
         const session  = sessions.find((s) => s.id === id);
         if (!session) throw new Error(`Meeting not found: ${id}`);
 
         await this.meetClient.endSpace(session.spaceName);
 
         // Persist ended_at — reuse upsert since it overwrites on space_name conflict
-        await this.d1.upsertMeetingSession({
+        await this.meetingsRepo.upsertSession({
             ...session,
             endedAt: new Date().toISOString(),
         });
@@ -150,7 +153,7 @@ export class MeetingsService {
     // ─── Attendance (sync from Google Meet API → D1) ──────────
 
     async getAttendance(meetingId: string): Promise<AttendanceRecord> {
-        const sessions = await this.d1.getMeetingSessions(500);
+        const sessions = await this.meetingsRepo.getSessions(500);
         const session  = sessions.find((s) => s.id === meetingId);
         if (!session) throw new Error(`Meeting not found: ${meetingId}`);
 
@@ -160,15 +163,20 @@ export class MeetingsService {
         try {
             const records = await this.meetClient.listConferenceRecords(session.spaceName);
 
-            for (const record of records) {
-                const rawParticipants = await this.meetClient.listParticipants(record.name);
+            // Parallelize API calls using Promise.all
+            const participantsResults = await Promise.all(
+                records.map(r => this.meetClient.listParticipants(r.name))
+            );
+
+            for (let i = 0; i < records.length; i++) {
+                const record = records[i];
+                const rawParticipants = participantsResults[i];
                 const mapped          = mapParticipants(rawParticipants, record.startTime, record.endTime || null);
 
                 // Persist each participant to D1
                 for (const p of mapped) {
-                    const attendanceId = `${meetingId}:${p.email ?? p.displayName}`;
                     const row: MeetingAttendance = {
-                        id:              attendanceId,
+                        id:              `${meetingId}:${p.email ?? p.displayName}`,
                         sessionId:       meetingId,
                         developerLogin:  p.email?.split("@")[0] ?? p.displayName,
                         displayName:     p.displayName,
@@ -177,7 +185,7 @@ export class MeetingsService {
                         leftAt:          p.leftAt ?? undefined,
                         durationMinutes: p.durationMinutes,
                     };
-                    await this.d1.upsertMeetingAttendance(row);
+                    await this.attendanceRepo.upsertAttendance(row);
                 }
 
                 participants.push(...mapped);
@@ -189,7 +197,7 @@ export class MeetingsService {
         } catch (e: any) {
             this.logger.warn({ err: e, meetingId }, "Could not fetch live attendance from Google Meet API");
             // Fall back to persisted rows
-            const persisted = await this.d1.getAttendanceForSession(meetingId);
+            const persisted = await this.attendanceRepo.getAttendanceForSession(meetingId);
             participants     = persisted.map((a) => ({
                 displayName:     a.displayName ?? a.developerLogin,
                 email:           a.email ?? null,
@@ -224,14 +232,14 @@ export class MeetingsService {
     // ─── Analytics ────────────────────────────────────────────
 
     async getAnalytics(): Promise<AttendanceAnalytics> {
-        const sessions = await this.d1.getMeetingSessions(100);
+        const sessions = await this.meetingsRepo.getSessions(100);
 
         const meetingsWithParticipants: Array<{
             id: string; title: string; createdAt: string; participants: Participant[];
         }> = [];
 
         for (const session of sessions) {
-            const rows = await this.d1.getAttendanceForSession(session.id);
+            const rows = await this.attendanceRepo.getAttendanceForSession(session.id);
             meetingsWithParticipants.push({
                 id:           session.id,
                 title:        session.title ?? session.spaceName,

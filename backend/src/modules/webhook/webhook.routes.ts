@@ -22,7 +22,38 @@ webhook.post("/github", async (c) => {
 
     if (!event || !RELEVANT_EVENTS.has(event)) return c.json({ ignored: true, event });
 
-    const payload = await c.req.json<any>();
+    const payload = await c.req.json<{
+        action?: string;
+        organization?: { login: string };
+        repository?: {
+            id: number;
+            full_name: string;
+            name: string;
+            html_url: string;
+            owner?: { login: string };
+        };
+        pull_request?: {
+            id: number;
+            number: number;
+            title: string;
+            html_url: string;
+            merged: boolean;
+            user?: { login: string; type: string; avatar_url: string; name?: string };
+            merged_at?: string;
+            closed_at?: string;
+            created_at?: string;
+            additions?: number;
+            deletions?: number;
+        };
+        issue?: { number: number };
+        comment?: {
+            id: number;
+            body: string;
+            html_url: string;
+            created_at: string;
+            user?: { login: string; type: string; avatar_url: string };
+        };
+    }>();
 
     // Org membership events — just flush member cache
     if (["organization", "member", "membership"].includes(event)) {
@@ -51,11 +82,11 @@ webhook.post("/github", async (c) => {
         const pr     = payload.pull_request;
         const author = pr.user?.login as string;
         if (author && !isBot(author, pr.user?.type)) {
-            const repoId = await cradle.d1RelationalService.upsertRepo(
+            const repoId = await cradle.reposRepo.upsertRepo(
                 repo.id as number, repoOwner, repoName, { htmlUrl: repo.html_url },
             );
-            await cradle.d1RelationalService.upsertDeveloper(author, pr.user?.avatar_url, pr.user?.name);
-            await cradle.d1RelationalService.upsertMergedPr({
+            await cradle.developerRepo.upsertDeveloper(author, pr.user?.avatar_url, pr.user?.name);
+            await cradle.prsRepo.upsertMergedPr({
                 id: pr.id as number, repoId, prNumber: pr.number,
                 author, title: pr.title, htmlUrl: pr.html_url,
                 mergedAt:    pr.merged_at || pr.closed_at || new Date().toISOString(),
@@ -76,13 +107,13 @@ webhook.post("/github", async (c) => {
         const author  = comment.user?.login as string;
         if (author && !isBot(author, comment.user?.type)) {
             const prNumber = payload.issue?.number || payload.pull_request?.number;
-            const repoId = await cradle.d1RelationalService.upsertRepo(
+            const repoId = await cradle.reposRepo.upsertRepo(
                 repo.id as number, repoOwner, repoName, { htmlUrl: repo.html_url },
             );
-            await cradle.d1RelationalService.upsertDeveloper(author, comment.user?.avatar_url);
-            await cradle.d1RelationalService.insertComment({
+            await cradle.developerRepo.upsertDeveloper(author, comment.user?.avatar_url);
+            await cradle.commentsRepo.insertComment({
                 id: comment.id as number, prId: payload.pull_request?.id as number,
-                repoId, prNumber, author, body: comment.body,
+                repoId, prNumber: prNumber as number, author, body: comment.body,
                 commentType: event === "pull_request_review_comment" ? "review" : "issue",
                 htmlUrl: comment.html_url, commentedAt: comment.created_at,
             });

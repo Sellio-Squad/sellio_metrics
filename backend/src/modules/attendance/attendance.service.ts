@@ -11,7 +11,9 @@
  * No dependency on EventsService or the old events table.
  */
 
-import type { D1RelationalService, MeetingAttendance } from "../../infra/database/d1-relational.service";
+import type { AttendanceRepository, MeetingAttendance } from "./attendance.repository";
+import type { DeveloperRepository } from "../developers/developer.repository";
+import type { MeetingsRepository } from "../meetings/meetings.repository";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { Logger } from "../../core/logger";
 
@@ -36,22 +38,30 @@ interface CheckOutOpts {
 }
 
 export class AttendanceService {
-    private readonly d1:            D1RelationalService;
-    private readonly attendanceKv:  CacheService;
-    private readonly logger:        Logger;
+    private readonly attendanceRepo: AttendanceRepository;
+    private readonly developerRepo:  DeveloperRepository;
+    private readonly meetingsRepo:   MeetingsRepository;
+    private readonly attendanceKv:   CacheService;
+    private readonly logger:         Logger;
 
     constructor({
-        d1RelationalService,
+        attendanceRepo,
+        developerRepo,
+        meetingsRepo,
         attendanceKvCache,
         logger,
     }: {
-        d1RelationalService: D1RelationalService;
+        attendanceRepo:      AttendanceRepository;
+        developerRepo:       DeveloperRepository;
+        meetingsRepo:        MeetingsRepository;
         attendanceKvCache:   CacheService;
         logger:              Logger;
     }) {
-        this.d1           = d1RelationalService;
-        this.attendanceKv = attendanceKvCache;
-        this.logger       = logger.child({ module: "attendance" });
+        this.attendanceRepo = attendanceRepo;
+        this.developerRepo  = developerRepo;
+        this.meetingsRepo   = meetingsRepo;
+        this.attendanceKv   = attendanceKvCache;
+        this.logger         = logger.child({ module: "attendance" });
     }
 
     // ─── Check In ─────────────────────────────────────────────
@@ -69,7 +79,7 @@ export class AttendanceService {
 
         // Ensure a meeting_session row exists for manual sessions
         if (!opts.meeting_id) {
-            await this.d1.upsertMeetingSession({
+            await this.meetingsRepo.upsertSession({
                 id:        sessionId,
                 spaceName: sessionId,
                 title:     "Manual attendance",
@@ -85,7 +95,8 @@ export class AttendanceService {
             durationMinutes: 0,
         };
 
-        await this.d1.upsertMeetingAttendance(row);
+        await this.developerRepo.upsertDeveloper(developerLogin);
+        await this.attendanceRepo.upsertAttendance(row);
 
         // Track active session in KV for duration calculation on check-out
         const activeSession: ActiveSession = {
@@ -137,14 +148,14 @@ export class AttendanceService {
                 leftAt:          checkoutTime,
                 durationMinutes,
             };
-            await this.d1.upsertMeetingAttendance(updated);
+            await this.attendanceRepo.upsertAttendance(updated);
         } else {
             warning = "No matching CHECK_IN found — CHECK_OUT recorded without duration";
             this.logger.warn({ developerLogin, checkoutTime }, warning);
 
             // Still write a minimal row so we have a record
             const sessionId = opts.meeting_id ?? `manual:${developerLogin}`;
-            await this.d1.upsertMeetingAttendance({
+            await this.attendanceRepo.upsertAttendance({
                 id:              attendanceId,
                 sessionId,
                 developerLogin,
@@ -169,28 +180,8 @@ export class AttendanceService {
         until?:          string;
         limit?:          number;
     } = {}): Promise<MeetingAttendance[]> {
-        // Get all sessions, then filter attendance rows
-        const sessions = await this.d1.getMeetingSessions(500);
-        const rows: MeetingAttendance[] = [];
-
-        for (const session of sessions) {
-            const attendance = await this.d1.getAttendanceForSession(session.id);
-            rows.push(...attendance);
-        }
-
-        let filtered = rows;
-        if (filters.developerLogin) {
-            filtered = filtered.filter((r) => r.developerLogin === filters.developerLogin);
-        }
-        if (filters.since) {
-            filtered = filtered.filter((r) => r.joinedAt >= filters.since!);
-        }
-        if (filters.until) {
-            filtered = filtered.filter((r) => r.joinedAt <= filters.until!);
-        }
-
-        filtered.sort((a, b) => b.joinedAt.localeCompare(a.joinedAt));
-        return filtered.slice(0, filters.limit ?? 50);
+        // N+1 query fixed: DB layer now executes a single optimized query
+        return this.attendanceRepo.queryAttendance(filters);
     }
 
     // ─── Private ─────────────────────────────────────────────
