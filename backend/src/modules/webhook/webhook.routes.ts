@@ -70,8 +70,13 @@ webhook.post("/github", async (c) => {
     const repoName  = repo.name;
     const action    = payload?.action;
 
-    // Invalidate open-PRs cache on any PR/review event (fire-and-forget)
-    if (event === "pull_request" || event === "pull_request_review") {
+    // Invalidate open-PRs cache on any PR/review/comment event (fire-and-forget)
+    if (
+        event === "pull_request" || 
+        event === "pull_request_review" || 
+        event === "issue_comment" || 
+        event === "pull_request_review_comment"
+    ) {
         const p = cradle.openPrsService.invalidateCache(org).catch(() => {});
         if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(p);
         else await p;

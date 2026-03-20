@@ -221,14 +221,4 @@ export class GoogleMeetClient {
             latestEndTime: p.latestEndTime ?? "",
         }));
     }
-
-    async listParticipantSessions(participantName: string): Promise<Array<{ startTime: string; endTime: string | null; }>> {
-        const res = await this.apiFetch<any>(`${participantName}/participantSessions`);
-        const sessions = res.participantSessions || [];
-
-        return sessions.map((s: any) => ({
-            startTime: s.startTime ?? "",
-            endTime: s.endTime || null,
-        }));
-    }
 }
