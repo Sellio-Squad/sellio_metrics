@@ -32,9 +32,9 @@ export interface Participant {
     /** Email address (if available). */
     email: string | null;
     /** ISO timestamp when participant first joined. */
-    joinTime: string;
+    joinedAt: string;
     /** ISO timestamp when participant left (null if still in meeting). */
-    leaveTime: string | null;
+    leftAt: string | null;
     /** Duration in minutes spent in the meeting. */
     durationMinutes: number;
     /** Attendance score (0–100), computed on backend. */

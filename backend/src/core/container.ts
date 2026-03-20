@@ -1,11 +1,12 @@
 /**
  * Sellio Metrics Backend — DI Container (Cradle interface only)
  *
- * Registration is now done in worker.ts where env bindings are available.
+ * Registration is now done in container-factory.ts where env bindings are available.
  * This file defines the Cradle shape for type-safe dependency injection.
  */
 
 import type { CacheService, KVNamespace } from "../infra/cache/cache.service";
+import type { CacheRegistry } from "../infra/cache/cache-registry";
 import type { D1Service } from "../infra/database/d1.service";
 import type { D1RelationalService } from "../infra/database/d1-relational.service";
 import type { RateLimitGuard } from "../infra/github/rate-limit-guard";
@@ -18,7 +19,6 @@ import type { WorkspaceEventsClient } from "../infra/google/workspace-events.cli
 import type { MeetingsService } from "../modules/meetings/meetings.service";
 import type { MeetEventsService } from "../modules/meet-events/meet-events.service";
 import type { LogsService } from "../modules/logs/logs.service";
-import type { EventsService } from "../modules/events/events.service";
 import type { PointsRulesService } from "../modules/points/points-rules.service";
 import type { ScoreAggregationService } from "../modules/scores/score-aggregation.service";
 import type { AttendanceService } from "../modules/attendance/attendance.service";
@@ -31,17 +31,26 @@ export interface Cradle {
     env: typeof env;
     logger: Logger;
 
-    // Infrastructure — core
+    // Infrastructure — GitHub
     githubClient: any;
-    kvNamespace: KVNamespace | null;
-    cacheService: CacheService;
     rateLimitGuard: RateLimitGuard;
     cachedGithubClient: CachedGitHubClient;
 
-    // Infrastructure — new KV namespaces
+    // Infrastructure — Cache (single registry, named namespaces)
+    cache: CacheRegistry;
+
+    /**
+     * @deprecated Use `cache.general` instead.
+     * Kept for backward compatibility with services not yet migrated.
+     */
+    cacheService: CacheService;
+    /** @deprecated Use `cache.scores` */
     scoresKvCache: CacheService;
+    /** @deprecated Use `cache.members` */
     membersKvCache: CacheService;
+    /** @deprecated Use `cache.attendance` */
     attendanceKvCache: CacheService;
+    kvNamespace: KVNamespace | null;
 
     // Infrastructure — D1
     d1Service: D1Service;
@@ -56,13 +65,10 @@ export interface Cradle {
     // PRs
     openPrsService: OpenPrsService;
 
-    // Event-Driven Scoring
-    eventsService: EventsService;
+    // Scoring
     pointsRulesService: PointsRulesService;
     scoreAggregationService: ScoreAggregationService;
     attendanceService: AttendanceService;
-
-
 
     // Google Meet
     googleMeetClient: GoogleMeetClient;
