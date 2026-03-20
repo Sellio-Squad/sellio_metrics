@@ -10,9 +10,11 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
-import { AppError } from "../../core/app-error";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
 
-interface SubscribeBody { spaceName: string; }
+const subscribeSchema = z.object({ spaceName: z.string() });
+type SubscribeBody = z.infer<typeof subscribeSchema>;
 
 const meetEvents = new Hono<HonoEnv>();
 
@@ -22,7 +24,7 @@ meetEvents.post("/webhook", safe(async (c) => {
     return c.json({ ok: true, eventId: event.id, type: event.label });
 }));
 
-meetEvents.post("/subscribe", safe(async (c) => {
+meetEvents.post("/subscribe", zValidator("json", subscribeSchema), safe(async (c) => {
     const { meetEventsService, meetingsService } = useCradle(c);
 
     if (!(await meetingsService.isReady())) {
@@ -32,10 +34,9 @@ meetEvents.post("/subscribe", safe(async (c) => {
         );
     }
 
-    const body = await c.req.json<SubscribeBody>();
-    if (!body.spaceName) throw new AppError("Body must contain 'spaceName'", 400);
+    const { spaceName } = c.req.valid("json") as SubscribeBody;
 
-    return c.json(await meetEventsService.subscribe(body.spaceName));
+    return c.json(await meetEventsService.subscribe(spaceName));
 }));
 
 meetEvents.get("/events", safe(async (c) => {

@@ -7,12 +7,47 @@ import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle } from "../../lib/route-helpers";
 import { isBot } from "../../lib/bot-filter";
+import { z } from "zod";
+import { zValidator } from "@hono/zod-validator";
 
 const RELEVANT_EVENTS = new Set([
     "pull_request", "pull_request_review",
     "issue_comment", "pull_request_review_comment",
     "organization", "member", "membership",
 ]);
+
+const webhookPayloadSchema = z.object({
+    action: z.string().optional(),
+    organization: z.object({ login: z.string() }).optional(),
+    repository: z.object({
+        id: z.number(),
+        full_name: z.string(),
+        name: z.string(),
+        html_url: z.string(),
+        owner: z.object({ login: z.string() }).optional(),
+    }).optional(),
+    pull_request: z.object({
+        id: z.number(),
+        number: z.number(),
+        title: z.string(),
+        html_url: z.string(),
+        merged: z.boolean().optional(),
+        user: z.object({ login: z.string(), type: z.string(), avatar_url: z.string(), name: z.string().nullable().optional() }).optional(),
+        merged_at: z.string().nullable().optional(),
+        closed_at: z.string().nullable().optional(),
+        created_at: z.string().optional(),
+        additions: z.number().optional(),
+        deletions: z.number().optional(),
+    }).optional(),
+    issue: z.object({ number: z.number() }).optional(),
+    comment: z.object({
+        id: z.number(),
+        body: z.string(),
+        html_url: z.string(),
+        created_at: z.string(),
+        user: z.object({ login: z.string(), type: z.string(), avatar_url: z.string() }).optional(),
+    }).optional(),
+}).passthrough();
 
 const webhook = new Hono<HonoEnv>();
 
@@ -22,38 +57,14 @@ webhook.post("/github", async (c) => {
 
     if (!event || !RELEVANT_EVENTS.has(event)) return c.json({ ignored: true, event });
 
-    const payload = await c.req.json<{
-        action?: string;
-        organization?: { login: string };
-        repository?: {
-            id: number;
-            full_name: string;
-            name: string;
-            html_url: string;
-            owner?: { login: string };
-        };
-        pull_request?: {
-            id: number;
-            number: number;
-            title: string;
-            html_url: string;
-            merged: boolean;
-            user?: { login: string; type: string; avatar_url: string; name?: string };
-            merged_at?: string;
-            closed_at?: string;
-            created_at?: string;
-            additions?: number;
-            deletions?: number;
-        };
-        issue?: { number: number };
-        comment?: {
-            id: number;
-            body: string;
-            html_url: string;
-            created_at: string;
-            user?: { login: string; type: string; avatar_url: string };
-        };
-    }>();
+    // Use safeParse so we can lazily handle weird un-parsable payloads without 400ing the webhook delivery itself
+    const rawJson = await c.req.json().catch(() => ({}));
+    const parseResult = webhookPayloadSchema.safeParse(rawJson);
+    if (!parseResult.success) {
+        cradle.logger.error({ err: parseResult.error }, "Webhook payload validation failed");
+        return c.json({ ignored: true, reason: "invalid payload schema" });
+    }
+    const payload = parseResult.data;
 
     // Org membership events — just flush member cache
     if (["organization", "member", "membership"].includes(event)) {
@@ -92,7 +103,7 @@ webhook.post("/github", async (c) => {
             const repoId = await cradle.reposRepo.upsertRepo(
                 repo.id as number, repoOwner, repoName, { htmlUrl: repo.html_url },
             );
-            await cradle.developerRepo.upsertDeveloper(author, pr.user?.avatar_url, pr.user?.name);
+            await cradle.developerRepo.upsertDeveloper(author, pr.user?.avatar_url, pr.user?.name ?? undefined);
             await cradle.prsRepo.upsertMergedPr({
                 id: pr.id as number, repoId, prNumber: pr.number,
                 author, title: pr.title, htmlUrl: pr.html_url,

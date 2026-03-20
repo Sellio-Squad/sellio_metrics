@@ -4,27 +4,29 @@
   "description": "Sellio Metrics — Cloudflare Worker backend (Hono)",
   "private": true,
   "scripts": {
-    "dev":     "wrangler dev",
-    "deploy":  "wrangler deploy",
-    "lint":    "tsc --noEmit",
-    "build":   "tsc"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "lint": "tsc --noEmit",
+    "build": "tsc"
   },
   "dependencies": {
-    "@octokit/auth-app":    "^7.1.4",
-    "@octokit/rest":        "^21.1.1",
-    "awilix":               "^12.0.4",
-    "dotenv":               "^16.4.7",
-    "google-auth-library":  "^10.6.1",
-    "googleapis":           "^171.4.0",
-    "hono":                 "^4.12.8"
+    "@hono/zod-validator": "^0.7.6",
+    "@octokit/auth-app": "^7.1.4",
+    "@octokit/rest": "^21.1.1",
+    "awilix": "^12.0.4",
+    "dotenv": "^16.4.7",
+    "google-auth-library": "^10.6.1",
+    "googleapis": "^171.4.0",
+    "hono": "^4.12.8",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20240925.0",
-    "@types/node":               "^22.13.4",
-    "pino":                      "^9.6.0",
-    "pino-pretty":               "^13.0.0",
-    "tsx":                       "^4.19.2",
-    "typescript":                "^5.7.3",
-    "wrangler":                  "^4.0.0"
+    "@types/node": "^22.13.4",
+    "pino": "^9.6.0",
+    "pino-pretty": "^13.0.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "wrangler": "^4.0.0"
   }
 }
