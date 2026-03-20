@@ -24,6 +24,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import type { HonoEnv } from "./core/hono-env";
+import type { Cradle } from "./core/container";
 import type { KVNamespace } from "./infra/cache/cache.service";
 import type { D1Database } from "./infra/database/d1.service";
 import { getContainer } from "./core/container-factory";
@@ -78,19 +79,26 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.GOOGLE_PUBSUB_TOPIC)   process.env.GOOGLE_PUBSUB_TOPIC  = workerEnv.GOOGLE_PUBSUB_TOPIC;
 }
 
-function buildApp() {
+function buildApp(cradle: Cradle) {
     const app = new Hono<HonoEnv>();
 
+    // 1. CORS — must be first
     app.use("*", cors({
         origin:       "*",
         allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         allowHeaders: ["Content-Type", "Authorization"],
     }));
 
-    // ─── Mount routes ─────────────────────────────────────────
+    // 2. Cradle injection — must come BEFORE routes so c.get('cradle') is available
+    app.use("*", (c, next) => {
+        c.set("cradle", cradle);
+        return next();
+    });
+
+    // 3. Route modules
     app.route("/api",             healthRoutes);
-    app.route("/api",             reposRoutes);
-    app.route("/api",             prsRoutes);
+    app.route("/api/repos",       reposRoutes);
+    app.route("/api/prs",         prsRoutes);
     app.route("/api/sync",        syncRoutes);
     app.route("/api/webhooks",    webhookRoutes);
     app.route("/api/points",      pointsRoutes);
@@ -123,13 +131,7 @@ export default {
                 workerEnv.DB           || null,
             );
 
-            const app = buildApp();
-
-            // Inject DI cradle into every request
-            app.use("*", async (c, next) => {
-                c.set("cradle", container.cradle);
-                await next();
-            });
+            const app = buildApp(container.cradle);
 
             return app.fetch(request);
         } catch (e: any) {
