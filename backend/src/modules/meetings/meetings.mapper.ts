@@ -85,8 +85,8 @@ export function mapParticipants(
     return rawParticipants.map((raw) => ({
         displayName: raw.displayName,
         email: raw.email,
-        joinTime: raw.earliestStartTime,
-        leaveTime: raw.latestEndTime || null,
+        joinedAt:  raw.earliestStartTime,
+        leftAt:    raw.latestEndTime || null,
         durationMinutes: calcDurationMinutes(raw.earliestStartTime, raw.latestEndTime || null),
         attendanceScore: calcAttendanceScore(
             raw.earliestStartTime,
