@@ -65,8 +65,8 @@
 ```
 
 **Frontend** → Clean Architecture + Provider state management  
-**Backend** → Layered Architecture + Awilix DI + Workers-native router  
-**Infra** → Cloudflare Workers + KV + Pages + GitHub Actions CI/CD
+**Backend** → Layered Architecture (Routes → Services → Repositories) + Awilix DI + Workers/Hono router  
+**Infra** → Cloudflare Workers + KV + D1 + Pages + GitHub Actions CI/CD
 
 ---
 
@@ -78,12 +78,13 @@
 | **TypeScript** | Type-safe API development |
 | **Cloudflare Workers** | Serverless edge compute (0ms cold start, 100k+ req/day free) |
 | **Workers KV** | Edge-distributed caching with TTL (100k reads/day free) |
+| **Cloudflare D1** | Serverless SQLite relational database accessed via the Repository Pattern |
+| **Hono** | Ultrafast, lightweight web framework built for Edge runtimes |
 | **Awilix** | Dependency injection (PROXY mode, scoped lifetimes) |
 | **Octokit** | GitHub REST API client with App authentication |
 | **GitHub App Auth** | JWT → Installation token (5,000 req/hr, auto-refresh) |
 | **Google Meet API**| Native REST API via `fetch` (Cloudflare Worker compatible) |
 | **Google Auth Library**| Managing OAuth2 user consent flow and handling permissions |
-| **Workers KV Cache** | Persistent storage for OAuth tokens and meeting history |
 
 ### Frontend
 | Technology | Purpose |

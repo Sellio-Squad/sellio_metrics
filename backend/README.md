@@ -2,14 +2,14 @@
 
 # ⚡ Sellio Metrics — Backend
 
-**Fastify · TypeScript · GitHub App · Clean Architecture**
+**Hono · Cloudflare Workers · TypeScript · Clean Architecture**
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Fastify](https://img.shields.io/badge/Fastify-5.x-000000?logo=fastify&logoColor=white)](https://fastify.dev)
-[![Node.js](https://img.shields.io/badge/Node.js-22+-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Hono](https://img.shields.io/badge/Hono-Ultrafast_Web_Framework-E36002?logo=hono&logoColor=white)](https://hono.dev)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare_Workers-Serverless-F38020?logo=cloudflare&logoColor=white)](https://workers.cloudflare.com)
 [![GitHub App](https://img.shields.io/badge/GitHub_App-Auth-181717?logo=github&logoColor=white)](https://docs.github.com/en/apps)
 
-*A high-performance REST API that fetches live GitHub PR metrics using GitHub App authentication.*
+*A high-performance REST API deployed on the Edge that fetches live GitHub PR metrics, stores data in Cloudflare D1/KV, and manages team Google Meetings.*
 
 </div>
 
@@ -19,17 +19,16 @@
 
 | Tool | Role |
 |------|------|
-| **Fastify 5** | HTTP server (4× faster than Express) |
-| **TypeScript 5.7** | Type-safe throughout |
+| **Hono** | Edge-native Web Framework |
+| **Cloudflare Workers** | Serverless execution environment |
+| **Cloudflare D1 & KV** | Relational Database & High-speed Cache |
+| **TypeScript 5.x** | Type-safe throughout |
 | **@octokit/rest** | GitHub REST API client |
 | **@octokit/auth-app** | GitHub App JWT → access token auth |
 | **@google-apps/meet**| Google Meet REST API client |
 | **google-auth-library**| Google OAuth2 user consent flow |
 | **Awilix** | Dependency injection (PROXY mode) |
-| **Pino** | Structured JSON logging |
-| **@fastify/rate-limit** | Request rate limiting |
-| **@fastify/cors** | Cross-origin request handling |
-| **tsx** | TypeScript execution (dev mode) |
+| **Wrangler** | Local development and deployment CLI |
 
 ---
 
@@ -44,41 +43,36 @@ backend/
 ├── tsconfig.json
 │
 └── src/
-    ├── config/
-    │   └── env.ts          ← Validated env config (fail-fast on startup)
+  ├── config/
+    │   └── env.ts          ← Validated env config
     │
     ├── core/               ← Framework-agnostic business core
     │   ├── container.ts    ← Awilix DI container
     │   ├── errors.ts       ← AppError hierarchy
-    │   ├── logger.ts       ← Pino logger instance
-    │   ├── types.ts        ← Shared domain types (PrMetric, RepoInfo…)
-    │   └── utils/
-    │       └── date.ts     ← Pure date helpers
+    │   ├── logger.ts       ← Console logger adapted for Workers
+    │   └── types.ts        ← Shared domain types
     │
     ├── infra/
-    │   └── github/
-    │       ├── github.client.ts  ← Octokit + auto token refresh
-    │       └── github.types.ts   ← Raw GitHub API types
+    │   ├── database/       ← D1 Services
+    │   ├── cache/          ← Workers KV Services
+    │   ├── github/         ← Octokit + auto token refresh
+    │   └── google/         ← Google Meet API & Webhooks
     │
-    ├── modules/            ← Feature slices (Route → Service → Mapper)
-    │   ├── health/
-    │   │   └── health.route.ts
+    ├── lib/
+    │   └── route-helpers.ts ← Hono route wrappers, generic AppError formatting
+    │
+    ├── modules/            ← Feature slices (Route → Service → Repository)
+    │   ├── metrics/
+    │   │   └── pr-fetcher.service.ts
     │   ├── repos/
-    │   │   ├── repos.service.ts  ← Business logic + 5-min cache
-    │   │   ├── repos.route.ts    ← JSON Schema validation
-    │   │   └── repos.types.ts
-    │   └── metrics/
-    │       ├── metrics.service.ts ← Orchestrates paginated API calls
-    │       ├── metrics.mapper.ts  ← Pure fn: raw GitHub → PrMetric
-    │       ├── metrics.route.ts
-    │       └── metrics.types.ts
+    │   │   ├── repos.repository.ts ← Repository Pattern layer
+    │   │   ├── repos.service.ts  ← Business logic 
+    │   │   └── repos.routes.ts    ← Hono routes
+    │   ├── attendance/
+    │   └── webhook/
+    │       └── webhook.routes.ts ← Uses c.executionCtx.waitUntil
     │
-    ├── plugins/
-    │   ├── error-handler.ts ← Central error → JSON response
-    │   └── rate-limit.ts    ← Rate limiting plugin
-    │
-    ├── app.ts              ← Fastify factory (testable)
-    └── server.ts           ← Entry point: config → DI → app → listen
+    └── worker.ts           ← Cloudflare Workers entry point (Hono router config)
 ```
 
 ---
@@ -249,23 +243,19 @@ curl "http://localhost:3001/api/metrics/Sellio-Squad/sellio_mobile?state=all"
 
 ```
 ┌─────────────────────────────────────────────┐
-│              Fastify Backend                 │
+│              Cloudflare Worker               │
 │                                             │
-│  Request                                    │
+│  Hono Route (request unpacking)             │
 │     │                                       │
 │     ▼                                       │
-│  Route (JSON Schema validation)             │
-│     │                                       │
-│     ▼                                       │
-│  Service (business logic + caching)         │
+│  Service (orchestration + cache)            │
 │     │                    │                  │
 │     ▼                    ▼                  │
-│  GitHub Client      Mapper (pure fn)        │
-│  (Octokit +         raw → PrMetric          │
-│   App Auth)                                 │
-│     │                                       │
-│     ▼                                       │
-│  GitHub REST API                            │
+│  Repository         GitHub/Google Client    │
+│  (Data access)      (External APIs)         │
+│     │                    │                  │
+│     ▼                    ▼                  │
+│  Cloudflare D1      External Endpoints      │
 └─────────────────────────────────────────────┘
 ```
 
@@ -273,10 +263,10 @@ curl "http://localhost:3001/api/metrics/Sellio-Squad/sellio_mobile?state=all"
 
 | Layer | Does | Does NOT do |
 |-------|------|-------------|
-| **Route** | HTTP, validation, DI resolution | Business logic |
-| **Service** | Orchestration, caching | HTTP details |
-| **Mapper** | Data transformation (pure) | API calls, side effects |
-| **Client** | GitHub API calls | Business rules |
+| **Route** | HTTP, validation, Hono wrappers, JSON formatting | Business logic |
+| **Service** | Orchestration, parallelizing APIs (`Promise.all`), caching | HTTP details, direct D1 SQL |
+| **Repository**| Strict database access (D1 queries), N+1 query optimized joins | External API logic |
+| **Client** | Third-party REST calls | Business rules |
 
 ### Dependency Injection (Awilix)
 
