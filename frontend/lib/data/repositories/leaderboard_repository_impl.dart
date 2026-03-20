@@ -24,21 +24,52 @@ class LeaderboardRepositoryImpl implements LeaderboardRepository {
 
   LeaderboardEntry _toEntity(dynamic json) {
     final m = json as Map<String, dynamic>;
+
+    // Primary field names from the relational leaderboard API
+    final login       = m['developer_login'] as String? ?? m['developer'] as String? ?? '';
+    final displayName = m['displayName']     as String?;
+
+    // Use displayName if available and different from login, otherwise fall back to login
+    final name = (displayName != null && displayName.isNotEmpty && displayName != login)
+        ? displayName
+        : login;
+
+    // Normalise avatar URL: convert github.com/user.png redirect → CDN URL
+    final rawAvatar = m['avatarUrl'] as String? ?? m['avatar_url'] as String?;
+    final avatarUrl = _normaliseAvatar(rawAvatar, login);
+
+    // Current relational API fields
+    final prCount      = m['pr_count']      as int? ?? 0;
+    final commentCount = m['comment_count'] as int? ?? 0;
+
+    // Fallback for older event_counts shape (if still in cache)
     final counts = m['event_counts'] as Map<String, dynamic>? ?? {};
 
     return LeaderboardEntry(
-      developer: m['developer_id'] as String? ?? m['developer'] as String? ?? 'Unknown',
-      avatarUrl: m['avatarUrl'] as String?,
-      prsCreated: counts['PR_CREATED'] as int? ?? m['prsCreated'] as int? ?? 0,
-      prsMerged: counts['PR_MERGED'] as int? ?? m['prsMerged'] as int? ?? 0,
-      // commentsGiven = number of individual comment events in D1
-      commentsGiven: counts['COMMENT'] as int? ?? m['commentsGiven'] as int? ?? 0,
-      // Actual line counts from the aggregated leaderboard response
+      developer:     name,
+      avatarUrl:     avatarUrl,
+      prsCreated:    prCount     != 0 ? prCount     : (counts['PR_MERGED']  as int? ?? 0),
+      prsMerged:     prCount     != 0 ? prCount     : (counts['PR_MERGED']  as int? ?? 0),
+      commentsGiven: commentCount != 0 ? commentCount : (counts['COMMENT'] as int? ?? 0),
       lineAdditions: m['line_additions'] as int? ?? counts['CODE_ADDITION'] as int? ?? 0,
       lineDeletions: m['line_deletions'] as int? ?? counts['CODE_DELETION'] as int? ?? 0,
-      totalScore: (m['total_points'] as num?)?.toDouble() ??
-          (m['totalScore'] as num?)?.toDouble() ??
-          0.0,
+      totalScore:    (m['total_points'] as num?)?.toDouble() ??
+                     (m['totalScore']   as num?)?.toDouble() ??
+                     0.0,
     );
+  }
+
+  /// Converts `https://github.com/username.png` redirect URLs to
+  /// the final CDN URL format `https://avatars.githubusercontent.com/username`.
+  /// If the URL is already CDN or null/empty, it's returned as-is.
+  String? _normaliseAvatar(String? url, String login) {
+    if (url == null || url.isEmpty) return null;
+    // Already a CDN URL — no change needed
+    if (url.startsWith('https://avatars.githubusercontent.com')) return url;
+    // Convert https://github.com/username.png → CDN stable URL
+    if (url.startsWith('https://github.com/') && url.endsWith('.png')) {
+      return 'https://avatars.githubusercontent.com/$login';
+    }
+    return url;
   }
 }

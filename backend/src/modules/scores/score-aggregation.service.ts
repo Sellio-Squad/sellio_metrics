@@ -110,13 +110,10 @@ export class ScoreAggregationService {
             ]);
         } else {
             // ── Full recompute — called by cron or full sync ─────────────────
-            this.logger.info("Full leaderboard snapshot recompute (all, month, week)");
-            await Promise.all([
-                this.computeAndCachePeriod("all", 50),
-                this.computeAndCachePeriod("month", 50),
-                this.computeAndCachePeriod("week", 50),
-            ]);
-            this.logger.info("All leaderboard snapshots updated");
+            this.logger.info("Full leaderboard snapshot recompute (all-time only)");
+            await this.computeAndCachePeriod("all", 50);
+            // Note: month/week are computed on-demand when queried
+            this.logger.info("All-time leaderboard snapshot updated");
         }
     }
 
