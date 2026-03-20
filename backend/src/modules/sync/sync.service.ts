@@ -16,7 +16,7 @@ export async function syncOneRepo(
     orgRepos: any[],
     targetPrNumbers?: number[],
 ): Promise<object> {
-    const { cachedGithubClient, d1RelationalService, logger } = cradle;
+    const { cachedGithubClient, developerRepo, reposRepo, prsRepo, commentsRepo, logger } = cradle;
 
     // Bust repo cache so fresh data is fetched
     await cradle.cacheService.del(`github:repos:${owner}`);
@@ -45,7 +45,7 @@ export async function syncOneRepo(
     const repoMeta = orgRepos.find((r: any) => r.name === repoName);
     if (!repoMeta?.id) throw new Error(`Repo metadata id missing for ${owner}/${repoName}`);
 
-    const repoId = await d1RelationalService.upsertRepo(repoMeta.id as number, owner, repoName, {
+    const repoId = await reposRepo.upsertRepo(repoMeta.id as number, owner, repoName, {
         htmlUrl:         repoMeta?.html_url ?? `https://github.com/${owner}/${repoName}`,
         description:     repoMeta?.description ?? undefined,
         githubCreatedAt: repoMeta?.created_at ?? undefined,
@@ -53,7 +53,7 @@ export async function syncOneRepo(
     });
 
     // Skip PRs already deeply fetched (i.e., have non-null additions)
-    const existingMergedPrs = await d1RelationalService.getMergedPrs({ repoId: repoMeta.id as number, limit: 1000 });
+    const existingMergedPrs = await prsRepo.getMergedPrs({ repoId: repoMeta.id as number, limit: 1000 });
     const existingMap = new Map(existingMergedPrs.map((p: any) => [p.prNumber, p]));
 
     const enrichedPrs: any[] = [];
@@ -113,7 +113,7 @@ export async function syncOneRepo(
         try {
             await cradle.cacheService.del(`github:user:${login}`);
             const profile = await cachedGithubClient.getUser(login);
-            await d1RelationalService.upsertMember(
+            await developerRepo.upsertDeveloper(
                 login,
                 profile.avatar_url ?? undefined,
                 profile.name ?? undefined,
@@ -122,7 +122,7 @@ export async function syncOneRepo(
         } catch (e: any) {
             logger.warn({ login, err: e.message }, "getUser failed — storing login only");
             const pr = enrichedPrs.find((p: any) => p.user?.login === login);
-            await d1RelationalService.upsertMember(login, pr?.user?.avatar_url);
+            await developerRepo.upsertDeveloper(login, pr?.user?.avatar_url);
         }
     }
 
@@ -141,7 +141,7 @@ export async function syncOneRepo(
         deletions:   pr.deletions,
     }));
 
-    const { upserted } = await d1RelationalService.upsertMergedPrBatch(prRows);
+    const { upserted } = await prsRepo.upsertMergedPrBatch(prRows);
 
     // Index merged PR ids for comment filtering
     const mergedPrNumbers = new Set(enrichedPrs.map((p: any) => p.number as number));
@@ -156,8 +156,8 @@ export async function syncOneRepo(
         if (!mergedPrNumbers.has(prNumber)) continue;
         const prGithubId = enrichedPrs.find((p: any) => p.number === prNumber)?.id as number | undefined;
         if (!prGithubId) continue;
-        await d1RelationalService.upsertMember(author, comment.user?.avatar_url);
-        const ok = await d1RelationalService.insertComment({
+        await developerRepo.upsertDeveloper(author, comment.user?.avatar_url);
+        const ok = await commentsRepo.insertComment({
             id:          comment.id as number,
             prId:        prGithubId,
             repoId,
@@ -179,8 +179,8 @@ export async function syncOneRepo(
         if (!mergedPrNumbers.has(prNumber)) continue;
         const prGithubId = enrichedPrs.find((p: any) => p.number === prNumber)?.id as number | undefined;
         if (!prGithubId) continue;
-        await d1RelationalService.upsertMember(author, comment.user?.avatar_url);
-        const ok = await d1RelationalService.insertComment({
+        await developerRepo.upsertDeveloper(author, comment.user?.avatar_url);
+        const ok = await commentsRepo.insertComment({
             id:          comment.id as number,
             prId:        prGithubId,
             repoId,

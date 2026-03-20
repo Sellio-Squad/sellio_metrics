@@ -8,7 +8,13 @@
 import type { CacheService, KVNamespace } from "../infra/cache/cache.service";
 import type { CacheRegistry } from "../infra/cache/cache-registry";
 import type { D1Service } from "../infra/database/d1.service";
-import type { D1RelationalService } from "../infra/database/d1-relational.service";
+import type { ReposRepository } from "../modules/repos/repos.repository";
+import type { PrsRepository } from "../modules/prs/prs.repository";
+import type { CommentsRepository } from "../modules/prs/comments.repository";
+import type { ScoresRepository } from "../modules/scores/scores.repository";
+import type { DeveloperRepository } from "../modules/developers/developer.repository";
+import type { AttendanceRepository } from "../modules/attendance/attendance.repository";
+import type { MeetingsRepository } from "../modules/meetings/meetings.repository";
 import type { RateLimitGuard } from "../infra/github/rate-limit-guard";
 import type { CachedGitHubClient } from "../infra/github/cached-github.client";
 import type { ReposService } from "../modules/repos/repos.service";
@@ -54,7 +60,13 @@ export interface Cradle {
 
     // Infrastructure — D1
     d1Service: D1Service;
-    d1RelationalService: D1RelationalService;
+    developerRepo: DeveloperRepository;
+    reposRepo: ReposRepository;
+    prsRepo: PrsRepository;
+    commentsRepo: CommentsRepository;
+    scoresRepo: ScoresRepository;
+    attendanceRepo: AttendanceRepository;
+    meetingsRepo: MeetingsRepository;
 
     // Repos
     reposService: ReposService;

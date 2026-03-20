@@ -8,6 +8,7 @@
 
 import type { Context } from "hono";
 import type { HonoEnv } from "../core/hono-env";
+import { AppError } from "../core/app-error";
 
 // ─── Cradle accessor ──────────────────────────────────────────
 
@@ -35,6 +36,12 @@ export const safe =
             const result = await fn(c);
             return result ?? c.json({ ok: true });
         } catch (e: any) {
+            if (e instanceof AppError) {
+                return c.json({
+                    error: e.message,
+                    ...(e.details && { details: e.details })
+                }, e.statusCode as any);
+            }
             c.get("cradle").logger?.warn?.({ err: e?.message }, "Unhandled route error");
             return c.json({ error: e?.message || "Internal Server Error" }, 500);
         }

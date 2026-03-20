@@ -11,12 +11,12 @@ import { isBot } from "../../lib/bot-filter";
 const members = new Hono<HonoEnv>();
 
 members.get("/", safe(async (c) => {
-    const { cachedGithubClient, d1RelationalService, env } = useCradle(c);
+    const { cachedGithubClient, developerRepo, env } = useCradle(c);
 
     const [orgMembers, dbMembers, activityMap] = await Promise.all([
         cachedGithubClient.listOrgMembers(env.org),
-        d1RelationalService.getMembers(),
-        d1RelationalService.getLastActiveDates(),
+        developerRepo.getDevelopers(),
+        developerRepo.getLastActiveDates(),
     ]);
 
     const displayNameMap = new Map(dbMembers.map((m) => [m.login, m.displayName]));

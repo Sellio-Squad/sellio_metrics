@@ -16,6 +16,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe, oauthSuccessHtml, oauthErrorHtml, oauthFailHtml } from "../../lib/route-helpers";
+import { AppError } from "../../core/app-error";
 
 interface CreateMeetingBody { title: string; }
 
@@ -39,7 +40,7 @@ meetings.get("/oauth2callback", async (c) => {
         "<a href='https://console.cloud.google.com/apis/credentials/consent' target='_blank'>" +
         "Google Cloud Console → OAuth consent screen</a>.",
     );
-    if (!code) return c.json({ error: "Missing code" }, 400);
+    if (!code) throw new AppError("Missing code", 400);
 
     try {
         await meetingsService.authorize(code);
