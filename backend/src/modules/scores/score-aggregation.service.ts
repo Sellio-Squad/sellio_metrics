@@ -101,18 +101,13 @@ export class ScoreAggregationService {
      */
     async precomputeSnapshots(developerLogins?: string[]): Promise<void> {
         if (developerLogins && developerLogins.length > 0) {
-            // ── Incremental update — only patch affected developers ──────────
-            this.logger.info({ developers: developerLogins }, "Incremental leaderboard update");
-            await Promise.all([
-                this.patchDevelopersInSnapshot("all", developerLogins),
-                this.patchDevelopersInSnapshot("month", developerLogins),
-                this.patchDevelopersInSnapshot("week", developerLogins),
-            ]);
+            // Incremental: only refresh the all-time snapshot for affected developers
+            this.logger.info({ developers: developerLogins }, "Incremental all-time leaderboard update");
+            await this.patchDevelopersInSnapshot("all", developerLogins);
         } else {
-            // ── Full recompute — called by cron or full sync ─────────────────
-            this.logger.info("Full leaderboard snapshot recompute (all-time only)");
+            // Full recompute (all-time only)
+            this.logger.info("Full leaderboard snapshot recompute (all-time)");
             await this.computeAndCachePeriod("all", 50);
-            // Note: month/week are computed on-demand when queried
             this.logger.info("All-time leaderboard snapshot updated");
         }
     }
