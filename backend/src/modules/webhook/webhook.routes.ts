@@ -72,7 +72,9 @@ webhook.post("/github", async (c) => {
 
     // Invalidate open-PRs cache on any PR/review event (fire-and-forget)
     if (event === "pull_request" || event === "pull_request_review") {
-        cradle.openPrsService.invalidateCache(org).catch(() => {});
+        const p = cradle.openPrsService.invalidateCache(org).catch(() => {});
+        if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(p);
+        else await p;
     }
 
     const affectedDevelopers = new Set<string>();
@@ -122,9 +124,11 @@ webhook.post("/github", async (c) => {
     }
 
     if (affectedDevelopers.size > 0) {
-        cradle.scoreAggregationService
+        const p = cradle.scoreAggregationService
             .precomputeSnapshots([...affectedDevelopers])
             .catch(() => {});
+        if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(p);
+        else await p;
     }
 
     return c.json({ ok: true, event, repo: repo.full_name, affectedDevelopers: [...affectedDevelopers] });
