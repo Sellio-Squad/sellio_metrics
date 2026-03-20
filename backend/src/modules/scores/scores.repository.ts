@@ -47,7 +47,7 @@ export class ScoresRepository {
                 FROM merged_prs mp
                 WHERE 1=1
                   AND mp.author NOT LIKE '%[bot]'
-                  AND mp.author NOT IN ('Sellio-Bot','sellio-bot','github-copilot','dependabot','dependabot-preview','renovate','renovate-bot')
+                  AND mp.author NOT IN ('Sellio-Bot','sellio-bot','selliobot','SellioBot','github-copilot','dependabot','dependabot-preview','renovate','renovate-bot')
                   ${prFilter} ${prUntil}
                 GROUP BY mp.author
             ),
@@ -63,7 +63,7 @@ export class ScoresRepository {
                 FROM pr_comments pc
                 WHERE 1=1
                   AND pc.author NOT LIKE '%[bot]'
-                  AND pc.author NOT IN ('Sellio-Bot','sellio-bot','github-copilot','dependabot','dependabot-preview','renovate','renovate-bot')
+                  AND pc.author NOT IN ('Sellio-Bot','sellio-bot','selliobot','SellioBot','github-copilot','dependabot','dependabot-preview','renovate','renovate-bot')
                   ${cmtFilter} ${cmtUntil}
                 GROUP BY pc.author
             ),

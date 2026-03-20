@@ -170,8 +170,8 @@ const MERGED_PRS_QUERY = `
 `;
 
 const OPEN_PRS_SEARCH_QUERY = `
-    query OpenPRsSearch($query: String!, $cursor: String) {
-        search(query: $query, type: ISSUE, first: ${OPEN_PRS_PAGE_SIZE}, after: $cursor) {
+    query OpenPRsSearch($searchQuery: String!, $cursor: String) {
+        search(query: $searchQuery, type: ISSUE, first: ${OPEN_PRS_PAGE_SIZE}, after: $cursor) {
             pageInfo { hasNextPage endCursor }
             nodes {
                 ... on PullRequest {

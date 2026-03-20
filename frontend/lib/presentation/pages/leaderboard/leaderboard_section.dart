@@ -38,10 +38,42 @@ class LeaderboardSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.lg),
-          ...entries.asMap().entries.map(
-            (entry) => LeaderboardRow(index: entry.key, entry: entry.value),
-          ),
+          if (entries.isEmpty)
+            _EmptyLeaderboard(scheme: scheme)
+          else
+            ...entries.asMap().entries.map(
+              (entry) => LeaderboardRow(index: entry.key, entry: entry.value),
+            ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyLeaderboard extends StatelessWidget {
+  final dynamic scheme;
+  const _EmptyLeaderboard({required this.scheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xl),
+      child: Center(
+        child: Column(
+          children: [
+            Icon(Icons.bar_chart_rounded, size: 48, color: scheme.hint),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'No scores available yet',
+              style: AppTypography.body.copyWith(color: scheme.hint),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Sync a repo to start computing scores',
+              style: AppTypography.caption.copyWith(color: scheme.hint),
+            ),
+          ],
+        ),
       ),
     );
   }
