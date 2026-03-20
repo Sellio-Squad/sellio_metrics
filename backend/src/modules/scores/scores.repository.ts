@@ -45,7 +45,10 @@ export class ScoresRepository {
                         + COALESCE(SUM(mp.deletions), 0) * COALESCE((SELECT points FROM point_rules WHERE event_type = 'CODE_DELETION'), 0)
                     , 2) AS points
                 FROM merged_prs mp
-                WHERE 1=1 ${prFilter} ${prUntil}
+                WHERE 1=1
+                  AND mp.author NOT LIKE '%[bot]'
+                  AND mp.author NOT IN ('Sellio-Bot','sellio-bot','github-copilot','dependabot','dependabot-preview','renovate','renovate-bot')
+                  ${prFilter} ${prUntil}
                 GROUP BY mp.author
             ),
             comment_scores AS (
@@ -58,7 +61,10 @@ export class ScoresRepository {
                     0                                AS line_deletions,
                     ROUND(COUNT(*) * COALESCE((SELECT points FROM point_rules WHERE event_type = 'PR_COMMENT'), 0), 2) AS points
                 FROM pr_comments pc
-                WHERE 1=1 ${cmtFilter} ${cmtUntil}
+                WHERE 1=1
+                  AND pc.author NOT LIKE '%[bot]'
+                  AND pc.author NOT IN ('Sellio-Bot','sellio-bot','github-copilot','dependabot','dependabot-preview','renovate','renovate-bot')
+                  ${cmtFilter} ${cmtUntil}
                 GROUP BY pc.author
             ),
             attendance_scores AS (

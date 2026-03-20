@@ -308,7 +308,7 @@ export class GitHubGraphQLClient {
             page++;
 
             const result: any = await (this.octokit as any).graphql(OPEN_PRS_SEARCH_QUERY, {
-                query:  searchQuery,
+                searchQuery,
                 cursor: cursor ?? undefined,
             });
 
