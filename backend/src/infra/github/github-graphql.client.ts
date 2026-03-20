@@ -224,7 +224,7 @@ export class GitHubGraphQLClient {
     async fetchMergedPRs(
         owner: string,
         repo:  string,
-        opts:  { since?: string; maxPages?: number } = {},
+        opts:  { maxPages?: number } = {},
     ): Promise<GqlSyncRepoResult> {
         const { maxPages = 20 } = opts;
 
@@ -253,19 +253,6 @@ export class GitHubGraphQLClient {
 
             const prPage = result.repository.pullRequests;
             const nodes: GqlPullRequest[] = prPage.nodes ?? [];
-
-            // If `since` is set, drop PRs older than the cutoff (early exit optimization)
-            if (opts.since) {
-                const cutoff = new Date(opts.since).getTime();
-                const tooOld = nodes.findIndex(
-                    (pr) => pr.mergedAt && new Date(pr.mergedAt).getTime() < cutoff,
-                );
-                if (tooOld !== -1) {
-                    allPrs.push(...nodes.slice(0, tooOld));
-                    this.logger.info({ owner, repo, page, droppedAt: tooOld }, "Reached since cutoff — stopping pagination");
-                    break;
-                }
-            }
 
             allPrs.push(...nodes);
             hasNextPage = prPage.pageInfo.hasNextPage;
