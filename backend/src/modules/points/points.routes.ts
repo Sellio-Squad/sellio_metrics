@@ -7,6 +7,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
+import { AppError } from "../../core/app-error";
 
 interface UpdateRuleBody {
     eventType: string;
@@ -25,7 +26,7 @@ points.put("/rules", safe(async (c) => {
     const body = await c.req.json<UpdateRuleBody>();
 
     if (!body.eventType || typeof body.points !== "number") {
-        return c.json({ error: "Body must contain 'eventType' (string) and 'points' (number)" }, 400);
+        throw new AppError("Body must contain 'eventType' (string) and 'points' (number)", 400);
     }
 
     const rule = await useCradle(c).pointsRulesService.updateRule(

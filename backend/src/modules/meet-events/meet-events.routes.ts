@@ -10,6 +10,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
+import { AppError } from "../../core/app-error";
 
 interface SubscribeBody { spaceName: string; }
 
@@ -32,7 +33,7 @@ meetEvents.post("/subscribe", safe(async (c) => {
     }
 
     const body = await c.req.json<SubscribeBody>();
-    if (!body.spaceName) return c.json({ error: "Body must contain 'spaceName'" }, 400);
+    if (!body.spaceName) throw new AppError("Body must contain 'spaceName'", 400);
 
     return c.json(await meetEventsService.subscribe(body.spaceName));
 }));

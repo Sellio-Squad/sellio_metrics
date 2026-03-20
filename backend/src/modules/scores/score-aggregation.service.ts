@@ -14,7 +14,7 @@
  *   leaderboard:week  — current Mon–Sun week (UTC)
  */
 
-import type { D1RelationalService, RelationalLeaderboardEntry } from "../../infra/database/d1-relational.service";
+import type { ScoresRepository, RelationalLeaderboardEntry } from "./scores.repository";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { Logger } from "../../core/logger";
 
@@ -59,20 +59,20 @@ function periodCacheKey(period: LeaderboardPeriod): string {
 // ─── Service ─────────────────────────────────────────────
 
 export class ScoreAggregationService {
-    private readonly d1: D1RelationalService;
+    private readonly scoresRepo: ScoresRepository;
     private readonly scoresKv: CacheService;
     private readonly logger: Logger;
 
     constructor({
-        d1RelationalService,
+        scoresRepo,
         scoresKvCache,
         logger,
     }: {
-        d1RelationalService: D1RelationalService;
+        scoresRepo: ScoresRepository;
         scoresKvCache: CacheService;
         logger: Logger;
     }) {
-        this.d1 = d1RelationalService;
+        this.scoresRepo = scoresRepo;
         this.scoresKv = scoresKvCache;
         this.logger = logger.child({ module: "score-aggregation" });
     }
@@ -141,7 +141,7 @@ export class ScoreAggregationService {
         const snapshot = cached.data;
 
         for (const login of developerLogins) {
-            const freshEntry = await this.d1.getDeveloperLeaderboardEntry(login, since ?? undefined, until ?? undefined);
+            const freshEntry = await this.scoresRepo.getDeveloperLeaderboardEntry(login, since ?? undefined, until ?? undefined);
 
             // Remove old entry (if any)
             snapshot.entries = snapshot.entries.filter((e) => e.developer_login !== login);
@@ -178,7 +178,7 @@ export class ScoreAggregationService {
 
         try {
             const { since, until } = periodBounds(period);
-            const entries = await this.d1.getLeaderboard(since ?? undefined, until ?? undefined, limit);
+            const entries = await this.scoresRepo.getLeaderboard(since ?? undefined, until ?? undefined, limit);
 
             const result: LeaderboardResult = {
                 entries,
