@@ -35,7 +35,7 @@ export class CommentsRepository {
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`
             )
             .bind(
-                comment.id, comment.prId, comment.repoId, comment.prNumber, comment.author,
+                comment.id ?? null, comment.prId ?? null, comment.repoId ?? null, comment.prNumber ?? null, comment.author,
                 comment.body ?? null, comment.commentType, comment.htmlUrl ?? null, comment.commentedAt,
             )
             .run();

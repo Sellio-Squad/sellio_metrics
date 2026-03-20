@@ -27,6 +27,7 @@ import type { HonoEnv } from "./core/hono-env";
 import type { Cradle } from "./core/container";
 import type { KVNamespace } from "./infra/cache/cache.service";
 import type { D1Database } from "./infra/database/d1.service";
+import type { ExecutionContext } from "@cloudflare/workers-types";
 import { getContainer } from "./core/container-factory";
 
 // ─── Route modules ─────────────────────────────────────────────────────
@@ -119,7 +120,7 @@ function buildApp(cradle: Cradle) {
 // ─── Worker export ─────────────────────────────────────────────────────
 
 export default {
-    async fetch(request: Request, workerEnv: WorkerEnv): Promise<Response> {
+    async fetch(request: Request, workerEnv: WorkerEnv, ctx: ExecutionContext): Promise<Response> {
         try {
             bootstrapEnv(workerEnv);
 
@@ -133,7 +134,7 @@ export default {
 
             const app = buildApp(container.cradle);
 
-            return app.fetch(request);
+            return app.fetch(request, workerEnv as any, ctx);
         } catch (e: any) {
             console.error("Worker fetch error:", e?.message, e?.stack);
             return new Response(
