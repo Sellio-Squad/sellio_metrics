@@ -1,223 +1,202 @@
 /**
- * Attendance Module — Service
+ * Attendance Service
  *
- * Handles CHECK_IN / CHECK_OUT events with:
- *   - Standard metadata keys (checkin_time, checkout_time, meeting_id, location)
- *   - ISO 8601 validation
- *   - Duration calculation on CHECK_OUT → generates ATTENDANCE_DURATION event
- *   - Orphan handling: warns on CHECK_OUT without matching CHECK_IN
- *   - Multiple sessions per developer supported
+ * Manual check-in / check-out for developers who join meetings
+ * without using Google Meet (or alongside it).
+ *
+ * Persists to `meeting_attendance` via D1RelationalService.
+ * Uses `attendanceKvCache` only to track the active session
+ * (so we can compute duration on check-out).
+ *
+ * No dependency on EventsService or the old events table.
  */
 
-import type { D1Service } from "../../infra/database/d1.service";
+import type { D1RelationalService, MeetingAttendance } from "../../infra/database/d1-relational.service";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { Logger } from "../../core/logger";
-import type { ScoringEvent, AttendanceMetadata } from "../../core/event-types";
-import { EventType } from "../../core/event-types";
-import type { EventsService } from "../events/events.service";
 
-/** Duration scoring block size in minutes (configurable) */
-const DURATION_BLOCK_MINUTES = 15;
-/** Stale session timeout in hours */
 const STALE_SESSION_HOURS = 8;
 
+interface ActiveSession {
+    attendanceId: string;
+    checkinTime:  string;
+    meetingId?:   string;
+}
+
+interface CheckInOpts {
+    checkin_time?: string;
+    meeting_id?:  string;
+    location?:    string;
+}
+
+interface CheckOutOpts {
+    checkout_time?: string;
+    meeting_id?:   string;
+    location?:     string;
+}
+
 export class AttendanceService {
-    private readonly d1: D1Service;
-    private readonly attendanceKv: CacheService;
-    private readonly eventsService: EventsService;
-    private readonly logger: Logger;
+    private readonly d1:            D1RelationalService;
+    private readonly attendanceKv:  CacheService;
+    private readonly logger:        Logger;
 
     constructor({
-        d1Service,
+        d1RelationalService,
         attendanceKvCache,
-        eventsService,
         logger,
     }: {
-        d1Service: D1Service;
-        attendanceKvCache: CacheService;
-        eventsService: EventsService;
-        logger: Logger;
+        d1RelationalService: D1RelationalService;
+        attendanceKvCache:   CacheService;
+        logger:              Logger;
     }) {
-        this.d1 = d1Service;
+        this.d1           = d1RelationalService;
         this.attendanceKv = attendanceKvCache;
-        this.eventsService = eventsService;
-        this.logger = logger.child({ module: "attendance" });
+        this.logger       = logger.child({ module: "attendance" });
     }
 
-    /**
-     * Register a CHECK_IN event.
-     * Validates checkin_time is present and ISO 8601.
-     * Tracks active session in ATTENDANCE_KV.
-     */
+    // ─── Check In ─────────────────────────────────────────────
+
     async checkIn(
-        developerId: string,
-        metadata: Partial<AttendanceMetadata>,
-    ): Promise<{ eventId: string; inserted: boolean }> {
-        // Validate required field
-        if (!metadata.checkin_time) {
-            throw new Error("checkin_time is required for CHECK_IN");
+        developerLogin: string,
+        opts: CheckInOpts,
+    ): Promise<{ attendanceId: string; inserted: boolean }> {
+        if (!opts.checkin_time) throw new Error("checkin_time is required");
+        this.validateIso8601(opts.checkin_time, "checkin_time");
+
+        const checkinTime  = new Date(opts.checkin_time).toISOString();
+        const attendanceId = `checkin:${developerLogin}:${checkinTime}`;
+        const sessionId    = opts.meeting_id ?? `manual:${developerLogin}`;
+
+        // Ensure a meeting_session row exists for manual sessions
+        if (!opts.meeting_id) {
+            await this.d1.upsertMeetingSession({
+                id:        sessionId,
+                spaceName: sessionId,
+                title:     "Manual attendance",
+            });
         }
-        this.validateIso8601(metadata.checkin_time, "checkin_time");
 
-        const checkinTime = new Date(metadata.checkin_time).toISOString(); // Normalize to UTC
-        const eventId = `checkin:${developerId}:${checkinTime}`;
-
-        const event: ScoringEvent = {
-            id: eventId,
-            developerId,
-            eventType: EventType.CHECK_IN,
-            source: "attendance",
-            sourceId: metadata.meeting_id,
-            eventTimestamp: checkinTime,
-            metadata: {
-                checkin_time: checkinTime,
-                ...(metadata.meeting_id && { meeting_id: metadata.meeting_id }),
-                ...(metadata.location && { location: metadata.location }),
-            },
+        // Write a skeleton attendance row (left_at + duration filled on check-out)
+        const row: MeetingAttendance = {
+            id:              attendanceId,
+            sessionId,
+            developerLogin,
+            joinedAt:        checkinTime,
+            durationMinutes: 0,
         };
 
-        const { inserted } = await this.eventsService.ingest(event);
+        await this.d1.upsertMeetingAttendance(row);
 
-        if (inserted) {
-            // Track active session in ATTENDANCE_KV
-            await this.attendanceKv.set(`session:${developerId}`, {
-                eventId,
-                checkinTime,
-                meetingId: metadata.meeting_id || null,
-            });
-            this.logger.info({ developerId, checkinTime }, "CHECK_IN recorded");
-        }
+        // Track active session in KV for duration calculation on check-out
+        const activeSession: ActiveSession = {
+            attendanceId,
+            checkinTime,
+            meetingId: sessionId,
+        };
+        const staleTtl = STALE_SESSION_HOURS * 60 * 60;
+        await this.attendanceKv.set(`session:${developerLogin}`, activeSession, staleTtl);
 
-        return { eventId, inserted };
+        this.logger.info({ developerLogin, checkinTime }, "CHECK_IN recorded");
+        return { attendanceId, inserted: true };
     }
 
-    /**
-     * Register a CHECK_OUT event.
-     * Finds matching CHECK_IN, calculates duration, and creates ATTENDANCE_DURATION event.
-     * Warns if no matching CHECK_IN found (orphan handling).
-     */
+    // ─── Check Out ────────────────────────────────────────────
+
     async checkOut(
-        developerId: string,
-        metadata: Partial<AttendanceMetadata>,
-    ): Promise<{ eventId: string; inserted: boolean; durationMinutes?: number; warning?: string }> {
-        // Validate required field
-        if (!metadata.checkout_time) {
-            throw new Error("checkout_time is required for CHECK_OUT");
-        }
-        this.validateIso8601(metadata.checkout_time, "checkout_time");
+        developerLogin: string,
+        opts: CheckOutOpts,
+    ): Promise<{ attendanceId: string; inserted: boolean; durationMinutes?: number; warning?: string }> {
+        if (!opts.checkout_time) throw new Error("checkout_time is required");
+        this.validateIso8601(opts.checkout_time, "checkout_time");
 
-        const checkoutTime = new Date(metadata.checkout_time).toISOString();
-        const eventId = `checkout:${developerId}:${checkoutTime}`;
+        const checkoutTime = new Date(opts.checkout_time).toISOString();
+        const attendanceId = `checkout:${developerLogin}:${checkoutTime}`;
 
-        // Look for matching CHECK_IN
-        const activeSession = await this.attendanceKv.get<{
-            eventId: string;
-            checkinTime: string;
-            meetingId: string | null;
-        }>(`session:${developerId}`);
+        const cached = await this.attendanceKv.get<ActiveSession>(`session:${developerLogin}`);
 
         let durationMinutes: number | undefined;
         let warning: string | undefined;
 
-        if (activeSession?.data) {
-            const checkinTime = new Date(activeSession.data.checkinTime).getTime();
-            const checkoutTimeMs = new Date(checkoutTime).getTime();
-            durationMinutes = Math.round((checkoutTimeMs - checkinTime) / 60000);
+        if (cached?.data) {
+            const checkinMs  = new Date(cached.data.checkinTime).getTime();
+            const checkoutMs = new Date(checkoutTime).getTime();
+            durationMinutes  = Math.max(0, Math.round((checkoutMs - checkinMs) / 60000));
 
             if (durationMinutes < 0) {
-                warning = "CHECK_OUT time is before CHECK_IN time — duration set to 0";
+                warning         = "CHECK_OUT time is before CHECK_IN — duration set to 0";
                 durationMinutes = 0;
             }
+
+            // Update the existing attendance row with left_at + duration
+            const sessionId = cached.data.meetingId ?? `manual:${developerLogin}`;
+            const updated: MeetingAttendance = {
+                id:              cached.data.attendanceId,
+                sessionId,
+                developerLogin,
+                joinedAt:        cached.data.checkinTime,
+                leftAt:          checkoutTime,
+                durationMinutes,
+            };
+            await this.d1.upsertMeetingAttendance(updated);
         } else {
-            // Orphan: CHECK_OUT without matching CHECK_IN
-            warning = "No matching CHECK_IN found — CHECK_OUT recorded but no ATTENDANCE_DURATION generated";
-            this.logger.warn({ developerId, checkoutTime }, warning);
+            warning = "No matching CHECK_IN found — CHECK_OUT recorded without duration";
+            this.logger.warn({ developerLogin, checkoutTime }, warning);
+
+            // Still write a minimal row so we have a record
+            const sessionId = opts.meeting_id ?? `manual:${developerLogin}`;
+            await this.d1.upsertMeetingAttendance({
+                id:              attendanceId,
+                sessionId,
+                developerLogin,
+                joinedAt:        checkoutTime,
+                leftAt:          checkoutTime,
+                durationMinutes: 0,
+            });
         }
 
-        // Store CHECK_OUT event
-        const checkoutEvent: ScoringEvent = {
-            id: eventId,
-            developerId,
-            eventType: EventType.CHECK_OUT,
-            source: "attendance",
-            sourceId: metadata.meeting_id || activeSession?.data?.meetingId || undefined,
-            eventTimestamp: checkoutTime,
-            metadata: {
-                checkout_time: checkoutTime,
-                ...(durationMinutes !== undefined && { duration_minutes: durationMinutes }),
-                ...(metadata.meeting_id && { meeting_id: metadata.meeting_id }),
-                ...(metadata.location && { location: metadata.location }),
-                ...(warning && { warning }),
-            },
-        };
+        // Clear active session from KV
+        await this.attendanceKv.del(`session:${developerLogin}`);
 
-        const { inserted } = await this.eventsService.ingest(checkoutEvent);
-
-        // Generate ATTENDANCE_DURATION event if we have a valid duration
-        if (inserted && durationMinutes !== undefined && durationMinutes > 0) {
-            const durationBlocks = Math.floor(durationMinutes / DURATION_BLOCK_MINUTES);
-
-            if (durationBlocks > 0) {
-                const durationEvent: ScoringEvent = {
-                    id: `duration:${developerId}:${checkoutTime}`,
-                    developerId,
-                    eventType: EventType.ATTENDANCE_DURATION,
-                    source: "attendance",
-                    sourceId: metadata.meeting_id || activeSession?.data?.meetingId || undefined,
-                    eventTimestamp: checkoutTime,
-                    metadata: {
-                        checkin_time: activeSession?.data?.checkinTime,
-                        checkout_time: checkoutTime,
-                        duration_minutes: durationMinutes,
-                        duration_blocks: durationBlocks,
-                        block_size_minutes: DURATION_BLOCK_MINUTES,
-                    },
-                };
-
-                await this.eventsService.ingest(durationEvent);
-                this.logger.info(
-                    { developerId, durationMinutes, durationBlocks },
-                    "ATTENDANCE_DURATION event created",
-                );
-            }
-        }
-
-        // Clear active session
-        await this.attendanceKv.del(`session:${developerId}`);
-
-        return { eventId, inserted, durationMinutes, warning };
+        this.logger.info({ developerLogin, checkoutTime, durationMinutes }, "CHECK_OUT recorded");
+        return { attendanceId, inserted: true, durationMinutes, warning };
     }
 
-    /**
-     * Get attendance history for a developer or all developers.
-     */
+    // ─── History ──────────────────────────────────────────────
+
     async getHistory(filters: {
-        developerId?: string;
-        since?: string;
-        until?: string;
-        limit?: number;
-    } = {}): Promise<any[]> {
-        return this.d1.queryEvents({
-            ...filters,
-            eventType: undefined, // Get all attendance-related events
-        });
+        developerLogin?: string;
+        since?:          string;
+        until?:          string;
+        limit?:          number;
+    } = {}): Promise<MeetingAttendance[]> {
+        // Get all sessions, then filter attendance rows
+        const sessions = await this.d1.getMeetingSessions(500);
+        const rows: MeetingAttendance[] = [];
+
+        for (const session of sessions) {
+            const attendance = await this.d1.getAttendanceForSession(session.id);
+            rows.push(...attendance);
+        }
+
+        let filtered = rows;
+        if (filters.developerLogin) {
+            filtered = filtered.filter((r) => r.developerLogin === filters.developerLogin);
+        }
+        if (filters.since) {
+            filtered = filtered.filter((r) => r.joinedAt >= filters.since!);
+        }
+        if (filters.until) {
+            filtered = filtered.filter((r) => r.joinedAt <= filters.until!);
+        }
+
+        filtered.sort((a, b) => b.joinedAt.localeCompare(a.joinedAt));
+        return filtered.slice(0, filters.limit ?? 50);
     }
 
-    /**
-     * Check for stale sessions (no CHECK_OUT within timeout).
-     * Called periodically by cron.
-     */
-    async closeStaleSessionsNotImplemented(): Promise<void> {
-        // Future: query ATTENDANCE_KV for sessions older than STALE_SESSION_HOURS
-        // and auto-close them with a warning in metadata
-        this.logger.info("Stale session cleanup — not yet implemented");
-    }
-
-    // ─── Private ────────────────────────────────────────────
+    // ─── Private ─────────────────────────────────────────────
 
     private validateIso8601(value: string, fieldName: string): void {
-        const date = new Date(value);
-        if (isNaN(date.getTime())) {
+        if (isNaN(new Date(value).getTime())) {
             throw new Error(`${fieldName} must be a valid ISO 8601 timestamp, got: ${value}`);
         }
     }

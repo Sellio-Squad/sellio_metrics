@@ -1,13 +1,20 @@
 /**
- * Meetings Module — Service
+ * Meetings Service — Google Meet + D1
  *
- * Business orchestration for Google Meet integration.
- * Manages meeting lifecycle, attendance tracking, and analytics.
- * All scoring logic lives here (on the backend).
+ * Persists meetings to `meeting_sessions` and attendance to `meeting_attendance`
+ * in D1 (instead of the old in-memory KV approach).
+ *
+ * Flow:
+ *   createMeeting()  → Google Meet API createSpace() → D1 upsertMeetingSession()
+ *   getAttendance()  → Google Meet API listConferenceRecords/listParticipants
+ *                    → D1 upsertMeetingAttendance() (for each participant)
+ *                    → returns persisted rows
+ *   listMeetings()   → D1 getMeetingSessions()
+ *   endMeeting()     → Google Meet API endSpace() → D1 update ended_at
  */
 
 import type { GoogleMeetClient } from "../../infra/google/google-meet.client";
-import type { CacheService } from "../../infra/cache/cache.service";
+import type { D1RelationalService, MeetingSession, MeetingAttendance } from "../../infra/database/d1-relational.service";
 import type { Logger } from "../../core/logger";
 import type {
     MeetingSpace,
@@ -19,258 +26,227 @@ import type {
 } from "./meetings.types";
 import { mapParticipants, aggregateAnalytics } from "./meetings.mapper";
 
-// ─── In-Memory Storage ──────────────────────────────────────
-
-interface StoredMeeting {
-    id: string;
-    title: string;
-    spaceName: string;
-    meetingUri: string;
-    meetingCode: string;
-    createdAt: string;
-}
-
-// ─── Service ────────────────────────────────────────────────
+// ─── Service ────────────────────────────────────────────────────
 
 export class MeetingsService {
     private readonly logger: Logger;
     private readonly meetClient: GoogleMeetClient;
-    private readonly cacheService: CacheService;
+    private readonly d1: D1RelationalService;
 
-    constructor({ logger, googleMeetClient, cacheService }: { logger: Logger; googleMeetClient: GoogleMeetClient; cacheService: CacheService }) {
-        this.logger = logger.child({ module: "meetings" });
+    constructor({
+        logger,
+        googleMeetClient,
+        d1RelationalService,
+    }: {
+        logger: Logger;
+        googleMeetClient: GoogleMeetClient;
+        d1RelationalService: D1RelationalService;
+    }) {
+        this.logger    = logger.child({ module: "meetings" });
         this.meetClient = googleMeetClient;
-        this.cacheService = cacheService;
+        this.d1        = d1RelationalService;
     }
 
-    private async getMeetings(): Promise<Map<string, StoredMeeting>> {
-        const res = await this.cacheService.get<StoredMeeting[]>("meetings_list");
-        const list = res?.data || [];
-        const map = new Map<string, StoredMeeting>();
-        for (const m of list) map.set(m.id, m);
-        return map;
-    }
+    // ─── OAuth2 ───────────────────────────────────────────────
 
-    private async saveMeetings(map: Map<string, StoredMeeting>): Promise<void> {
-        const list = Array.from(map.values());
-        // Store for 30 days
-        await this.cacheService.set("meetings_list", list, 30 * 24 * 60 * 60);
-    }
-
-    // ─── OAuth2 Authentication ──────────────────────────────
-
-    getAuthUrl(): string {
-        return this.meetClient.getAuthUrl();
-    }
+    getAuthUrl(): string { return this.meetClient.getAuthUrl(); }
 
     async authorize(code: string): Promise<any> {
-        this.logger.info("Exchanging auth code for tokens...");
+        this.logger.info("Exchanging auth code for tokens…");
         return this.meetClient.authorize(code);
     }
 
-    async isReady(): Promise<boolean> {
-        return this.meetClient.isReady();
-    }
+    async isReady(): Promise<boolean> { return this.meetClient.isReady(); }
 
-    async clearCredentials(): Promise<void> {
-        await this.meetClient.clearCredentials();
-    }
+    async clearCredentials(): Promise<void> { return this.meetClient.clearCredentials(); }
 
-    // ─── Create ─────────────────────────────────────────────
+    getRateLimitStatus(): RateLimitInfo { return this.meetClient.getRateLimitStatus(); }
+
+    // ─── Create ───────────────────────────────────────────────
 
     async createMeeting(title: string): Promise<MeetingSpace> {
-        this.logger.info({ title }, "Creating new meeting");
+        this.logger.info({ title }, "Creating meeting space");
 
         const space = await this.meetClient.createSpace();
+        const id    = `meet_${Date.now()}`;
 
-        const id = `meet_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
-        const stored: StoredMeeting = {
+        const session: MeetingSession = {
             id,
-            title,
-            spaceName: space.spaceName,
-            meetingUri: space.meetingUri,
+            spaceName:   space.spaceName,
+            meetingUri:  space.meetingUri,
             meetingCode: space.meetingCode,
-            createdAt: new Date().toISOString(),
+            title,
         };
 
-        const map = await this.getMeetings();
-        map.set(id, stored);
-        await this.saveMeetings(map);
+        await this.d1.upsertMeetingSession(session);
+        this.logger.info({ id, meetingUri: space.meetingUri }, "✅ Meeting created + persisted to D1");
 
-        this.logger.info({ id, meetingUri: space.meetingUri }, "✅ Meeting created");
+        return { id, title, ...space, createdAt: new Date().toISOString(), participantCount: 0 };
+    }
 
-        return {
-            ...stored,
+    // ─── List ─────────────────────────────────────────────────
+
+    async listMeetings(limit = 50): Promise<MeetingSpace[]> {
+        const sessions = await this.d1.getMeetingSessions(limit);
+        return sessions.map((s) => ({
+            id:           s.id,
+            title:        s.title ?? s.spaceName,
+            spaceName:    s.spaceName,
+            meetingUri:   s.meetingUri ?? "",
+            meetingCode:  s.meetingCode ?? "",
+            createdAt:    s.startedAt ?? "",
             participantCount: 0,
-        };
+        }));
     }
 
-    // ─── List ───────────────────────────────────────────────
-
-    async listMeetings(): Promise<MeetingSpace[]> {
-        const map = await this.getMeetings();
-        const list = Array.from(map.values());
-
-        return list
-            .map((m) => ({
-                id: m.id,
-                title: m.title,
-                spaceName: m.spaceName,
-                meetingUri: m.meetingUri,
-                meetingCode: m.meetingCode,
-                createdAt: m.createdAt,
-                participantCount: 0, // Live count fetched on detail
-            }))
-            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    }
-
-    // ─── Get Detail ─────────────────────────────────────────
+    // ─── Get Detail ───────────────────────────────────────────
 
     async getMeeting(id: string): Promise<MeetingDetail> {
-        const map = await this.getMeetings();
-        const meeting = map.get(id);
-        if (!meeting) {
-            throw new Error(`Meeting not found: ${id}`);
-        }
+        const sessions = await this.d1.getMeetingSessions(500);
+        const session  = sessions.find((s) => s.id === id);
+        if (!session) throw new Error(`Meeting not found: ${id}`);
 
-        // Try to fetch live participants from conference records
-        let participants: Participant[] = [];
-        try {
-            const records = await this.meetClient.listConferenceRecords(meeting.spaceName);
+        const attendanceRows = await this.d1.getAttendanceForSession(id);
 
-            if (records.length > 0) {
-                // Get participants from the most recent conference
-                const latestRecord = records[records.length - 1];
-                const rawParticipants = await this.meetClient.listParticipants(latestRecord.name);
-
-                participants = mapParticipants(
-                    rawParticipants,
-                    latestRecord.startTime,
-                    latestRecord.endTime || null,
-                );
-            }
-        } catch (error) {
-            this.logger.warn({ err: error, id }, "Could not fetch live participants");
-        }
+        const participants: Participant[] = attendanceRows.map((a) => ({
+            displayName:     a.displayName ?? a.developerLogin,
+            email:           a.email ?? null,
+            joinedAt:        a.joinedAt,
+            leftAt:          a.leftAt ?? null,
+            durationMinutes: a.durationMinutes,
+            attendanceScore: a.durationMinutes,
+        }));
 
         return {
-            id: meeting.id,
-            title: meeting.title,
-            spaceName: meeting.spaceName,
-            meetingUri: meeting.meetingUri,
-            meetingCode: meeting.meetingCode,
-            createdAt: meeting.createdAt,
+            id:              session.id,
+            title:           session.title ?? session.spaceName,
+            spaceName:       session.spaceName,
+            meetingUri:      session.meetingUri ?? "",
+            meetingCode:     session.meetingCode ?? "",
+            createdAt:       session.startedAt ?? "",
             participantCount: participants.length,
             participants,
         };
     }
 
-    async endMeeting(id: string): Promise<void> {
-        const map = await this.getMeetings();
-        const meeting = map.get(id);
-        if (!meeting) {
-            throw new Error(`Meeting not found: ${id}`);
-        }
+    // ─── End Meeting ──────────────────────────────────────────
 
-        await this.meetClient.endSpace(meeting.spaceName);
-        this.logger.info({ id, spaceName: meeting.spaceName }, "Ended meeting");
+    async endMeeting(id: string): Promise<void> {
+        const sessions = await this.d1.getMeetingSessions(500);
+        const session  = sessions.find((s) => s.id === id);
+        if (!session) throw new Error(`Meeting not found: ${id}`);
+
+        await this.meetClient.endSpace(session.spaceName);
+
+        // Persist ended_at — reuse upsert since it overwrites on space_name conflict
+        await this.d1.upsertMeetingSession({
+            ...session,
+            endedAt: new Date().toISOString(),
+        });
+
+        this.logger.info({ id, spaceName: session.spaceName }, "Meeting ended");
     }
 
-    // ─── Attendance ─────────────────────────────────────────
+    // ─── Attendance (sync from Google Meet API → D1) ──────────
 
     async getAttendance(meetingId: string): Promise<AttendanceRecord> {
-        const map = await this.getMeetings();
-        const meeting = map.get(meetingId);
-        if (!meeting) {
-            throw new Error(`Meeting not found: ${meetingId}`);
-        }
+        const sessions = await this.d1.getMeetingSessions(500);
+        const session  = sessions.find((s) => s.id === meetingId);
+        if (!session) throw new Error(`Meeting not found: ${meetingId}`);
 
         let participants: Participant[] = [];
-        let totalDurationMinutes = 0;
+        let totalDurationMinutes        = 0;
 
         try {
-            const records = await this.meetClient.listConferenceRecords(meeting.spaceName);
+            const records = await this.meetClient.listConferenceRecords(session.spaceName);
 
             for (const record of records) {
                 const rawParticipants = await this.meetClient.listParticipants(record.name);
-                const mapped = mapParticipants(
-                    rawParticipants,
-                    record.startTime,
-                    record.endTime || null,
-                );
+                const mapped          = mapParticipants(rawParticipants, record.startTime, record.endTime || null);
+
+                // Persist each participant to D1
+                for (const p of mapped) {
+                    const attendanceId = `${meetingId}:${p.email ?? p.displayName}`;
+                    const row: MeetingAttendance = {
+                        id:              attendanceId,
+                        sessionId:       meetingId,
+                        developerLogin:  p.email?.split("@")[0] ?? p.displayName,
+                        displayName:     p.displayName,
+                        email:           p.email ?? undefined,
+                        joinedAt:        p.joinedAt ?? record.startTime,
+                        leftAt:          p.leftAt ?? undefined,
+                        durationMinutes: p.durationMinutes,
+                    };
+                    await this.d1.upsertMeetingAttendance(row);
+                }
+
                 participants.push(...mapped);
 
-                // Calculate total meeting duration
                 const start = new Date(record.startTime).getTime();
-                const end = record.endTime ? new Date(record.endTime).getTime() : Date.now();
+                const end   = record.endTime ? new Date(record.endTime).getTime() : Date.now();
                 totalDurationMinutes += Math.round((end - start) / 60000);
             }
-        } catch (error) {
-            this.logger.warn({ err: error, meetingId }, "Could not fetch attendance data");
+        } catch (e: any) {
+            this.logger.warn({ err: e, meetingId }, "Could not fetch live attendance from Google Meet API");
+            // Fall back to persisted rows
+            const persisted = await this.d1.getAttendanceForSession(meetingId);
+            participants     = persisted.map((a) => ({
+                displayName:     a.displayName ?? a.developerLogin,
+                email:           a.email ?? null,
+                joinedAt:        a.joinedAt,
+                leftAt:          a.leftAt ?? null,
+                durationMinutes: a.durationMinutes,
+                attendanceScore: a.durationMinutes,
+            }));
         }
 
-        // De-duplicate participants (same person across conference records)
+        // De-duplicate across conference records (same person, multiple sessions)
         const uniqueMap = new Map<string, Participant>();
         for (const p of participants) {
-            const key = p.email ?? p.displayName;
+            const key      = p.email ?? p.displayName;
             const existing = uniqueMap.get(key);
             if (!existing || p.durationMinutes > existing.durationMinutes) {
                 uniqueMap.set(key, p);
             }
         }
 
+        const deduped = Array.from(uniqueMap.values()).sort((a, b) => b.attendanceScore - a.attendanceScore);
+
         return {
-            meetingId: meeting.id,
-            meetingTitle: meeting.title,
-            meetingDate: meeting.createdAt,
+            meetingId:           session.id,
+            meetingTitle:        session.title ?? session.spaceName,
+            meetingDate:         session.startedAt ?? "",
             totalDurationMinutes,
-            participants: Array.from(uniqueMap.values())
-                .sort((a, b) => b.attendanceScore - a.attendanceScore),
+            participants: deduped,
         };
     }
 
-    // ─── Analytics ──────────────────────────────────────────
+    // ─── Analytics ────────────────────────────────────────────
 
     async getAnalytics(): Promise<AttendanceAnalytics> {
-        const map = await this.getMeetings();
-        const meetingsList = Array.from(map.values());
+        const sessions = await this.d1.getMeetingSessions(100);
 
         const meetingsWithParticipants: Array<{
-            id: string;
-            title: string;
-            createdAt: string;
-            participants: Participant[];
+            id: string; title: string; createdAt: string; participants: Participant[];
         }> = [];
 
-        for (const meeting of meetingsList) {
-            try {
-                const records = await this.meetClient.listConferenceRecords(meeting.spaceName);
-                let allParticipants: Participant[] = [];
-
-                for (const record of records) {
-                    const rawParticipants = await this.meetClient.listParticipants(record.name);
-                    allParticipants.push(
-                        ...mapParticipants(rawParticipants, record.startTime, record.endTime || null),
-                    );
-                }
-
-                meetingsWithParticipants.push({
-                    id: meeting.id,
-                    title: meeting.title,
-                    createdAt: meeting.createdAt,
-                    participants: allParticipants,
-                });
-            } catch (error) {
-                this.logger.warn({ err: error, meetingId: meeting.id }, "Skipping meeting in analytics");
-            }
+        for (const session of sessions) {
+            const rows = await this.d1.getAttendanceForSession(session.id);
+            meetingsWithParticipants.push({
+                id:           session.id,
+                title:        session.title ?? session.spaceName,
+                createdAt:    session.startedAt ?? "",
+                participants: rows.map((a) => ({
+                    displayName:     a.displayName ?? a.developerLogin,
+                    email:           a.email ?? null,
+                    joinedAt:        a.joinedAt,
+                    leftAt:          a.leftAt ?? null,
+                    durationMinutes: a.durationMinutes,
+                    attendanceScore: a.durationMinutes,
+                })),
+            });
         }
 
         return aggregateAnalytics(meetingsWithParticipants);
-    }
-
-    // ─── Rate Limit Status ──────────────────────────────────
-
-    getRateLimitStatus(): RateLimitInfo {
-        return this.meetClient.getRateLimitStatus();
     }
 }
