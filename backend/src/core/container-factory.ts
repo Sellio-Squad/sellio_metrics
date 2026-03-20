@@ -22,9 +22,10 @@ export function getContainer(
     membersKv: KVNamespace | null,
     attendanceKv: KVNamespace | null,
     d1Database: D1Database | null,
+    webhookQueue: any | null = null,
 ): Promise<AwilixContainer<Cradle>> {
     if (!containerPromise) {
-        containerPromise = buildContainer(kvNamespace, scoresKv, membersKv, attendanceKv, d1Database);
+        containerPromise = buildContainer(kvNamespace, scoresKv, membersKv, attendanceKv, d1Database, webhookQueue);
     }
     return containerPromise;
 }
@@ -35,6 +36,7 @@ async function buildContainer(
     membersKv: KVNamespace | null,
     attendanceKv: KVNamespace | null,
     d1Database: D1Database | null,
+    webhookQueue: any | null = null,
 ): Promise<AwilixContainer<Cradle>> {
     const { createContainer, asFunction, asClass, InjectionMode } = await import("awilix");
     const { env } = await import("../config/env");
@@ -61,6 +63,7 @@ async function buildContainer(
     const { AttendanceRepository } = await import("../modules/attendance/attendance.repository");
     const { MeetingsRepository } = await import("../modules/meetings/meetings.repository");
     const { AttendanceService } = await import("../modules/attendance/attendance.service");
+    const { WebhookService } = await import("../modules/webhook/webhook.service");
 
     const logger = createConsoleLogger();
     const container = createContainer<Cradle>({ injectionMode: InjectionMode.PROXY });
@@ -153,6 +156,12 @@ async function buildContainer(
                 cacheService,
                 pubsubTopic: env.googlePubsubTopic,
             }),
+        ).singleton(),
+
+        // Webhook
+        webhookQueue: asFunction(() => webhookQueue).singleton(),
+        webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, env }: Cradle) =>
+            new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, env }),
         ).singleton(),
     });
 

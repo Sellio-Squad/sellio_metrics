@@ -52,6 +52,19 @@ database_name = "sellio-metrics-db"
 database_id = "a7ae3b9f-87c7-4696-be19-8660777703c7"
 migrations_dir = "migrations"
 
+# ─── Cloudflare Queues ───────────────────────────────────────
+# Queue for offloading heavy webhook background tasks
+# (score recomputation, etc.)
+
+[[queues.producers]]
+queue = "webhook"
+binding = "WEBHOOK_QUEUE"
+
+[[queues.consumers]]
+queue = "webhook"
+max_batch_size = 10
+max_retries = 3
+
 # ─── Cron Triggers ───────────────────────────────────────────
 # Precompute leaderboard snapshots every 6 hours
 

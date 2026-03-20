@@ -28,6 +28,7 @@ import type { LogsService } from "../modules/logs/logs.service";
 import type { PointsRulesService } from "../modules/points/points-rules.service";
 import type { ScoreAggregationService } from "../modules/scores/score-aggregation.service";
 import type { AttendanceService } from "../modules/attendance/attendance.service";
+import type { WebhookService } from "../modules/webhook/webhook.service";
 import type { env } from "../config/env";
 import type { Logger } from "./logger";
 
@@ -90,4 +91,8 @@ export interface Cradle {
 
     // Logs
     logsService: LogsService;
+
+    // Webhook
+    webhookService: WebhookService;
+    webhookQueue: any | null;
 }

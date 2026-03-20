@@ -63,6 +63,7 @@ interface WorkerEnv {
     MEMBERS_KV:     KVNamespace;
     ATTENDANCE_KV:  KVNamespace;
     DB:             D1Database;
+    WEBHOOK_QUEUE?: any;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -130,6 +131,7 @@ export default {
                 workerEnv.MEMBERS_KV   || null,
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB           || null,
+                workerEnv.WEBHOOK_QUEUE || null,
             );
 
             const app = buildApp(container.cradle);
@@ -154,6 +156,7 @@ export default {
                 workerEnv.MEMBERS_KV   || null,
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB           || null,
+                workerEnv.WEBHOOK_QUEUE || null,
             );
             await container.cradle.scoreAggregationService.precomputeSnapshots();
             console.log("Cron: leaderboard snapshots refreshed");
@@ -161,7 +164,40 @@ export default {
             console.error("Cron error:", e?.message, e?.stack);
         }
     },
+
+    // ─── Queue consumer (webhook background tasks) ─────────
+    async queue(batch: MessageBatch, workerEnv: WorkerEnv): Promise<void> {
+        try {
+            bootstrapEnv(workerEnv);
+            const container = await getContainer(
+                workerEnv.CACHE        || null,
+                workerEnv.SCORES_KV    || null,
+                workerEnv.MEMBERS_KV   || null,
+                workerEnv.ATTENDANCE_KV || null,
+                workerEnv.DB           || null,
+                workerEnv.WEBHOOK_QUEUE || null,
+            );
+
+            for (const msg of batch.messages) {
+                try {
+                    const body = msg.body as { type: string; developers?: string[] };
+                    if (body.type === "recompute_scores") {
+                        await container.cradle.scoreAggregationService
+                            .precomputeSnapshots(body.developers);
+                    }
+                    msg.ack();
+                } catch (e: any) {
+                    console.error("Queue message processing error:", e?.message);
+                    msg.retry();
+                }
+            }
+        } catch (e: any) {
+            console.error("Queue handler error:", e?.message, e?.stack);
+        }
+    },
 };
 
 // ─── Cloudflare runtime types ───────────────────────────────────────────
 interface ScheduledEvent { scheduledTime: number; cron: string; }
+interface MessageBatch { messages: QueueMessage[]; }
+interface QueueMessage { body: unknown; ack(): void; retry(): void; }
