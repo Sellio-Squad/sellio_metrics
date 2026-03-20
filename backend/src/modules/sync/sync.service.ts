@@ -26,6 +26,7 @@ export async function syncOneRepo(
     repoName: string,
     orgRepos: any[],
     targetPrNumbers?: number[],
+    force = false,   // if true, skip the since cutoff and re-sync all PRs
 ): Promise<object> {
     const {
         developerRepo, reposRepo, prsRepo, commentsRepo, logger,
@@ -61,13 +62,16 @@ export async function syncOneRepo(
         return syncTargetedPrs(cradle, owner, repoName, repoId, targetPrNumbers, log);
     }
 
-    // Skip already fully-synced PRs using a since cutoff
-    const existingMergedPrs = await prsRepo.getMergedPrs({ repoId: repoMeta.id as number, limit: 5 });
-    const mostRecentMergedAt = existingMergedPrs.length > 0
-        ? existingMergedPrs.reduce((latest: any, pr: any) =>
-            (!latest || pr.mergedAt > latest.mergedAt) ? pr : latest,
-        ).mergedAt
-        : undefined;
+    // Determine since cutoff — skip if force=true
+    let mostRecentMergedAt: string | undefined;
+    if (!force) {
+        const existingMergedPrs = await prsRepo.getMergedPrs({ repoId: repoMeta.id as number, limit: 5 });
+        mostRecentMergedAt = existingMergedPrs.length > 0
+            ? existingMergedPrs.reduce((latest: any, pr: any) =>
+                (!latest || pr.mergedAt > latest.mergedAt) ? pr : latest,
+            ).mergedAt
+            : undefined;
+    }
 
     log.info({ since: mostRecentMergedAt ?? "all-time" }, "Starting GraphQL sync");
 
@@ -265,4 +269,63 @@ function extractAllComments(pr: GqlPullRequest): GqlComment[] {
         comments.push(...thread.comments.nodes);
     }
     return comments;
+}
+
+// ─── Org Members Sync (independent of PRs) ───────────────────
+
+/**
+ * Fetch all org members and enrich them with full GitHub profiles
+ * (display_name, joined_at). Runs independently of PR sync.
+ *
+ * - Lists org members (slim: login + avatar_url)
+ * - Fetches each profile via REST (cached 24h), 5 in parallel
+ * - Batch upserts to developers table
+ * - Filters out bots automatically
+ */
+export async function syncOrgMembers(
+    cradle: Cradle,
+    org:    string,
+): Promise<{ synced: number; logins: string[] }> {
+    const { cachedGithubClient, developerRepo, logger } = cradle;
+    const log = logger.child({ module: "sync-members", org });
+
+    // Bust members cache to get fresh list
+    await cradle.cacheService.del(`github:org-members:${org}`);
+
+    const members = await cachedGithubClient.listOrgMembers(org);
+    log.info({ count: members.length }, "Org members fetched");
+
+    // Filter bots
+    const humanMembers = members.filter(
+        (m: any) => !isBot(m.login ?? "", m.type),
+    );
+
+    // Fetch full profiles in parallel batches of 5
+    const BATCH = 5;
+    const enriched: Array<{ login: string; avatarUrl?: string; displayName?: string; joinedAt?: string }> = [];
+
+    for (let i = 0; i < humanMembers.length; i += BATCH) {
+        const chunk = humanMembers.slice(i, i + BATCH);
+        const profiles = await Promise.all(
+            chunk.map(async (m: any) => {
+                try {
+                    const profile = await cachedGithubClient.getUser(m.login);
+                    return {
+                        login:       m.login,
+                        avatarUrl:   profile.avatar_url ?? m.avatar_url,
+                        displayName: profile.name ?? undefined,
+                        joinedAt:    profile.created_at ?? undefined,
+                    };
+                } catch {
+                    return { login: m.login, avatarUrl: m.avatar_url };
+                }
+            }),
+        );
+        enriched.push(...profiles);
+    }
+
+    await developerRepo.upsertDeveloperBatch(enriched);
+    log.info({ synced: enriched.length }, "Org members batch upserted with full profiles");
+
+    return { synced: enriched.length, logins: enriched.map((e) => e.login) };
 }

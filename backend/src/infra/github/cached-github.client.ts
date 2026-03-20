@@ -57,8 +57,22 @@ export class CachedGitHubClient {
             this.github.rest.repos.listForOrg,
             { org, type: "all", sort: "updated", per_page: 100 },
         );
-        await this.cache.set(cacheKey, repos, 24 * 60 * 60);
-        return repos;
+
+        // Cache only the fields needed by sync/repos routes — not the hundreds of URL fields
+        const slim = repos.map((r: any) => ({
+            id:          r.id,
+            name:        r.name,
+            full_name:   r.full_name,
+            html_url:    r.html_url,
+            description: r.description ?? null,
+            created_at:  r.created_at,
+            pushed_at:   r.pushed_at,
+            language:    r.language ?? null,
+            private:     r.private,
+            fork:        r.fork,
+        }));
+        await this.cache.set(cacheKey, slim, 24 * 60 * 60);
+        return slim;
     }
 
     /**
@@ -75,8 +89,11 @@ export class CachedGitHubClient {
             this.github.rest.orgs.listMembers,
             { org, filter: "all", role: "all", per_page: 100 }
         );
-        await this.membersKv.set(cacheKey, members);
-        return members;
+
+        // Cache only login + avatar_url — not all 30+ URL fields per member
+        const slim = members.map((m: any) => ({ login: m.login, avatar_url: m.avatar_url }));
+        await this.membersKv.set(cacheKey, slim);
+        return slim;
     }
 
     /**
