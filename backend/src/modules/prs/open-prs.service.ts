@@ -1,8 +1,11 @@
 /**
- * PRs — Open PRs Service
+ * PRs — Open PRs Service (GraphQL)
  *
- * Single Responsibility: Fetch all open PRs across the entire organization
- * using the GitHub Search API, and enrich them with reviews and comments.
+ * Fetches all open PRs across the org in a single paginated GraphQL query.
+ * Reviews and comments are embedded — no per-PR enrichment loop needed.
+ *
+ * Before:  1 search call + N×4 REST calls per PR (~40+ API calls for 10 open PRs)
+ * After:   1-2 GraphQL calls total (~5-15 pts per page)
  */
 
 import type { CachedGitHubClient } from "../../infra/github/cached-github.client";
@@ -13,10 +16,9 @@ import type { LogsService } from "../logs/logs.service";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { PrMetric } from "../../core/types";
 import { GitHubApiError } from "../../core/errors";
-import { mapToPrMetric } from "../metrics/metrics.mapper";
-
-/** Batch size for parallel PR enrichment (avoids GitHub rate limits). */
-const BATCH_SIZE = 10;
+import { GitHubGraphQLClient } from "../../infra/github/github-graphql.client";
+import type { GqlOpenPr } from "../../infra/github/github-graphql.client";
+import { toISOWeek, minutesBetween } from "../../core/utils/date";
 
 export class OpenPrsService {
     private readonly github: CachedGitHubClient;
@@ -50,11 +52,12 @@ export class OpenPrsService {
     }
 
     /**
-     * Search all open PRs in the organization and return fully-enriched metrics.
+     * Fetch all open PRs across the org via GraphQL.
+     * Result is cached for 24h; webhooks invalidate on PR events.
      */
-    async fetchOpenPrs(org: string, perPage = 100): Promise<PrMetric[]> {
+    async fetchOpenPrs(org: string): Promise<PrMetric[]> {
         const cacheKey = `github:open_prs:${org}`;
-        
+
         try {
             const cached = await this.cacheService.get<PrMetric[]>(cacheKey);
             if (cached) {
@@ -62,23 +65,29 @@ export class OpenPrsService {
                 return cached.data;
             }
 
-            this.logger.info({ org }, "Searching open PRs from GitHub");
+            this.logger.info({ org }, "Fetching open PRs via GraphQL");
 
-            const searchResults = await this.github.searchOpenPrsForOrg(org, perPage);
-            this.logger.info({ count: searchResults.length }, "Open PRs found, enriching…");
+            const gql = new GitHubGraphQLClient(this.github.raw as any, this.logger);
+            const { openPrs, totalCostUsed, pagesLoaded } = await gql.searchOpenPRs(org);
 
-            this.logsService.log(
-                `Found ${searchResults.length} open PRs across ${org}`,
-                "info",
-                "github",
-                { org, count: searchResults.length }
+            this.logger.info(
+                { org, count: openPrs.length, pages: pagesLoaded, totalCostUsed },
+                "GraphQL open PRs complete — rate limit cost",
             );
 
-            const enriched = await this.enrichInBatches(searchResults);
-            
-            // Cache for a long duration, let webhooks invalidate it
-            await this.cacheService.set(cacheKey, enriched, 24 * 60 * 60); // 24 hours
-            return enriched;
+            this.logsService.log(
+                `Found ${openPrs.length} open PRs across ${org} (GraphQL: ${totalCostUsed} pts, ${pagesLoaded} pages)`,
+                "info",
+                "github",
+                { org, count: openPrs.length, totalCostUsed, pagesLoaded },
+            );
+
+            const mapped = openPrs.map((pr) => this.mapGqlOpenPr(pr));
+
+            // Cache 24h — webhooks will invalidate on PR events
+            await this.cacheService.set(cacheKey, mapped, 24 * 60 * 60);
+            return mapped;
+
         } catch (err: any) {
             if (err instanceof GitHubApiError) throw err;
             throw new GitHubApiError(`Failed to fetch open PRs for ${org}: ${err.message}`);
@@ -95,47 +104,95 @@ export class OpenPrsService {
 
     // ─── Private ─────────────────────────────────────────────
 
-    private async enrichInBatches(items: any[]): Promise<PrMetric[]> {
-        const results: PrMetric[] = [];
-        for (let i = 0; i < items.length; i += BATCH_SIZE) {
-            await this.guard.checkAndWait();
-            const batch = items.slice(i, i + BATCH_SIZE);
-            const enriched = await Promise.all(batch.map((item) => this.enrichSingle(item)));
-            results.push(...enriched);
+    /**
+     * Map a GQL open PR node → PrMetric (matching the shape used by the dashboard).
+     */
+    private mapGqlOpenPr(pr: GqlOpenPr): PrMetric {
+        const approvedReviews = pr.reviews.nodes.filter((r) => r.state === "APPROVED");
+        const requiredMet     = approvedReviews.length >= this.requiredApprovals;
+        const firstApproval   = approvedReviews[0];
+        const requiredMetAt   = requiredMet
+            ? (approvedReviews[this.requiredApprovals - 1] as any)?.submittedAt ?? null
+            : null;
+
+        const creator = {
+            login:      pr.author?.login ?? "",
+            id:         0,
+            url:        pr.url,
+            avatar_url: pr.author?.avatarUrl ?? "",
+        };
+
+        // Flatten all comments (timeline + review threads)
+        const allComments: Array<{ login: string; id: number; date: string; avatarUrl: string }> = [];
+        for (const c of pr.comments.nodes) {
+            if (c.author?.login) allComments.push({ login: c.author.login, id: c.databaseId, date: c.createdAt, avatarUrl: c.author.avatarUrl });
         }
-        return results;
-    }
-
-    private async enrichSingle(searchItem: any): Promise<PrMetric> {
-        // The search API returns issue items. We need to extract repo details.
-        // repository_url is like "https://api.github.com/repos/Sellio-Squad/sellio_mobile"
-        const repoUrlParts = searchItem.repository_url.split("/");
-        const repoName = repoUrlParts.pop();
-        const ownerName = repoUrlParts.pop();
-
-        if (!ownerName || !repoName) {
-            this.logger.error({ url: searchItem.repository_url }, "Could not parse repository URL");
-            throw new Error(`Invalid repository URL: ${searchItem.repository_url}`);
+        for (const thread of pr.reviewThreads.nodes) {
+            for (const c of thread.comments.nodes) {
+                if (c.author?.login) allComments.push({ login: c.author.login, id: c.databaseId, date: c.createdAt, avatarUrl: c.author.avatarUrl });
+            }
         }
 
-        const pullNumber = searchItem.number;
-        
-        // Since we explicitly searched for is:open, we know these are open
-        const isOpen = true;
+        // Group comments by author
+        const byAuthor = new Map<string, { author: { login: string; id: number; url: string; avatar_url: string }; comments: { id: number; created_at: string }[]; }>();
+        for (const c of allComments) {
+            const existing = byAuthor.get(c.login);
+            const entry = { id: c.id, created_at: c.date };
+            if (existing) {
+                existing.comments.push(entry);
+            } else {
+                byAuthor.set(c.login, {
+                    author: { login: c.login, id: 0, url: "", avatar_url: c.avatarUrl },
+                    comments: [entry],
+                });
+            }
+        }
 
-        const [fullPr, reviews, issueComments, reviewComments] = await Promise.all([
-            this.github.getPull(ownerName, repoName, pullNumber, isOpen).catch(() => searchItem),
-            this.github.listReviews(ownerName, repoName, pullNumber, isOpen).catch(() => []),
-            this.github.listIssueComments(ownerName, repoName, pullNumber, isOpen).catch(() => []),
-            this.github.listReviewComments(ownerName, repoName, pullNumber, isOpen).catch(() => []),
-        ]);
+        const commentGroups = [...byAuthor.values()].map((g) => ({
+            author:          g.author,
+            comments:        g.comments,
+            first_comment_at: g.comments[0]?.created_at ?? null,
+            last_comment_at:  g.comments[g.comments.length - 1]?.created_at ?? null,
+            count:           g.comments.length,
+        }));
 
-        return mapToPrMetric({
-            pr: fullPr,
-            reviews: reviews as any,
-            issueComments: issueComments as any,
-            reviewComments: reviewComments as any,
-            requiredApprovals: this.requiredApprovals,
-        });
+        const approvals = approvedReviews.map((r) => ({
+            reviewer:     { login: r.author?.login ?? "", id: 0, url: "", avatar_url: r.author?.avatarUrl ?? "" },
+            submitted_at: (r as any).submittedAt ?? pr.updatedAt,
+            commit_id:    "",
+        }));
+
+        return {
+            pr_number:                          pr.number,
+            url:                                pr.url,
+            title:                              pr.title,
+            opened_at:                          pr.createdAt,
+            head_ref:                           "",
+            base_ref:                           "",
+            creator,
+            assignees:                          [creator],
+            comments:                           commentGroups,
+            approvals,
+            required_approvals:                 this.requiredApprovals,
+            first_approved_at:                  firstApproval ? (firstApproval as any).submittedAt ?? null : null,
+            time_to_first_approval_minutes:     minutesBetween(pr.createdAt, requiredMet ? requiredMetAt : null),
+            required_approvals_met_at:          requiredMetAt,
+            time_to_required_approvals_minutes: minutesBetween(pr.createdAt, requiredMetAt),
+            closed_at:                          null,
+            merged_at:                          null,
+            merged_by:                          null,
+            week:                               toISOWeek(pr.createdAt),
+            status:                             requiredMet ? "approved" : "pending",
+            labels:                             [],
+            milestone:                          null,
+            draft:                              false,
+            review_requests:                    [],
+            files_changed:                      [],
+            diff_stats: {
+                additions:     pr.additions,
+                deletions:     pr.deletions,
+                changed_files: pr.changedFiles,
+            },
+        };
     }
 }

@@ -43,6 +43,30 @@ export class CommentsRepository {
         return result.meta.changes > 0;
     }
 
+    /**
+     * Batch insert comments — single D1 batch() call instead of N+1 queries.
+     * Skips duplicates via INSERT OR IGNORE.
+     * Returns the number of newly inserted rows.
+     */
+    async insertCommentBatch(comments: PrComment[]): Promise<number> {
+        if (!this.db || comments.length === 0) return 0;
+
+        // D1 batch() executes all statements in a single HTTP round-trip
+        const stmts = comments.map((c) =>
+            this.db!.prepare(
+                `INSERT OR IGNORE INTO pr_comments
+                     (id, pr_id, repo_id, pr_number, author, body, comment_type, html_url, commented_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`,
+            ).bind(
+                c.id ?? null, c.prId ?? null, c.repoId ?? null, c.prNumber ?? null, c.author,
+                c.body ?? null, c.commentType, c.htmlUrl ?? null, c.commentedAt,
+            ),
+        );
+
+        const results = await this.db.batch(stmts);
+        return results.reduce((sum, r) => sum + (r.meta.changes ?? 0), 0);
+    }
+
     async getCommentsByPr(prId: string): Promise<PrComment[]> {
         if (!this.db) return [];
         const res = await this.db

@@ -32,6 +32,37 @@ export class DeveloperRepository {
             .run();
     }
 
+    /**
+     * Batch upsert multiple developers in a single D1 batch() round-trip.
+     * Deduplicates by login before sending — only the last entry per login is kept.
+     */
+    async upsertDeveloperBatch(developers: Array<{
+        login:       string;
+        avatarUrl?:  string;
+        displayName?: string;
+        joinedAt?:   string;
+    }>): Promise<void> {
+        if (!this.db || developers.length === 0) return;
+
+        // Deduplicate: last writer wins for the same login
+        const deduped = [...new Map(developers.map((d) => [d.login, d])).values()];
+
+        const stmts = deduped
+            .filter((d) => !!d.login)
+            .map((d) =>
+                this.db!.prepare(
+                    `INSERT INTO members (login, avatar_url, display_name, joined_at)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(login) DO UPDATE SET
+                         avatar_url   = COALESCE(?2, avatar_url),
+                         display_name = COALESCE(?3, display_name),
+                         joined_at    = COALESCE(?4, joined_at)`,
+                ).bind(d.login, d.avatarUrl ?? null, d.displayName ?? null, d.joinedAt ?? null),
+            );
+
+        await this.db.batch(stmts);
+    }
+
     async getDevelopers(): Promise<Member[]> {
         if (!this.db) return [];
         const res = await this.db
