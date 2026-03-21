@@ -100,17 +100,18 @@ export class D1Service {
         if (!this.db) return { prsDeleted: 0, commentsDeleted: 0, devsDeleted: 0, reposDeleted: 0 };
 
         const [r1, r2, r3, r4] = await this.db.batch([
-            this.db.prepare("DELETE FROM merged_prs"),
             this.db.prepare("DELETE FROM pr_comments"),
-            this.db.prepare("DELETE FROM members"),
+            this.db.prepare("DELETE FROM merged_prs"),
             this.db.prepare("DELETE FROM repos"),
+            // Delete members who have no attendance records to avoid wiping historical Google Meet data (Foreign Key constraint limit)
+            this.db.prepare("DELETE FROM members WHERE login NOT IN (SELECT developer_login FROM meeting_attendance)"),
         ]);
 
         return {
-            prsDeleted: (r1.meta as any)?.changes ?? 0,
-            commentsDeleted: (r2.meta as any)?.changes ?? 0,
-            devsDeleted: (r3.meta as any)?.changes ?? 0,
-            reposDeleted: (r4.meta as any)?.changes ?? 0,
+            commentsDeleted: (r1.meta as any)?.changes ?? 0,
+            prsDeleted:      (r2.meta as any)?.changes ?? 0,
+            reposDeleted:    (r3.meta as any)?.changes ?? 0,
+            devsDeleted:     (r4.meta as any)?.changes ?? 0,
         };
     }
 
