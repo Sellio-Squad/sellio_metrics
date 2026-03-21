@@ -102,6 +102,8 @@ class SyncProvider extends ChangeNotifier {
         return '${selected.length - failed} synced · ${parts.join(', ')}';
       case SyncStatus.error:
         return 'Sync failed: ${_globalError ?? "Unknown error"}';
+      case SyncStatus.resetting:
+        return 'Resetting database and caches…';
     }
   }
 
