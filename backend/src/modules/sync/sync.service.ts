@@ -119,6 +119,9 @@ export async function syncOneRepo(
     log.info({ developers: authorsMap.size }, "Batch upserted developers");
 
     // ─── Build and batch upsert PR rows ─────────────────────
+    // Get existing PR numbers BEFORE upsert to know which are truly new
+    const existingPrNums = await prsRepo.getExistingPrNumbers(repoId);
+
     const prRows = mergedPrs.map((pr) => ({
         id:          pr.databaseId,
         repoId,
@@ -133,13 +136,16 @@ export async function syncOneRepo(
         deletions:   pr.deletions,
     }));
 
-    const { upserted } = await prsRepo.upsertMergedPrBatch(prRows);
+    const { inserted: prsInserted, updated: prsUpdated } = await prsRepo.upsertMergedPrBatch(prRows);
+    log.info({ prsInserted, prsUpdated }, "PR upsert complete");
 
-    // ─── Batch insert comments ───────────────────────────────
-    const mergedPrNumbers = new Set(mergedPrs.map((p) => p.number));
+    // ─── Batch insert comments (only for NEW PRs) ────────────
+    // Skip comment processing for PRs already in DB — they have their comments.
+    // On force sync, existingPrNums is empty so all comments are processed.
+    const newPrs = mergedPrs.filter((pr) => !existingPrNums.has(pr.number));
     const commentRows: PrComment[] = [];
 
-    for (const pr of mergedPrs) {
+    for (const pr of newPrs) {
         const prGithubId = pr.databaseId;
 
         for (const c of pr.comments.nodes) {
@@ -178,13 +184,14 @@ export async function syncOneRepo(
     }
 
     const commentsInserted = await commentsRepo.insertCommentBatch(commentRows);
-    log.info({ comments: commentRows.length, inserted: commentsInserted }, "Batch inserted comments");
+    log.info({ newPrs: newPrs.length, comments: commentRows.length, inserted: commentsInserted }, "Batch inserted comments");
 
     // ─── Summary ─────────────────────────────────────────────
+    // Line counts only for newly inserted PRs (not re-synced ones)
     let linesAdded = 0, linesDeleted = 0;
-    for (const r of prRows) {
-        if (r.additions) linesAdded   += r.additions;
-        if (r.deletions) linesDeleted += r.deletions;
+    for (const pr of newPrs) {
+        linesAdded   += pr.additions ?? 0;
+        linesDeleted += pr.deletions ?? 0;
     }
 
     return {
@@ -192,7 +199,9 @@ export async function syncOneRepo(
         repo:             `${owner}/${repoName}`,
         prsFound:         allPrs.length,
         mergedPrs:        mergedPrs.length,
-        prsUpserted:      upserted,
+        prsInserted,          // ← truly NEW PRs added this sync
+        prsUpdated,           // ← already-known PRs that were re-synced (data refreshed)
+        prsUpserted:      prsInserted,  // keep for backward compat with Flutter UI
         commentsInserted,
         linesAdded,
         linesDeleted,
@@ -247,7 +256,7 @@ async function syncTargetedPrs(
         }
     }
 
-    const { upserted } = await prsRepo.upsertMergedPrBatch(prRows);
+    const { inserted: upserted } = await prsRepo.upsertMergedPrBatch(prRows);
 
     const developers = prRows
         .filter((p) => p.author && p.author !== "ghost")

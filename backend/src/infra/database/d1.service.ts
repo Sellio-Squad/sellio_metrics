@@ -95,4 +95,19 @@ export class D1Service {
         this.logger.info({ eventType, points }, "Point rule updated");
     }
 
+    /** Wipe all sync data (merged PRs + comments). Used by the reset endpoint. */
+    async truncateSyncData(): Promise<{ prsDeleted: number; commentsDeleted: number }> {
+        if (!this.db) return { prsDeleted: 0, commentsDeleted: 0 };
+
+        const [r1, r2] = await this.db.batch([
+            this.db.prepare("DELETE FROM merged_prs"),
+            this.db.prepare("DELETE FROM pr_comments"),
+        ]);
+
+        return {
+            prsDeleted:      (r1.meta as any)?.changes ?? 0,
+            commentsDeleted: (r2.meta as any)?.changes ?? 0,
+        };
+    }
+
 }

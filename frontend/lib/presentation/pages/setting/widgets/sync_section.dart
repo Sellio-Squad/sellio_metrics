@@ -191,20 +191,23 @@ class _OverallProgress extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final variant = switch (sync.status) {
-      SyncStatus.done  => HuxProgressVariant.success,
-      SyncStatus.error => HuxProgressVariant.destructive,
-      _                => HuxProgressVariant.primary,
+      SyncStatus.done      => HuxProgressVariant.success,
+      SyncStatus.error     => HuxProgressVariant.destructive,
+      SyncStatus.resetting => HuxProgressVariant.destructive,
+      _                    => HuxProgressVariant.primary,
     };
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         HuxProgress(
-          value: sync.progress,
+          value: sync.status == SyncStatus.resetting ? null : sync.progress,
           min: 0,
           max: 1,
-          label: sync.progressLabel,
-          showValue: true,
+          label: sync.status == SyncStatus.resetting
+              ? 'Resetting database and caches…'
+              : sync.progressLabel,
+          showValue: sync.status != SyncStatus.resetting,
           size: HuxProgressSize.large,
           variant: variant,
         ),
@@ -603,6 +606,9 @@ class _ActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = context.colors;
     final hasFailed = sync.results.any((r) => !r.success || r.fetchFailures.isNotEmpty);
+    final isIdle = sync.status == SyncStatus.idle ||
+        sync.status == SyncStatus.done ||
+        sync.status == SyncStatus.error;
 
     return Wrap(
       spacing: AppSpacing.sm,
@@ -644,7 +650,7 @@ class _ActionRow extends StatelessWidget {
             ),
           ),
 
-        // ── Reset ─────────────────────────────────────────────
+        // ── Reset UI state ────────────────────────────────────
         if (sync.status == SyncStatus.done || sync.status == SyncStatus.error) ...[
           SButton(
             variant: SButtonVariant.outline,
@@ -652,6 +658,26 @@ class _ActionRow extends StatelessWidget {
             child: const Text('Reset'),
           ),
         ],
+
+        // ── Reset Database & Re-Sync (danger) ─────────────────
+        if (isIdle)
+          SButton(
+            variant: SButtonVariant.outline,
+            onPressed: sync.status == SyncStatus.resetting
+                ? null
+                : () => _confirmReset(context),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.delete_sweep_outlined, size: 14, color: scheme.red),
+                const SizedBox(width: 4),
+                Text(
+                  'Reset DB & Re-Sync',
+                  style: TextStyle(color: scheme.red),
+                ),
+              ],
+            ),
+          ),
 
         // ── Global error ──────────────────────────────────────
         if (sync.status == SyncStatus.error && sync.globalError != null)
@@ -663,5 +689,33 @@ class _ActionRow extends StatelessWidget {
           ),
       ],
     );
+  }
+
+  Future<void> _confirmReset(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reset All Sync Data?'),
+        content: const Text(
+          'This will permanently delete ALL synced PRs and comments from the database '
+          'and bust all caches.\n\nAfter reset, a full force re-sync of all repos will start automatically.\n\n'
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Reset & Re-Sync'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && context.mounted) {
+      await context.read<SyncProvider>().resetDatabase();
+    }
   }
 }
