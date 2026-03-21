@@ -96,17 +96,21 @@ export class D1Service {
     }
 
     /** Wipe all sync data (merged PRs + comments). Used by the reset endpoint. */
-    async truncateSyncData(): Promise<{ prsDeleted: number; commentsDeleted: number }> {
-        if (!this.db) return { prsDeleted: 0, commentsDeleted: 0 };
+    async truncateSyncData(): Promise<{ prsDeleted: number; commentsDeleted: number; devsDeleted: number; reposDeleted: number }> {
+        if (!this.db) return { prsDeleted: 0, commentsDeleted: 0, devsDeleted: 0, reposDeleted: 0 };
 
-        const [r1, r2] = await this.db.batch([
+        const [r1, r2, r3, r4] = await this.db.batch([
             this.db.prepare("DELETE FROM merged_prs"),
             this.db.prepare("DELETE FROM pr_comments"),
+            this.db.prepare("DELETE FROM members"),
+            this.db.prepare("DELETE FROM repos"),
         ]);
 
         return {
-            prsDeleted:      (r1.meta as any)?.changes ?? 0,
+            prsDeleted: (r1.meta as any)?.changes ?? 0,
             commentsDeleted: (r2.meta as any)?.changes ?? 0,
+            devsDeleted: (r3.meta as any)?.changes ?? 0,
+            reposDeleted: (r4.meta as any)?.changes ?? 0,
         };
     }
 
