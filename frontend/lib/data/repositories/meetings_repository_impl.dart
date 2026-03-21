@@ -1,11 +1,6 @@
-/// Meetings Repository Implementation
-///
-/// Implements [MeetingsRepository] using [MeetingsDataSource].
-/// Maps raw JSON from the data source into domain entities.
 library;
 
 import 'package:injectable/injectable.dart';
-
 import '../../domain/entities/meeting_entity.dart';
 import '../../domain/entities/participant_entity.dart';
 import '../../domain/entities/attendance_analytics_entity.dart';

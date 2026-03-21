@@ -1,8 +1,3 @@
-/// Data — MembersRepositoryImpl
-///
-/// Implements the domain MembersRepository interface.
-/// Depends on MembersDataSource (interface, not concrete).
-/// Maps raw JSON to domain MemberStatusEntity.
 library;
 
 import 'package:injectable/injectable.dart';
