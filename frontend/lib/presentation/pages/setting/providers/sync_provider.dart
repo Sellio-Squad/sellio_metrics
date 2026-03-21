@@ -13,7 +13,7 @@ import '../../../../core/logging/app_logger.dart';
 import '../../../../domain/entities/repo_info.dart';
 import '../../../../domain/repositories/repos_repository.dart';
 
-enum SyncStatus { idle, running, done, error }
+enum SyncStatus { idle, running, done, error, resetting }
 
 class RepoSyncResult {
   final RepoInfo repo;
@@ -141,7 +141,7 @@ class SyncProvider extends ChangeNotifier {
 
   // ─── Sync ────────────────────────────────────────────────────
 
-  Future<void> startSync() async {
+  Future<void> startSync({bool force = false}) async {
     if (_status == SyncStatus.running) return;
 
     _status = SyncStatus.running;
@@ -169,7 +169,7 @@ class SyncProvider extends ChangeNotifier {
         notifyListeners();
 
         final repo = toSync[i];
-        await _syncRepo(repo);
+        await _syncRepo(repo, force: force);
         notifyListeners();
       }
 
@@ -226,7 +226,7 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> _syncRepo(RepoInfo repo, {List<int>? prNumbers}) async {
+  Future<void> _syncRepo(RepoInfo repo, {List<int>? prNumbers, bool force = false}) async {
     try {
       final parts = repo.fullName.split('/');
       final owner = parts.length == 2 ? parts[0] : null;
@@ -238,6 +238,7 @@ class SyncProvider extends ChangeNotifier {
           'repo': repoName,
           if (owner != null) 'owner': owner,
           if (prNumbers != null && prNumbers.isNotEmpty) 'prNumbers': prNumbers,
+          if (force) 'force': true,
         },
       );
 
@@ -282,5 +283,32 @@ class SyncProvider extends ChangeNotifier {
     _results.clear();
     _globalError = null;
     notifyListeners();
+  }
+
+  // ─── Reset Database ──────────────────────────────────────────
+  /// Wipes all synced PR/comment data and caches, then forces a full re-sync.
+  Future<void> resetDatabase() async {
+    if (_status == SyncStatus.running || _status == SyncStatus.resetting) return;
+
+    _status = SyncStatus.resetting;
+    _results.clear();
+    _currentIndex = -1;
+    _globalError = null;
+    notifyListeners();
+
+    try {
+      await _dio.delete('/api/sync/github/reset');
+      appLogger.info('SyncProvider', 'Database reset successful');
+    } catch (e) {
+      appLogger.error('SyncProvider', 'Database reset failed', null);
+      _globalError = 'Reset failed: ${e.toString()}';
+      _status = SyncStatus.error;
+      notifyListeners();
+      return;
+    }
+
+    // After reset, force a full sync of all repos
+    _selectedRepoNames = _repos.map((r) => r.fullName).toSet();
+    await startSync(force: true);
   }
 }

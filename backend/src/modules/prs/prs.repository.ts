@@ -52,38 +52,70 @@ export class PrsRepository {
         return result.meta.changes > 0;
     }
 
-    async upsertMergedPrBatch(prs: MergedPr[]): Promise<{ upserted: number }> {
-        if (!this.db || prs.length === 0) return { upserted: 0 };
+    async upsertMergedPrBatch(prs: MergedPr[]): Promise<{ inserted: number; updated: number }> {
+        if (!this.db || prs.length === 0) return { inserted: 0, updated: 0 };
 
         const logins = [...new Set(prs.map((p) => p.author))];
         for (const login of logins) await this.developerRepo.upsertDeveloper(login);
 
-        const stmt = this.db.prepare(
-            `INSERT INTO merged_prs
+        // Step 1: INSERT OR IGNORE — meta.changes counts ONLY truly new rows
+        const insertStmt = this.db.prepare(
+            `INSERT OR IGNORE INTO merged_prs
                  (id, repo_id, pr_number, author, title, body, html_url, merged_at, pr_created_at, additions, deletions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
-             ON CONFLICT(repo_id, pr_number) DO UPDATE SET
-                 additions     = ?10,
-                 deletions     = ?11,
-                 title         = COALESCE(?5, title),
-                 body          = COALESCE(?6, body),
-                 pr_created_at = COALESCE(?9, pr_created_at)`
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`
         );
 
-        let total = 0;
+        // Step 2: UPDATE fields that may have changed (e.g. additions/deletions corrected by GitHub)
+        const updateStmt = this.db.prepare(
+            `UPDATE merged_prs SET
+                 additions     = ?1,
+                 deletions     = ?2,
+                 title         = COALESCE(?3, title),
+                 body          = COALESCE(?4, body),
+                 pr_created_at = COALESCE(?5, pr_created_at)
+             WHERE repo_id = ?6 AND pr_number = ?7`
+        );
+
+        let inserted = 0;
+        let updated  = 0;
+
         for (let i = 0; i < prs.length; i += 50) {
             const chunk = prs.slice(i, i + 50);
-            const results = await this.db.batch(
-                chunk.map((pr) => stmt.bind(
+
+            const insertResults = await this.db.batch(
+                chunk.map((pr) => insertStmt.bind(
                     pr.id, pr.repoId, pr.prNumber, pr.author,
                     pr.title ?? null, pr.body ?? null, pr.htmlUrl ?? null, pr.mergedAt,
                     pr.prCreatedAt ?? null, pr.additions, pr.deletions,
                 )),
             );
-            total += results.reduce((sum, r) => sum + (r.meta.changes || 0), 0);
+            const chunkInserted = insertResults.reduce((sum, r) => sum + (r.meta.changes || 0), 0);
+            inserted += chunkInserted;
+
+            // Only UPDATE existing rows (those that were ignored above)
+            const existingChunk = chunk.filter((_, idx) => (insertResults[idx].meta.changes || 0) === 0);
+            if (existingChunk.length > 0) {
+                const updateResults = await this.db.batch(
+                    existingChunk.map((pr) => updateStmt.bind(
+                        pr.additions, pr.deletions,
+                        pr.title ?? null, pr.body ?? null, pr.prCreatedAt ?? null,
+                        pr.repoId, pr.prNumber,
+                    )),
+                );
+                updated += updateResults.reduce((sum, r) => sum + (r.meta.changes || 0), 0);
+            }
         }
 
-        return { upserted: total };
+        return { inserted, updated };
+    }
+
+    /** Get the set of PR numbers already stored for a repo — used to skip re-processing unchanged PRs. */
+    async getExistingPrNumbers(repoId: number): Promise<Set<number>> {
+        if (!this.db) return new Set();
+        const rows = await this.db.prepare(
+            "SELECT pr_number FROM merged_prs WHERE repo_id = ?1"
+        ).bind(repoId).all<{ pr_number: number }>();
+        return new Set(rows.results.map((r) => r.pr_number));
     }
 
     async getMergedPrs(filters: { author?: string; repoId?: number; since?: string; limit?: number } = {}): Promise<MergedPr[]> {

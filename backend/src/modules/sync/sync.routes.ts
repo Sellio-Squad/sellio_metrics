@@ -1,7 +1,8 @@
 /**
  * GitHub Sync Routes
- * POST /api/sync/github        — Sync merged PRs for one or more repos
- * POST /api/sync/github/members — Sync org member profiles (display names, joined_at)
+ * POST   /api/sync/github         — Sync merged PRs for one or more repos
+ * POST   /api/sync/github/members — Sync org member profiles (display names, joined_at)
+ * DELETE /api/sync/github/reset   — Wipe all sync data and caches for a clean re-sync
  */
 
 import { Hono } from "hono";
@@ -18,8 +19,8 @@ const syncSchema = z.object({
     repos:     z.array(z.string()).optional(),
     prNumbers: z.array(z.number()).optional(),
     /**
-     * force=true bypasses the incremental "since" cutoff and re-syncs ALL PRs.
-     * Use this when you suspect missed data (e.g. after a schema change).
+     * force=true fetches all pages (20) regardless of what's in DB.
+     * Use when you want a full historical re-sync.
      */
     force:     z.boolean().optional().default(false),
 }).refine(data => data.repo || (data.repos && data.repos.length > 0), {
@@ -70,6 +71,41 @@ sync.post("/github/members", safe(async (c) => {
     const org    = cradle.env.org;
     const result = await syncOrgMembers(cradle, org);
     return c.json({ ok: true, org, ...result });
+}));
+
+// ─── Reset All Sync Data ──────────────────────────────────────
+/**
+ * Wipes merged_prs and pr_comments tables, then busts all relevant KV caches.
+ * Leaves the developers and repos tables intact (re-populated during next sync).
+ * After calling this, run a fresh sync to repopulate everything.
+ */
+sync.delete("/github/reset", safe(async (c) => {
+    const cradle = useCradle(c);
+    const { d1Service, cacheService, scoresKvCache, logger, env } = cradle;
+
+    logger.info("Starting full database reset");
+
+    const { prsDeleted, commentsDeleted } = await d1Service.truncateSyncData();
+
+    logger.info({ prsDeleted, commentsDeleted }, "Sync tables cleared");
+
+    // Bust all relevant caches
+    const org = env.org;
+    await Promise.allSettled([
+        cacheService.del(`sellio:leaderboard:all`),
+        scoresKvCache.del(`sellio:leaderboard:all`),
+        cacheService.del(`github:open_prs:${org}`),
+        cacheService.del(`github:repos:${org}`),
+        cacheService.del(`github:org-members:${org}`),
+    ]);
+
+    logger.info("All KV caches cleared");
+
+    return c.json({
+        ok: true,
+        message: "All sync data wiped. Run a fresh sync to repopulate.",
+        cleared: { prsDeleted, commentsDeleted },
+    });
 }));
 
 export default sync;
