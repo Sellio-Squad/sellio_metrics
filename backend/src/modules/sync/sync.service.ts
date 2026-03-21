@@ -139,13 +139,13 @@ export async function syncOneRepo(
     const { inserted: prsInserted, updated: prsUpdated } = await prsRepo.upsertMergedPrBatch(prRows);
     log.info({ prsInserted, prsUpdated }, "PR upsert complete");
 
-    // ─── Batch insert comments (only for NEW PRs) ────────────
-    // Skip comment processing for PRs already in DB — they have their comments.
-    // On force sync, existingPrNums is empty so all comments are processed.
+    // ─── Batch insert comments (for ALL fetched PRs) ─────────
+    // Thanks to INSERT OR IGNORE, processing all comments is safe and lets us 
+    // catch late comments on already-merged PRs during manual Syncs!
     const newPrs = mergedPrs.filter((pr) => !existingPrNums.has(pr.number));
     const commentRows: PrComment[] = [];
 
-    for (const pr of newPrs) {
+    for (const pr of mergedPrs) {
         const prGithubId = pr.databaseId;
 
         for (const c of pr.comments.nodes) {

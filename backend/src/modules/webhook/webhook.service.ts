@@ -21,6 +21,7 @@ import type { OpenPrsService } from "../prs/open-prs.service";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { CacheRegistry } from "../../infra/cache/cache-registry";
 import type { CachedGitHubClient } from "../../infra/github/cached-github.client";
+import { GitHubGraphQLClient } from "../../infra/github/github-graphql.client";
 import { isBot } from "../../lib/bot-filter";
 import type {
     PullRequestPayload,
@@ -112,39 +113,57 @@ export class WebhookService {
         });
 
         // The PR is now merged! Let's fetch all historical comments it accumulated
-        // while it was open, since SQLite prevented saving them earlier.
+        // while it was open efficiently via GraphQL.
         if (this.cachedGithubClient) {
             try {
-                const [issueComments, reviewComments] = await Promise.all([
-                    this.cachedGithubClient.listIssueComments(repoOwner, repo.name, pr.number, false).catch(() => []),
-                    this.cachedGithubClient.listReviewComments(repoOwner, repo.name, pr.number, false).catch(() => []),
-                ]);
+                const gqlClient = new GitHubGraphQLClient(this.cachedGithubClient.raw as any, this.logger);
+                const gqlPr = await gqlClient.fetchSinglePR(repoOwner, repo.name, pr.number);
+                
+                if (gqlPr) {
+                    const commentsToInsert: any[] = [];
+                    
+                    const addComment = (c: any, type: "issue" | "review") => {
+                        const cAuthor = c.author?.login;
+                        if (!cAuthor || isBot(cAuthor, c.author?.__typename)) return;
+                        commentsToInsert.push({
+                            id:          parseInt(c.databaseId.toString(), 10) || parseInt(c.id.toString(), 10),
+                            prId:        pr.id,
+                            repoId,
+                            prNumber:    pr.number,
+                            author:      cAuthor,
+                            body:        c.body,
+                            commentType: type,
+                            htmlUrl:     c.url,
+                            commentedAt: c.createdAt,
+                        });
+                    };
 
-                const commentsToInsert: any[] = [];
-                const addComment = (c: any, type: "issue" | "review") => {
-                    const cAuthor = c.user?.login;
-                    if (!cAuthor || isBot(cAuthor, c.user?.type)) return;
-                    commentsToInsert.push({
-                        id: c.id,
-                        prId: pr.id,
-                        repoId,
-                        prNumber: pr.number,
-                        author: cAuthor,
-                        body: c.body,
-                        commentType: type,
-                        htmlUrl: c.html_url,
-                        commentedAt: c.created_at,
+                    // Add standard PR comments
+                    gqlPr.comments?.nodes?.forEach(c => addComment(c, "issue"));
+                    
+                    // Add review thread comments
+                    gqlPr.reviewThreads?.nodes?.forEach(thread => {
+                        thread.comments?.nodes?.forEach(c => addComment(c, "review"));
                     });
-                };
 
-                issueComments.forEach(c => addComment(c, "issue"));
-                reviewComments.forEach(c => addComment(c, "review"));
+                    // Add review summary bodies as comments
+                    gqlPr.reviews?.nodes?.forEach(r => {
+                        if (r.body?.trim()) {
+                            addComment({
+                                ...r,
+                                databaseId: Math.floor(Math.random() * -1000000), // mock ID for synthetic review bodies
+                                url: pr.html_url,
+                                createdAt: r.submittedAt,
+                            }, "review");
+                        }
+                    });
 
-                if (commentsToInsert.length > 0) {
-                    await this.commentsRepo.insertCommentBatch(commentsToInsert);
+                    if (commentsToInsert.length > 0) {
+                        await this.commentsRepo.insertCommentBatch(commentsToInsert);
+                    }
                 }
             } catch (err) {
-                this.logger.error({ err }, "Failed to backfill historical comments for newly merged PR");
+                this.logger.error({ err }, "Failed to backfill historical comments for newly merged PR via GraphQL");
             }
         }
 
@@ -230,7 +249,7 @@ export class WebhookService {
     // ─── Helpers ─────────────────────────────────────────────
 
     private invalidatePrCache(org: string): void {
-        this.openPrsService.invalidateCache(org).catch((err) => {
+        this.openPrsService.invalidateCache(org).catch((err: any) => {
             this.logger.error({ err: (err as Error).message }, "Failed to invalidate open-PRs cache");
         });
     }

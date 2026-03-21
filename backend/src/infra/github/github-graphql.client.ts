@@ -175,6 +175,42 @@ const MERGED_PRS_QUERY = `
     }
 `;
 
+const SINGLE_PR_QUERY = `
+    query SinglePR($owner: String!, $repo: String!, $number: Int!) {
+        repository(owner: $owner, name: $repo) {
+            pullRequest(number: $number) {
+                id
+                databaseId
+                number
+                title
+                url
+                additions
+                deletions
+                changedFiles
+                mergedAt
+                closedAt
+                createdAt
+                bodyText
+                author { ${AUTHOR_FIELDS} }
+                reviews(first: 20, states: [APPROVED, CHANGES_REQUESTED, COMMENTED]) {
+                    nodes { ${REVIEW_FIELDS} }
+                }
+                comments(first: 100) {
+                    nodes { ${COMMENT_FIELDS} }
+                }
+                reviewThreads(first: 50) {
+                    nodes {
+                        comments(first: 20) {
+                            nodes { ${COMMENT_FIELDS} }
+                        }
+                    }
+                }
+            }
+        }
+        ${RATE_LIMIT_FIELDS}
+    }
+`;
+
 const OPEN_PRS_SEARCH_QUERY = `
     query OpenPRsSearch($searchQuery: String!, $cursor: String) {
         search(query: $searchQuery, type: ISSUE, first: ${OPEN_PRS_PAGE_SIZE}, after: $cursor) {
@@ -332,5 +368,31 @@ export class GitHubGraphQLClient {
         );
 
         return { openPrs: allPrs, totalCostUsed, pagesLoaded: page };
+    }
+
+    /**
+     * Fetch a single PR and all its historical comments efficiently.
+     * Helpful for populating comments immediately after a webhook merge event.
+     */
+    async fetchSinglePR(owner: string, repo: string, number: number): Promise<GqlPullRequest | null> {
+        this.logger.info({ owner, repo, number }, "Fetching single PR via GraphQL");
+        try {
+            const result: any = await (this.octokit as any).graphql(SINGLE_PR_QUERY, {
+                owner,
+                repo,
+                number,
+            });
+
+            const rl: GqlRateLimit = result.rateLimit;
+            this.logger.info(
+                { repo, number, cost: rl.cost, remaining: rl.remaining },
+                "GraphQL single PR — rate limit cost",
+            );
+
+            return result.repository?.pullRequest ?? null;
+        } catch (err) {
+            this.logger.error({ err, owner, repo, number }, "Failed to fetch single PR via GraphQL");
+            return null;
+        }
     }
 }
