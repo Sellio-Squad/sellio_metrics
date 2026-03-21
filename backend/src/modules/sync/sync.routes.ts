@@ -75,8 +75,8 @@ sync.post("/github/members", safe(async (c) => {
 
 // ─── Reset All Sync Data ──────────────────────────────────────
 /**
- * Wipes merged_prs and pr_comments tables, then busts all relevant KV caches.
- * Leaves the developers and repos tables intact (re-populated during next sync).
+ * Wipes merged_prs, pr_comments, developers, and repositories tables, 
+ * then busts all relevant KV caches for a completely fresh start.
  * After calling this, run a fresh sync to repopulate everything.
  */
 sync.delete("/github/reset", safe(async (c) => {
@@ -85,9 +85,9 @@ sync.delete("/github/reset", safe(async (c) => {
 
     logger.info("Starting full database reset");
 
-    const { prsDeleted, commentsDeleted } = await d1Service.truncateSyncData();
+    const { prsDeleted, commentsDeleted, devsDeleted, reposDeleted } = await d1Service.truncateSyncData();
 
-    logger.info({ prsDeleted, commentsDeleted }, "Sync tables cleared");
+    logger.info({ prsDeleted, commentsDeleted, devsDeleted, reposDeleted }, "Sync tables cleared");
 
     // Bust all relevant caches
     const org = env.org;
@@ -104,7 +104,7 @@ sync.delete("/github/reset", safe(async (c) => {
     return c.json({
         ok: true,
         message: "All sync data wiped. Run a fresh sync to repopulate.",
-        cleared: { prsDeleted, commentsDeleted },
+        cleared: { prsDeleted, commentsDeleted, devsDeleted, reposDeleted },
     });
 }));
 
