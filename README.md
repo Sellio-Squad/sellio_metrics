@@ -46,28 +46,237 @@
 
 ## 🏗️ Architecture
 
-```
-                    ┌──────────────────────────────┐
-                    │       Cloudflare Edge         │
-                    │                              │
-   Browser ────────▶│  Pages (Flutter Web)         │
-                    │        │                     │
-                    │        │ /api/* ──────────▶  │
-                    │        │                     │
-                    │  Workers (TypeScript API)    │
-                    │        │          │          │
-                    │        ▼          ▼          │
-                    │   Workers KV   GitHub API    │
-                    │   (Cache)      (Octokit)     │
-                    └──────────────────────────────┘
-                              │
-                    GitHub Webhooks ─── cache invalidation
+### System Architecture
+```mermaid
+graph TD
+    User([Developer User])
+    GitHubWeb([GitHub Webhooks])
+    PubSub([Google Cloud Pub/Sub])
+    
+    subgraph Edge ["Cloudflare Edge Network"]
+        SPA[Flutter Web SPA<br/>Cloudflare Pages]
+        API[Hono Router + DI<br/>Cloudflare Worker]
+    end
+    
+    subgraph Store ["Cloudflare Serverless Persistence"]
+        KV[(Workers KV<br/>Caches & Auth)]
+        D1[(D1 SQLite<br/>Relational Log)]
+        Queue>Cloudflare Queue<br/>Async Job Queue]
+    end
+    
+    subgraph External ["External APIs"]
+        GHAPI[GitHub REST API]
+        MeetAPI[Google Meet API]
+    end
+    
+    User -->|Views Dashboards/HTTPS| SPA
+    SPA -->|JSON Queries| API
+    GitHubWeb -->|Sends Event Streams| API
+    PubSub -->|Pushes Workspace Events| API
+    
+    API <--> KV
+    API <--> D1
+    API -->|Submit Background Job| Queue
+    Queue -->|Consume & Compute| API
+    
+    API -->|App Auth / JWT| GHAPI
+    API -->|OAuth2 Tokens| MeetAPI
+    
+    classDef External fill:#2D3748,color:#fff,stroke:#4A5568
+    classDef Edge fill:#C05621,color:#fff,stroke:#9C4221
+    classDef Store fill:#2B6CB0,color:#fff,stroke:#2C5282
+    
+    class External External
+    class Edge Edge
+    class Store,KV,D1,Queue Store
 ```
 
-**Frontend** → Clean Architecture + Provider state management  
-**Backend** → Layered Architecture (Routes → Services → Repositories) + Awilix DI + Workers/Hono router  
-**Infra** → Cloudflare Workers + KV + D1 + Pages + GitHub Actions CI/CD
+<details>
+<summary><b>Component Diagram (Backend Modules)</b></summary>
+<br>
 
+```mermaid
+graph TB
+    subgraph HTTP ["HTTP & Router Boundary (worker.ts)"]
+        Controller[Hono Middleware & Route Endpoints]
+    end
+    
+    subgraph Services ["Business Domain"]
+        RepServ(Repos Service)
+        PrServ(PRs Metrics Service)
+        LeadServ(Score Aggregation Subsystem)
+        HookServ(Webhook Ingest Orchestrator)
+        MeetServ(Meeting Lifecycle Tracker)
+        MeetEventsServ(Google PubSub Event Handler)
+    end
+    
+    subgraph Repositories ["Data Storage Interfaces"]
+        RepoD1(SQLite Query Builders)
+        CacheSV(Namespaced Edge KV Store)
+    end
+    
+    subgraph Infra ["Infrastructure Wrappers"]
+        GHClient[Rate-Limited GitHub App Client]
+        GoogAuth[Google Tokens & Endpoints]
+        WsClient[Workspace Events Client]
+    end
+    
+    Controller -.-> RepServ & PrServ & LeadServ & HookServ & MeetServ & MeetEventsServ
+    
+    RepServ & PrServ -.-> GHClient
+    RepServ & PrServ -.-> RepoD1 & CacheSV
+    
+    HookServ -.-> RepoD1
+    HookServ -.-> |Invalidates| CacheSV
+    
+    MeetEventsServ -.-> WsClient
+    MeetEventsServ -.-> |Push Decoded Payload| CacheSV
+    
+    LeadServ -.-> RepoD1 & CacheSV
+    
+    MeetServ -.-> GoogAuth
+    MeetServ -.-> RepoD1 & CacheSV
+```
+</details>
+
+<details>
+<summary><b>Webhook Handling & Data Flow</b></summary>
+<br>
+
+```mermaid
+sequenceDiagram
+    participant GitHub
+    participant Worker HTTP
+    participant Webhook Service
+    participant D1 Relational
+    participant Queue
+    participant Background CPU
+    participant Cache
+    
+    GitHub->>Worker HTTP: POST /api/webhooks (PR Merged Content)
+    Worker HTTP->>Webhook Service: Forward JSON Body
+    Webhook Service->>D1 Relational: INSERT OR IGNORE merged_prs (Idempotent)
+    D1 Relational-->>Webhook Service: Inserted successfully
+    Webhook Service->>Queue: Submit Job: { type: 'recompute_scores' }
+    Webhook Service-->>Worker HTTP: Yield Control Flow
+    Worker HTTP-->>GitHub: HTTP 202 Accepted (Fast Return)
+    
+    Note over Queue, Cache: Asynchronous Background Execution
+    
+    Queue-->>Background CPU: Process Batch Job (Queue Consumer)
+    Background CPU->>D1 Relational: RUN SUM(points) Query Aggregation
+    D1 Relational-->>Background CPU: Raw Score Values
+    Background CPU->>Cache: Set Key `sellio:leaderboard:all` (TTL 6H)
+```
+
+```mermaid
+flowchart LR
+    Origin[GitHub State Changes] --> |Webhooks| IngestLayer[Webhook Route]
+    IngestLayer --> |Normalize / Pure Mapping| DBStore[(D1 Relational Entities)]
+    
+    Client[Flutter Frontend UI] --> |GET /api/scores| ScoreLayer[Score Calculation]
+    
+    DBStore --> |SQL JOIN points_rules| ScoreLayer
+    ScoreLayer --> |Cache Read / Write| KVCache[(Workers KV Snapshots)]
+    
+    KVCache --> |JSON Return Payload| Client
+    
+    Client2[Metrics Dashboard UI] --> |GET /api/prs| PrLayer[PR Fetch Controller]
+    PrLayer --> |Fall through Cache| ExternalApi[GitHub REST API]
+    ExternalApi --> |JSON Data| PrLayer
+    PrLayer --> Client2
+```
+</details>
+
+<details>
+<summary><b>Deployment & Database (ER)</b></summary>
+<br>
+
+```mermaid
+graph TD
+    node1["Developer Machine"]
+    
+    subgraph GitHubPipelines ["CI/CD Execution Environment"]
+        act1["Actions: Flutter UI Builder"]
+        act2["Actions: TypeScript Transpiler"]
+    end
+    
+    subgraph Prod ["Cloudflare Global Edge"]
+        subgraph DNS ["Anycast Routing Network"]
+            page["Cloudflare Pages<br/>(Statics)"]
+            work["Cloudflare Worker Runtime<br/>(Isolates)"]
+        end
+        d1["D1 (SQLite Distributed Hub)"]
+        kv["Workers KV Edge Nodes"]
+    end
+    
+    node1 -->|Push Code| GitHubPipelines
+    act1 -->|Upload Artifacts| page
+    act2 -->|Deploy via Wrangler| work
+    
+    page -->|Rest API Cross-Origin| work
+    work --> d1 & kv
+```
+
+```mermaid
+erDiagram
+    REPOS ||--o{ MERGED_PRS : contains
+    MEMBERS ||--o{ MERGED_PRS : authors
+    MERGED_PRS ||--o{ PR_COMMENTS : receives
+    MEMBERS ||--o{ PR_COMMENTS : comments
+    MEETING_SESSIONS ||--o{ MEETING_ATTENDANCE : hosts
+    MEMBERS ||--o{ MEETING_ATTENDANCE : attends
+    
+    REPOS {
+        int id PK
+        string owner 
+        string name 
+        string pushed_at 
+    }
+    
+    MEMBERS {
+        string login PK 
+        string display_name 
+        string avatar_url 
+    }
+    
+    MERGED_PRS {
+        int id PK 
+        int pr_number 
+        string author FK 
+        int repo_id FK 
+        int additions 
+        int deletions 
+        datetime merged_at 
+    }
+    
+    PR_COMMENTS {
+        int id PK
+        int pr_id FK 
+        string author FK
+        string comment_type
+    }
+    
+    MEETING_ATTENDANCE {
+        string id PK
+        string developer_login FK
+        string session_id FK
+        int duration_minutes
+    }
+    
+    POINT_RULES {
+        string event_type PK
+        float points 
+        string description 
+    }
+```
+</details>
+
+### 🏛️ System Architecture Summary
+
+- **Frontend (Flutter Web):** Edge-deployed Single Page Application relying on `Clean Architecture`. Utilizing `Provider` for state management, it connects UI interfaces logically via dependency injection interfaces to remote API endpoints—hiding physical implementations from UI rules.
+- **Backend (Cloudflare Workers):** Edge-native Modular Monolith utilizing a highly-performant `Hono` router. All endpoints orchestrate input parsing before passing generic objects down to discrete layer services via `Awilix DI`, completely decoupling business logic from HTTP contexts.
+- **Infrastructure (Cloudflare Edge):** 0ms cold start global networking. Data is stored across `Cloudflare D1` (an idempotent historical SQLite ledger) and cached across 4 unique `Workers KV` namespaces. Heavy lifting (webhook syncing, score calculation) is deferred asynchronously to `Cloudflare Queues`.
 ---
 
 ## 🛠️ Tech Stack
