@@ -1,7 +1,3 @@
-/// Data — ReposRepositoryImpl
-///
-/// Implements the domain ReposRepository interface.
-/// Depends on ReposDataSource (interface, not concrete).
 library;
 
 import 'package:injectable/injectable.dart';
