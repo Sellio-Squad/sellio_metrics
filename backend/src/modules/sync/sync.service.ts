@@ -89,7 +89,7 @@ export async function syncOneRepo(
 
     // Filter out bots
     const mergedPrs = allPrs.filter(
-        (pr) => !isBot(pr.author?.login ?? "", undefined),
+        (pr) => !isBot(pr.author?.login ?? "", pr.author?.__typename),
     );
 
     // ─── Batch upsert developers (authors + commenters) ─────
@@ -150,7 +150,7 @@ export async function syncOneRepo(
 
         for (const c of pr.comments.nodes) {
             const author = c.author?.login;
-            if (!author || isBot(author, undefined)) continue;
+            if (!author || isBot(author, c.author?.__typename)) continue;
             commentRows.push({
                 id:          parseInt(c.databaseId.toString(), 10),
                 prId:        prGithubId,
@@ -167,7 +167,7 @@ export async function syncOneRepo(
         for (const thread of pr.reviewThreads.nodes) {
             for (const c of thread.comments.nodes) {
                 const author = c.author?.login;
-                if (!author || isBot(author, undefined)) continue;
+                if (!author || isBot(author, c.author?.__typename)) continue;
                 commentRows.push({
                     id:          parseInt(c.databaseId.toString(), 10),
                     prId:        prGithubId,

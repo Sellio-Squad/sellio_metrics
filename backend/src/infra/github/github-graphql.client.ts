@@ -30,6 +30,7 @@ export interface GqlRateLimit {
 }
 
 export interface GqlAuthor {
+    __typename: string;
     login:     string;
     avatarUrl: string;
     name?:     string;        // only present on User nodes
@@ -102,6 +103,7 @@ export interface GqlSearchPrsResult {
 // ─── GraphQL fragments ───────────────────────────────────────
 
 const AUTHOR_FIELDS = `
+    __typename
     login
     avatarUrl
     ... on User { name createdAt }
@@ -120,7 +122,7 @@ const REVIEW_FIELDS = `
     state
     body
     submittedAt
-    author { login avatarUrl }
+    author { __typename login avatarUrl }
 `;
 
 const RATE_LIMIT_FIELDS = `

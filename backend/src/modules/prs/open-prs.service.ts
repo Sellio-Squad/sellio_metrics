@@ -127,13 +127,13 @@ export class OpenPrsService {
         const allComments: Array<{ login: string; id: number; date: string; avatarUrl: string }> = [];
         for (const c of pr.comments.nodes) {
             if (!c.author?.login) continue;
-            if (isBot(c.author.login)) continue;          // ← filter bot comments
+            if (isBot(c.author.login, c.author.__typename)) continue;          // ← filter bot comments
             allComments.push({ login: c.author.login, id: c.databaseId, date: c.createdAt, avatarUrl: c.author.avatarUrl });
         }
         for (const thread of pr.reviewThreads.nodes) {
             for (const c of thread.comments.nodes) {
                 if (!c.author?.login) continue;
-                if (isBot(c.author.login)) continue;      // ← filter bot review comments
+                if (isBot(c.author.login, c.author.__typename)) continue;      // ← filter bot review comments
                 allComments.push({ login: c.author.login, id: c.databaseId, date: c.createdAt, avatarUrl: c.author.avatarUrl });
             }
         }
@@ -144,7 +144,7 @@ export class OpenPrsService {
         for (const review of pr.reviews.nodes) {
             const body = review.body?.trim();
             if (!body || !review.author?.login) continue;
-            if (isBot(review.author.login)) continue;
+            if (isBot(review.author.login, review.author.__typename)) continue;
             allComments.push({
                 login:     review.author.login,
                 id:        syntheticId--,            // negative IDs mark synthetic entries
@@ -183,7 +183,7 @@ export class OpenPrsService {
 
         // Filter bots from approvals too
         const approvals = approvedReviews
-            .filter((r) => r.author?.login && !isBot(r.author.login))
+            .filter((r) => r.author?.login && !isBot(r.author.login, r.author.__typename))
             .map((r) => ({
                 reviewer:     { login: r.author?.login ?? "", id: 0, url: "", avatar_url: r.author?.avatarUrl ?? "" },
                 submitted_at: r.submittedAt ?? pr.updatedAt,
