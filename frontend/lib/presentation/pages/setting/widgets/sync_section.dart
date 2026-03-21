@@ -201,7 +201,7 @@ class _OverallProgress extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         HuxProgress(
-          value: sync.progress,
+          value: sync.status == SyncStatus.resetting ? null : sync.progress,
           min: 0,
           max: 1,
           label: sync.status == SyncStatus.resetting
