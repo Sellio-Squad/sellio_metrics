@@ -20,7 +20,7 @@ class PrRepositoryImpl implements PrRepository {
       try {
         return PrEntity.fromJson(json as Map<String, dynamic>);
       } catch (e) {
-        return null; // Skip invalid entries
+        return null;
       }
     })
         .whereType<PrEntity>()

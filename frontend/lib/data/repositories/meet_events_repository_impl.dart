@@ -1,12 +1,7 @@
-/// Meet Events Repository Implementation
-///
-/// Implements [MeetEventsRepository] using [MeetEventsDataSource].
-/// Maps raw JSON into domain entities and exposes SSE stream.
 library;
 
 import 'dart:async';
 import 'package:injectable/injectable.dart';
-
 import '../../domain/entities/meet_event_entity.dart';
 import '../../domain/repositories/meet_events_repository.dart';
 import '../datasources/meet_events_data_source.dart';
