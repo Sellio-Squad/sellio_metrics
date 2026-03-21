@@ -44,9 +44,156 @@
 
 ---
 
-## 🏗️ Architecture
+## 🏗️ Architecture & Design Deep Dive
 
-### System Architecture
+### 1) SYSTEM OVERVIEW
+
+**System Purpose:**  
+Sellio Metrics is a full-stack engineering operations platform designed to measure and visualize engineering team velocity. It tracks pull requests, reviewer engagement, code collaboration patterns, team activity, and meeting durations. The platform operates completely on the edge to provide real-time dashboards with extremely low latency.
+
+**Main Features:**
+- **PR Tracking & Analytics:** Real-time visibility into open/merged pull requests, code volume (additions/deletions), PR classifications (features, chores, bugs), and bottlenecks (stale PRs).
+- **Leaderboards & Gamification:** Points-based system tracking merged PRs, code contributions, review activity, and attendance.
+- **Team Activity Status:** Real-time visibility into active/inactive team members based on organization engagement.
+- **Meeting Lifecycles:** Google Meet integration for creating, tracking duration (via explicit check-in/out), and automatically terminating meetings.
+- **Real-Time Data Sync:** Webhook-driven invalidation and background recalculation of metrics.
+
+**Main Actors:**
+- **Developers / Users:** The engineering team using the Flutter web frontend to monitor performance.
+- **GitHub API:** Source of truth for all repository, PR, and engagement metrics via authenticated App connections.
+- **Google Meet API & Workspace Events:** Handles meeting creation, OAuth2 user consent, and pushes real-time event notifications via Google Cloud Pub/Sub.
+- **Infrastructure (Cloudflare Edge):** Powers execution, caching, and serving.
+
+---
+
+### 2) ARCHITECTURE ANALYSIS
+
+**Architecture Style:**  
+**Edge-Native Modular Monolith (Serverless) + Single Page Application (SPA)**
+
+**Reasoning:**
+- **Codebase Analysis Structure:** The backend is packaged as a single deployable Cloudflare Worker (`backend/src/worker.ts`), routing requests using Hono via distinct feature modules (`/api/repos`, `/api/prs`, etc.). Because it is deployed as a single runtime rather than distributed decoupled services, it functions as a monolith. However, internally it utilizes Awilix Dependency Injection and Clean Architecture to keep the service execution completely modular (resembling a Micro-Modular Monolith).  
+- **Edge Deployment First:** The system delegates standard long-running service capabilities to serverless edge equivalents: D1 (relational data), KV (edge caching), and Cloudflare Queues (asynchronous message queuing).
+
+**Boundaries:**
+- **Frontend ⟷ API Layer:** Secured HTTPS REST communication. The UI requests parsed JSON aggregates; does not understand where data originates.
+- **API Router ⟷ Service Layer:** The boundary enforced by the DI Container. Routes orchestrate input (Hono request parsing) and pass POJOs to strictly-typed domain services.
+- **Service Layer ⟷ External Dependencies (DB, Cache, GitHub):** Business logic interacts only with unified Repositories or Client abstractions (`GitHubClient`, `CacheService`).
+
+---
+
+### 3) CORE COMPONENTS
+
+#### Frontend (Flutter Web)
+- **Presentation Layer (Pages & Widgets):** Displays the UI (e.g., Hux Design System charts, Leaderboards).
+- **Providers (State Management):** Co-located reactive state handlers that orchestrate fetching data and updating the UI.
+- **Domain Layer (Entities & Services):** Contains business object representations (`BottleneckEntity`, `PrEntity`) and rules (NO UI dependencies).
+- **Data Layer (Repositories & RemoteDataSources):** Implements interfaces defined by the Domain to fetch data from the REST API.
+
+#### Backend (Cloudflare Workers)
+- **Hono Router:** Entry point that applies CORS, parses requests, and delegates endpoints to specific feature modules.
+- **Service Layer (Feature Modules):**
+  - **Metrics & Repos Services:** Uses Git client to fetch organization state and caches the results.
+  - **ScoreAggregationService:** Aggregates PR, code, and attendance data into leaderboard structures.
+  - **Attendance & Meetings Service:** Handles checking in/out of meetings via `ATTENDANCE_KV` and Google APIs.
+  - **MeetEventsService:** Subscribes Spaces to Workspace Events and ingests pushes via Google Cloud Pub/Sub (`WEBHOOK_QUEUE` / `/api/meet-events/webhook`) to track real-time participant joins, drops, and durations.
+  - **WebhookService:** Ingests external GitHub triggers and delegates caching invalidation / point creation.
+- **Infrastructure Integrations (Octokit + D1):**
+  - **D1 Service**: Abstracted query builder for SQLite interacting with `merged_prs`, `pr_comments`, etc.
+  - **CachedGitHubClient:** Wrapper around Octokit resolving App Auth (JWT to temporary access token), enforcing Rate Limit protections.
+
+---
+
+### 4) DATA FLOW ANALYSIS
+
+Data flows sync for user queries, and async for system updates.
+
+- **Synchronous User Query (e.g., Load Dashboard):**
+  1. Frontend requests `/api/metrics/repo`.
+  2. Worker queries `CACHE` KV namespace.
+  3. **Cache Hit:** Return JSON immediately (< 20ms).
+  4. **Cache Miss:** Request App token -> Fetch from GitHub API -> Transform via pure Mapping layer -> Write to KV with 1hr TTL -> Return to client.
+
+- **Asynchronous Webhooks (Event-Driven Updates):**
+  1. Developer interacts with GitHub (merges a PR) or joins a Google Meet.
+  2. GitHub Webhook POSTs to `/api/webhooks` / Google Cloud Pub/Sub POSTs to `/api/meet-events/webhook`.
+  3. Webhook worker writes to the D1 database (idempotent `INSERT OR IGNORE`) or caches the Meet Event into `EVENTS_CACHE_KEY` limit 200 items.
+  4. Worker queues a background task to `WEBHOOK_QUEUE` indicating caching should be invalidated.
+  5. The queue consumer picks up the event and triggers backend recomputation / cache dropping.
+
+- **Chronological / Background Jobs:**
+  1. A Cron schedule hits `scheduled(ScheduledEvent)` running naturally every 6 hours.
+  2. Worker precomputes massive queries (e.g., All Time Leaderboard Snapshot) and drops them in `SCORES_KV`.
+
+---
+
+### 5) EXTERNAL INTEGRATIONS
+
+- **GitHub App API:** Core engine source. Used to query Repos, PRs, comments, additions, and review lifecycle stages. Relies on App private keys (JWT payload) mapped to installation tokens.
+- **Google Authenticator (OAuth2):** Handles user consent required to generate calendar/meeting links.
+- **Google Meet API (REST v2) & Workspace Events:** Used via authenticated endpoints to initialize video chat instances dynamically and administratively close spaces. Leverages Google Cloud Pub/Sub to push real-time participant/meeting lifecycle events.
+
+---
+
+### 6) BACKEND DESIGN
+
+**Endpoint Organization:**
+- **System:** `/api/health`, `/api/logs`, `/api/debug` (telemetry and connectivity).
+- **GitHub Sync:** `/api/repos`, `/api/prs`, `/api/sync/github`, `/api/webhooks` (system automation boundary).
+- **User Activity:** `/api/scores`, `/api/points`, `/api/members` (Leaderboards & organization states).
+- **Meetings/Attendance:** `/api/meetings`, `/api/meet-events`, `/api/attendance` (Temporal lifecycle management).
+
+**Services / Business Logic:**
+- Strict `Controller -> Service -> Mapper -> Result` pipeline. Mappers are explicitly isolated as pure functions without dependencies.
+- Score derivation relies entirely on SQL aggregations (`SUM(r.points) JOIN point_rules`) instead of hardcoding points natively in the `merged_prs` tables.
+
+**Background Workers (Cron & Queues):**
+- **Cron:** Bound in `worker.ts`'s `scheduled()` export. Executes `precomputeSnapshots()` continuously to ensure high data-heavy queries do not impact normal user navigation times.
+- **Queue Consumers:** Built-in Cloudflare Queues bound to `queue()` in `worker.ts` handle asynchronous message batches, specifically mapping `recompute_scores` so immediate user operations aren't blocked.
+
+**Performance & Resiliency:**
+- **Caching:** Distributed KV edge caching across 4 namespaces (`CACHE`, `SCORES_KV`, `MEMBERS_KV`, `ATTENDANCE_KV`).
+- **Rate Limiting:** Managed implicitly through aggressive caching (reducing upstream dependency) combined with `RateLimitGuard` built into the `CachedGitHubClient`.
+- **Error Handling:** Standardized error handler translating exceptions (`GitHubApiError`, `RateLimitError`) into unified JSON constructs (`message`, `statusCode`).
+- **Retries:** The Queueing interface handles failures natively using standard Cloudflare retries (`msg.retry()`).
+
+---
+
+### 7) FRONTEND
+
+**State Management & UI:**
+- **App Pattern:** Relies on Provider mapped conceptually by feature boundary (e.g., Dashboard metrics are bound to a singular domain Provider component).
+- **API Communication pattern:** Widgets consume DI-registered `IMetricsRepository` implementations, ensuring the UI remains completely isolated from the HTTP layer. Data deserialization occurs at the boundaries parsing clean `Entities`.
+- **UI:** Designed symmetrically utilizing the `Hux Design System`. Fully i18n standardized supporting both Left-to-Right English and Right-to-Left Arabic. Relies heavily on cached backend aggregates to immediately load without skeleton screen fatigue.
+
+---
+
+### 8) DATABASE DESIGN
+
+The Cloudflare D1 (SQLite) instance forms an idempotent registry tracking historical engineering milestones.
+
+- `repos` (1) ─━ (N) `merged_prs`
+- `members` (1) ─━ (N) `merged_prs` (Author)
+- `merged_prs` (1) ─━ (N) `pr_comments`
+- `meeting_sessions` (1) ─━ (N) `meeting_attendance`
+- `point_rules` (Dictionary table mapping Event Name -> Points -> Description)
+
+Data is strictly normalized. Bots are excluded upstream upon ingest, eliminating noise from `is_bot` queries. Additions, deletions, statuses, bodies, and creation times are maintained natively for analytics processing.
+
+---
+
+### 9) IMPORTANT DESIGN DECISIONS
+
+- **Execution over Storage:** The system avoids computing rigid scores synchronously. `merged_prs` is an immutable log. "Points" are deduced dynamically in `SCORES_KV` using `point_rules`. Upgrading point calculations for past behavior only requires changing rule tables.
+- **Cloudflare V8 Isolates:** Relying on Cloudflare Workers guarantees sub-millisecond cold starts globally without warming layers, perfect for dashboard analytics.
+- **Dependency Rule:** Enters strict boundary constraints utilizing `Awilix` proxy mode scopes. Domain functions cannot import framework-level HTTP constructs, which means the domain logic is runtime-agnostic.
+- **Temporal Decoupling:** Instead of synchronous webhook processing, Webhooks issue state insertions to DB and hand invalidations off to Queues. Immediate GitHub API success is returned to avoid GitHub timeout dropping.
+
+---
+
+### 10) ARCHITECTURE DIAGRAMS
+
+#### System Architecture
 ```mermaid
 graph TD
     User([Developer User])
@@ -91,10 +238,7 @@ graph TD
     class Store,KV,D1,Queue Store
 ```
 
-<details>
-<summary><b>Component Diagram (Backend Modules)</b></summary>
-<br>
-
+#### Component Diagram (Backend Modules)
 ```mermaid
 graph TB
     subgraph HTTP ["HTTP & Router Boundary (worker.ts)"]
@@ -137,12 +281,8 @@ graph TB
     MeetServ -.-> GoogAuth
     MeetServ -.-> RepoD1 & CacheSV
 ```
-</details>
 
-<details>
-<summary><b>Webhook Handling & Data Flow</b></summary>
-<br>
-
+#### Webhook Priority Sequence
 ```mermaid
 sequenceDiagram
     participant GitHub
@@ -169,6 +309,7 @@ sequenceDiagram
     Background CPU->>Cache: Set Key `sellio:leaderboard:all` (TTL 6H)
 ```
 
+#### Data Flow Context
 ```mermaid
 flowchart LR
     Origin[GitHub State Changes] --> |Webhooks| IngestLayer[Webhook Route]
@@ -186,12 +327,8 @@ flowchart LR
     ExternalApi --> |JSON Data| PrLayer
     PrLayer --> Client2
 ```
-</details>
 
-<details>
-<summary><b>Deployment & Database (ER)</b></summary>
-<br>
-
+#### Deployment & Workers Hierarchy
 ```mermaid
 graph TD
     node1["Developer Machine"]
@@ -218,6 +355,7 @@ graph TD
     work --> d1 & kv
 ```
 
+#### Database Entity Relations (ER)
 ```mermaid
 erDiagram
     REPOS ||--o{ MERGED_PRS : contains
@@ -270,13 +408,6 @@ erDiagram
         string description 
     }
 ```
-</details>
-
-### 🏛️ System Architecture Summary
-
-- **Frontend (Flutter Web):** Edge-deployed Single Page Application relying on `Clean Architecture`. Utilizing `Provider` for state management, it connects UI interfaces logically via dependency injection interfaces to remote API endpoints—hiding physical implementations from UI rules.
-- **Backend (Cloudflare Workers):** Edge-native Modular Monolith utilizing a highly-performant `Hono` router. All endpoints orchestrate input parsing before passing generic objects down to discrete layer services via `Awilix DI`, completely decoupling business logic from HTTP contexts.
-- **Infrastructure (Cloudflare Edge):** 0ms cold start global networking. Data is stored across `Cloudflare D1` (an idempotent historical SQLite ledger) and cached across 4 unique `Workers KV` namespaces. Heavy lifting (webhook syncing, score calculation) is deferred asynchronously to `Cloudflare Queues`.
 ---
 
 ## 🛠️ Tech Stack
