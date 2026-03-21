@@ -160,8 +160,8 @@ async function buildContainer(
 
         // Webhook
         webhookQueue: asFunction(() => webhookQueue).singleton(),
-        webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, env }: Cradle) =>
-            new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, env }),
+        webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) =>
+            new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, cachedGithubClient, env }),
         ).singleton(),
     });
 
