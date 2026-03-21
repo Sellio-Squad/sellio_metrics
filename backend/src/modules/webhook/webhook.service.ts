@@ -20,6 +20,7 @@ import type { CommentsRepository } from "../prs/comments.repository";
 import type { OpenPrsService } from "../prs/open-prs.service";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { CacheRegistry } from "../../infra/cache/cache-registry";
+import type { CachedGitHubClient } from "../../infra/github/cached-github.client";
 import { isBot } from "../../lib/bot-filter";
 import type {
     PullRequestPayload,
@@ -40,6 +41,7 @@ interface WebhookServiceDeps {
     commentsRepo: CommentsRepository;
     openPrsService: OpenPrsService;
     cache: CacheRegistry;
+    cachedGithubClient?: CachedGitHubClient;
     env: { org: string };
 }
 
@@ -51,6 +53,7 @@ export class WebhookService {
     private readonly commentsRepo: CommentsRepository;
     private readonly openPrsService: OpenPrsService;
     private readonly cache: CacheRegistry;
+    private readonly cachedGithubClient?: CachedGitHubClient;
     private readonly org: string;
 
     constructor(deps: WebhookServiceDeps) {
@@ -61,6 +64,7 @@ export class WebhookService {
         this.commentsRepo  = deps.commentsRepo;
         this.openPrsService = deps.openPrsService;
         this.cache         = deps.cache;
+        this.cachedGithubClient = deps.cachedGithubClient;
         this.org           = deps.env.org;
     }
 
@@ -106,6 +110,43 @@ export class WebhookService {
             additions:   pr.additions ?? 0,
             deletions:   pr.deletions ?? 0,
         });
+
+        // The PR is now merged! Let's fetch all historical comments it accumulated
+        // while it was open, since SQLite prevented saving them earlier.
+        if (this.cachedGithubClient) {
+            try {
+                const [issueComments, reviewComments] = await Promise.all([
+                    this.cachedGithubClient.listIssueComments(repoOwner, repo.name, pr.number, false).catch(() => []),
+                    this.cachedGithubClient.listReviewComments(repoOwner, repo.name, pr.number, false).catch(() => []),
+                ]);
+
+                const commentsToInsert: any[] = [];
+                const addComment = (c: any, type: "issue" | "review") => {
+                    const cAuthor = c.user?.login;
+                    if (!cAuthor || isBot(cAuthor, c.user?.type)) return;
+                    commentsToInsert.push({
+                        id: c.id,
+                        prId: pr.id,
+                        repoId,
+                        prNumber: pr.number,
+                        author: cAuthor,
+                        body: c.body,
+                        commentType: type,
+                        htmlUrl: c.html_url,
+                        commentedAt: c.created_at,
+                    });
+                };
+
+                issueComments.forEach(c => addComment(c, "issue"));
+                reviewComments.forEach(c => addComment(c, "review"));
+
+                if (commentsToInsert.length > 0) {
+                    await this.commentsRepo.insertCommentBatch(commentsToInsert);
+                }
+            } catch (err) {
+                this.logger.error({ err }, "Failed to backfill historical comments for newly merged PR");
+            }
+        }
 
         affectedDevelopers.push(author);
         return { affectedDevelopers };
