@@ -1,24 +1,24 @@
-library;
-
 import 'package:injectable/injectable.dart';
 import '../../domain/entities/pr_entity.dart';
 import '../../domain/repositories/pr_repository.dart';
 import '../datasources/pr_data_source.dart';
+import '../mappers/pr_mappers.dart';
+import '../models/pr_model.dart';
 
 @LazySingleton(as: PrRepository)
 class PrRepositoryImpl implements PrRepository {
-  final PrDataSource remoteDataSource;
+  final PrDataSource _remoteDataSource;
 
-  const PrRepositoryImpl(this.remoteDataSource);
+  const PrRepositoryImpl(this._remoteDataSource);
 
 
   @override
   Future<List<PrEntity>> fetchOpenPrs({required String org}) async {
-    final rawData = await remoteDataSource.fetchOpenPrs(org: org);
+    final rawData = await _remoteDataSource.fetchOpenPrs(org: org);
     return rawData
         .map((json) {
       try {
-        return PrEntity.fromJson(json as Map<String, dynamic>);
+        return PrModel.fromJson(json as Map<String, dynamic>).toEntity();
       } catch (e) {
         return null;
       }

@@ -1,9 +1,8 @@
-library;
-
 import 'package:injectable/injectable.dart';
 import '../../domain/entities/repo_info.dart';
 import '../../domain/repositories/repos_repository.dart';
 import '../datasources/repos_data_source.dart';
+import '../mappers/repo_mappers.dart';
 
 @LazySingleton(as: ReposRepository)
 class ReposRepositoryImpl implements ReposRepository {
@@ -12,5 +11,8 @@ class ReposRepositoryImpl implements ReposRepository {
   ReposRepositoryImpl(this._dataSource);
 
   @override
-  Future<List<RepoInfo>> getRepositories() => _dataSource.fetchRepositories();
+  Future<List<RepoInfo>> getRepositories() async {
+    final models = await _dataSource.fetchRepositories();
+    return models.map((m) => m.toEntity()).toList();
+  }
 }

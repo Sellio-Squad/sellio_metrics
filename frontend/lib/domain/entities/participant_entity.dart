@@ -21,20 +21,6 @@ class ParticipantEntity {
     required this.attendanceScore,
   });
 
-  factory ParticipantEntity.fromJson(Map<String, dynamic> json) =>
-      ParticipantEntity(
-        displayName: json['displayName'] as String? ?? 'Unknown',
-        email: json['email'] as String?,
-        joinTime:
-            DateTime.tryParse(json['joinTime'] as String? ?? '') ??
-            DateTime.now(),
-        leaveTime: json['leaveTime'] != null
-            ? DateTime.tryParse(json['leaveTime'] as String)
-            : null,
-        durationMinutes: json['durationMinutes'] as int? ?? 0,
-        attendanceScore: json['attendanceScore'] as int? ?? 0,
-      );
-
   /// Whether the participant is currently in the meeting (no leave time).
   bool get isCurrentlyPresent => leaveTime == null;
 }

@@ -4,6 +4,8 @@ import '../../domain/entities/github_rate_limit_status.dart';
 import '../../domain/entities/kv_cache_quota_status.dart';
 import '../../domain/repositories/health_repository.dart';
 import '../datasources/health_data_source.dart';
+import '../mappers/health_mappers.dart';
+import '../models/github_rate_limit_model.dart';
 
 @LazySingleton(as: HealthRepository)
 class HealthRepositoryImpl implements HealthRepository {
@@ -17,13 +19,13 @@ class HealthRepositoryImpl implements HealthRepository {
     if (body == null) return null;
     final rateJson = body['githubRateLimit'];
     if (rateJson is! Map<String, dynamic>) return null;
-    return GitHubRateLimitStatus.fromJson(rateJson);
+    return GitHubRateLimitModel.fromJson(rateJson).toEntity();
   }
 
   @override
   Future<KvCacheQuotaStatus?> getCacheQuotaStatus() async {
     final body = await _dataSource.fetchCacheQuota();
     if (body == null) return null;
-    return KvCacheQuotaStatus.fromJson(body);
+    return body.toEntity();
   }
 }

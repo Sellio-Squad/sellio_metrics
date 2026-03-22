@@ -1,18 +1,18 @@
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../../../data/datasources/fake/fake_logs.dart';
-import '../../../../data/datasources/logs_data_source.dart';
+import '../../../../domain/entities/log_entry_entity.dart';
+import '../../../../domain/repositories/logs_repository.dart';
 
 @injectable
 class LogsProvider extends ChangeNotifier {
-  final LogsDataSource _dataSource;
+  final LogsRepository _repository;
 
   bool _isLoading = false;
   String? _error;
   List<LogEntry> _logs = [];
 
-  LogsProvider(this._dataSource);
+  LogsProvider(this._repository);
 
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -24,7 +24,7 @@ class LogsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _logs = await _dataSource.fetchLogs(limit: limit);
+      _logs = await _repository.getLogs(limit: limit);
     } catch (e) {
       _error = e.toString();
     } finally {

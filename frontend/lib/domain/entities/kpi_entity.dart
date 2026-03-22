@@ -1,4 +1,3 @@
-library;
 
 class KpiEntity {
   final int totalPrs;

@@ -1,11 +1,10 @@
-library;
-
 import 'package:injectable/injectable.dart';
 import '../../domain/entities/meeting_entity.dart';
-import '../../domain/entities/participant_entity.dart';
 import '../../domain/entities/attendance_analytics_entity.dart';
 import '../../domain/repositories/meetings_repository.dart';
 import '../datasources/meetings_data_source.dart';
+import '../mappers/meeting_mappers.dart';
+import '../models/participant_model.dart';
 
 @LazySingleton(as: MeetingsRepository)
 class MeetingsRepositoryImpl implements MeetingsRepository {
@@ -15,23 +14,31 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
 
   @override
   Future<MeetingEntity> createMeeting(String title) async {
-    final json = await _dataSource.createMeeting(title);
-    return MeetingEntity.fromJson(json);
+    final model = await _dataSource.createMeeting(title);
+    return model.toEntity();
   }
 
   @override
   Future<List<MeetingEntity>> getMeetings() async {
-    final list = await _dataSource.fetchMeetings();
-    return list.map((json) => MeetingEntity.fromJson(json)).toList();
+    final models = await _dataSource.fetchMeetings();
+    return models.map((m) => m.toEntity()).toList();
   }
 
   @override
   Future<MeetingDetailResult> getMeetingDetail(String id) async {
     final json = await _dataSource.fetchMeetingDetail(id);
 
-    final meeting = MeetingEntity.fromJson(json);
+    final meeting = MeetingEntity(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      spaceName: json['spaceName'] as String? ?? '',
+      meetingUri: json['meetingUri'] as String? ?? '',
+      meetingCode: json['meetingCode'] as String? ?? '',
+      createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
+      participantCount: json['participantCount'] as int? ?? 0,
+    );
     final participants = (json['participants'] as List? ?? [])
-        .map((p) => ParticipantEntity.fromJson(p as Map<String, dynamic>))
+        .map((p) => ParticipantModel.fromJson(p as Map<String, dynamic>).toEntity())
         .toList();
 
     return MeetingDetailResult(meeting: meeting, participants: participants);
@@ -42,7 +49,7 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
     final json = await _dataSource.fetchAttendance(meetingId);
 
     final participants = (json['participants'] as List? ?? [])
-        .map((p) => ParticipantEntity.fromJson(p as Map<String, dynamic>))
+        .map((p) => ParticipantModel.fromJson(p as Map<String, dynamic>).toEntity())
         .toList();
 
     return AttendanceResult(
@@ -56,14 +63,14 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
 
   @override
   Future<AttendanceAnalyticsEntity> getAnalytics() async {
-    final json = await _dataSource.fetchAnalytics();
-    return AttendanceAnalyticsEntity.fromJson(json);
+    final model = await _dataSource.fetchAnalytics();
+    return model.toEntity();
   }
 
   @override
   Future<RateLimitEntity> getRateLimitStatus() async {
-    final json = await _dataSource.fetchRateLimitStatus();
-    return RateLimitEntity.fromJson(json);
+    final model = await _dataSource.fetchRateLimitStatus();
+    return model.toEntity();
   }
 
   @override

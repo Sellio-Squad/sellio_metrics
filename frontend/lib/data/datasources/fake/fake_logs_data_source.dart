@@ -1,0 +1,31 @@
+import 'package:injectable/injectable.dart';
+import '../logs_data_source.dart';
+import '../../models/log_model.dart';
+
+@Injectable(as: LogsDataSource, env: [Environment.dev])
+class FakeLogsDataSource implements LogsDataSource {
+  @override
+  Future<List<LogModel>> fetchLogs({int limit = 50}) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    final now = DateTime.now();
+    final logs = [
+      {
+        'id': 'log_1',
+        'timestamp': now.subtract(const Duration(minutes: 2)).toIso8601String(),
+        'message': 'GitHub PR cache invalidated for sellio_mobile',
+        'severity': 'info',
+        'category': 'github',
+        'metadata': {'repo': 'sellio_mobile', 'trigger': 'webhook:pull_request'},
+      },
+      {
+        'id': 'log_2',
+        'timestamp': now.subtract(const Duration(minutes: 5)).toIso8601String(),
+        'message': 'Google Meet attendees synchronisation completed',
+        'severity': 'success',
+        'category': 'googleMeet',
+        'metadata': {'meetingId': '123_abc', 'attendeeCount': 14},
+      },
+    ];
+    return logs.map((json) => LogModel.fromJson(json)).toList();
+  }
+}
