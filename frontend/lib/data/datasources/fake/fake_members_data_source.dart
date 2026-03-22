@@ -1,6 +1,6 @@
 import 'package:injectable/injectable.dart';
-import '../members_data_source.dart';
-import '../../models/member_model.dart';
+import '../../models/member/member_model.dart';
+import '../member/members_data_source.dart';
 
 @Injectable(as: MembersDataSource, env: [Environment.dev])
 class FakeMembersDataSource implements MembersDataSource {

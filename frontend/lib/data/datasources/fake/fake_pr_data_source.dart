@@ -1,5 +1,5 @@
 import 'package:injectable/injectable.dart';
-import '../pr_data_source.dart';
+import '../pr/pr_data_source.dart';
 
 @Injectable(as: PrDataSource, env: [Environment.dev])
 class FakePrDataSource implements PrDataSource {

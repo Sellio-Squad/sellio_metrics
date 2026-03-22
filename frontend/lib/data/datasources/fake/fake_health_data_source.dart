@@ -1,6 +1,6 @@
 import 'package:injectable/injectable.dart';
-import '../health_data_source.dart';
-import '../../models/kv_cache_quota_model.dart';
+import '../../models/health/kv_cache_quota_model.dart';
+import '../health/health_data_source.dart';
 
 @Injectable(as: HealthDataSource, env: [Environment.dev])
 class FakeHealthDataSource implements HealthDataSource {

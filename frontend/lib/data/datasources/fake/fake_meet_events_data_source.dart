@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:injectable/injectable.dart';
-import '../meet_events_data_source.dart';
+import '../meeting/meet_events_data_source.dart';
 
 @Injectable(as: MeetEventsDataSource, env: [Environment.dev])
 class FakeMeetEventsDataSource implements MeetEventsDataSource {

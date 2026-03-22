@@ -1,6 +1,6 @@
 import 'package:injectable/injectable.dart';
-import '../leaderboard_data_source.dart';
-import '../../models/leaderboard_model.dart';
+import '../../models/leaderboard/leaderboard_model.dart';
+import '../leaderboard/leaderboard_data_source.dart';
 
 @Injectable(as: LeaderboardDataSource, env: [Environment.dev])
 class FakeLeaderboardDataSource implements LeaderboardDataSource {

@@ -1,7 +1,8 @@
 import 'package:injectable/injectable.dart';
-import '../meetings_data_source.dart';
-import '../../models/attendance_analytics_model.dart';
-import '../../models/meeting_model.dart';
+import '../../models/meeting/attendance_analytics_model.dart';
+import '../../models/meeting/meeting_model.dart';
+import '../../models/meeting/rate_limit_model.dart';
+import '../meeting/meetings_data_source.dart';
 
 @Injectable(as: MeetingsDataSource, env: [Environment.dev])
 class FakeMeetingsDataSource implements MeetingsDataSource {
@@ -73,15 +74,6 @@ class FakeMeetingsDataSource implements MeetingsDataSource {
       isLow: false,
     );
   }
-
-  @override
-  Future<bool> fetchAuthStatus() async => true;
-
-  @override
-  Future<String> fetchAuthUrl() async => 'https://fake-auth-url.com';
-
-  @override
-  Future<void> logout() async {}
 
   @override
   Future<void> endMeeting(String id) async {}

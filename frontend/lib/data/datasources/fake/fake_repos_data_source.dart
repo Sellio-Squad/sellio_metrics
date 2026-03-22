@@ -1,7 +1,8 @@
 import 'package:injectable/injectable.dart';
 import '../../../core/constants/app_constants.dart';
-import '../repos_data_source.dart';
-import '../../models/repo_model.dart';
+import '../../models/repo/repo_model.dart';
+import '../repo/repos_data_source.dart';
+
 
 @Injectable(as: ReposDataSource, env: [Environment.dev])
 class FakeReposDataSource implements ReposDataSource {
