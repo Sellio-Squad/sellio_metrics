@@ -22,12 +22,4 @@ class GitHubRateLimitStatus {
     return 'Resets at $resetAtIso';
   }
 
-  factory GitHubRateLimitStatus.fromJson(Map<String, dynamic> json) {
-    return GitHubRateLimitStatus(
-      remaining: (json['remaining'] as num?)?.toInt() ?? 0,
-      limit: (json['limit'] as num?)?.toInt() ?? 0,
-      resetAtIso: json['resetAt'] as String? ?? '',
-      isLow: json['isLow'] as bool? ?? false,
-    );
-  }
 }

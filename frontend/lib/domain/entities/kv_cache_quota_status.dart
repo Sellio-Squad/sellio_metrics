@@ -13,17 +13,6 @@ class KvCacheQuotaStatus {
     required this.maxWritesPerRequest,
   });
 
-  factory KvCacheQuotaStatus.fromJson(Map<String, dynamic> json) {
-    return KvCacheQuotaStatus(
-      kvFreeWriteLimit: (json['kvFreeWriteLimit'] as num?)?.toInt() ?? 1000,
-      kvResetAtUtc: json['kvResetAtUtc'] as String? ?? '',
-      kvSecondsToReset: (json['kvSecondsToReset'] as num?)?.toInt() ?? 0,
-      cachedKeys: json['cachedKeys'] as Map<String, dynamic>? ?? {},
-      maxWritesPerRequest:
-          (json['maxWritesPerRequest'] as num?)?.toInt() ?? 3,
-    );
-  }
-
   int get cachedKeyCount =>
       cachedKeys.values.where((v) => (v as Map?)?['hit'] == true).length;
   int get totalKeys => cachedKeys.length;
