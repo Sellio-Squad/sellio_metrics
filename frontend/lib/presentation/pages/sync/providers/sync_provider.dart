@@ -1,16 +1,7 @@
-import 'package:sellio_metrics/core/network/api_endpoints.dart';
-/// Sync Module — SyncProvider
-///
-/// Manages the state for syncing selected GitHub repositories into D1.
-/// Calls POST /api/sync/github with { repos: [...] } for selected repos.
-/// Tracks per-repo results including diff_warning counts.
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
 import 'package:sellio_metrics/core/logging/app_logger.dart';
-import 'package:sellio_metrics/core/network/api_call.dart';
 import 'package:sellio_metrics/domain/entities/repo_info.dart';
 import 'package:sellio_metrics/domain/repositories/repos_repository.dart';
 
@@ -37,14 +28,12 @@ class RepoSyncResult {
     this.fetchFailures = const [],
   });
 
-  /// True if there were PRs that failed to fetch deep payload data
   bool get hasWarnings => fetchFailures.isNotEmpty;
 }
 
 @injectable
 class SyncProvider extends ChangeNotifier {
   final ReposRepository _reposRepository;
-  final Dio _dio;
 
   SyncStatus _status = SyncStatus.idle;
   List<RepoInfo> _repos = [];
@@ -53,7 +42,7 @@ class SyncProvider extends ChangeNotifier {
   final List<RepoSyncResult> _results = [];
   String? _globalError;
 
-  SyncProvider(this._reposRepository, this._dio);
+  SyncProvider(this._reposRepository);
 
   SyncStatus get status => _status;
   List<RepoInfo> get repos => _repos;
@@ -63,15 +52,12 @@ class SyncProvider extends ChangeNotifier {
   String? get globalError => _globalError;
   bool get isRunning => _status == SyncStatus.running;
 
-  /// All repos from which the user can select to sync.
   List<RepoInfo> get availableRepos => _repos;
 
-  /// Currently selected repos (to be synced).
   List<RepoInfo> get selectedRepos => _repos
       .where((r) => _selectedRepoNames.contains(r.fullName))
       .toList();
 
-  /// Progress value 0.0 → 1.0
   double get progress {
     final total = selectedRepos.length;
     if (total == 0) return 0.0;
@@ -80,7 +66,6 @@ class SyncProvider extends ChangeNotifier {
     return _currentIndex / total;
   }
 
-  /// Label shown on the progress bar
   String get progressLabel {
     final selected = selectedRepos;
     switch (_status) {
@@ -108,12 +93,9 @@ class SyncProvider extends ChangeNotifier {
     }
   }
 
-  // ─── Repo Selection ──────────────────────────────────────────
-
   Future<void> loadRepos() async {
     try {
       _repos = await _reposRepository.getRepositories();
-      // Default: all repos selected
       if (_selectedRepoNames.isEmpty) {
         _selectedRepoNames = _repos.map((r) => r.fullName).toSet();
       }
@@ -142,8 +124,6 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Sync ────────────────────────────────────────────────────
-
   Future<void> startSync({bool force = false}) async {
     if (_status == SyncStatus.running) return;
 
@@ -154,7 +134,6 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      // Load repos if not yet loaded
       if (_repos.isEmpty) {
         await loadRepos();
       }
@@ -187,7 +166,6 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Retry only the repos that failed in the last sync run, or have zero diff PRs.
   Future<void> retryFailed() async {
     if (_status == SyncStatus.running) return;
 
@@ -203,7 +181,6 @@ class SyncProvider extends ChangeNotifier {
 
     if (reposToRetry.isEmpty) return;
 
-    // Remove old results so we can re-add them
     _results.removeWhere((r) => !r.success || r.fetchFailures.isNotEmpty);
     _status = SyncStatus.running;
     _currentIndex = -1;
@@ -231,25 +208,15 @@ class SyncProvider extends ChangeNotifier {
 
   Future<void> _syncRepo(RepoInfo repo, {List<int>? prNumbers, bool force = false}) async {
     try {
-      final parts = repo.fullName.split('/');
-      final owner = parts.length == 2 ? parts[0] : null;
-      final repoName = parts.length == 2 ? parts[1] : repo.name;
+      final body = await _reposRepository.syncGithub(
+        repo.fullName,
+        prNumbers: prNumbers,
+        force: force,
+      );
 
-      final response = await safeApiCall(() => _dio.post(
-        ApiEndpoints.syncGithub,
-        data: {
-          'repo': repoName,
-          if (owner != null) 'owner': owner,
-          if (prNumbers != null && prNumbers.isNotEmpty) 'prNumbers': prNumbers,
-          if (force) 'force': true,
-        },
-      ));
-
-      final body = response.data as Map<String, dynamic>;
-      final fetchFailures = (body['fetchFailures'] as List<dynamic>?)
-              ?.map((e) => e as Map<String, dynamic>)
-              .toList() ??
-          [];
+      final fetchFailures = ((body['fetchFailures'] as List?) ?? [])
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
 
       _results.add(RepoSyncResult(
         repo: repo,
@@ -270,8 +237,6 @@ class SyncProvider extends ChangeNotifier {
     }
   }
 
-  // ─── Reset ───────────────────────────────────────────────────
-
   void reset() {
     _status = SyncStatus.idle;
     _currentIndex = -1;
@@ -280,8 +245,6 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // ─── Reset Database ──────────────────────────────────────────
-  /// Wipes all synced PR/comment data and caches, then forces a full re-sync.
   Future<void> resetDatabase() async {
     if (_status == SyncStatus.running || _status == SyncStatus.resetting) return;
 
@@ -292,7 +255,7 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await safeApiCall(() => _dio.delete(ApiEndpoints.syncGithubReset));
+      await _reposRepository.syncGithubReset();
       appLogger.info('SyncProvider', 'Database reset successful');
     } catch (e) {
       appLogger.error('SyncProvider', 'Database reset failed', null);
@@ -302,7 +265,6 @@ class SyncProvider extends ChangeNotifier {
       return;
     }
 
-    // After reset, force a full sync of all repos
     _selectedRepoNames = _repos.map((r) => r.fullName).toSet();
     await startSync(force: true);
   }

@@ -1,7 +1,5 @@
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:sellio_metrics/core/di/injection.dart';
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
@@ -9,8 +7,6 @@ import 'package:sellio_metrics/presentation/pages/setting/widgets/settings_secti
 import 'package:sellio_metrics/presentation/pages/setting/widgets/repository_selector.dart';
 import 'package:sellio_metrics/presentation/pages/setting/widgets/theme_toggle.dart';
 import 'package:sellio_metrics/presentation/pages/setting/widgets/language_toggle.dart';
-import 'package:sellio_metrics/presentation/pages/setting/widgets/sync_section.dart';
-import 'package:sellio_metrics/presentation/pages/setting/providers/sync_provider.dart';
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 
@@ -32,18 +28,6 @@ class SettingsPage extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xxl),
 
-            // GitHub Sync
-            SettingsSection(
-              title: 'GitHub Data Sync',
-              icon: Icons.cloud_sync_outlined,
-              children: [
-                ChangeNotifierProvider(
-                  create: (_) => getIt<SyncProvider>(),
-                  child: const SyncSection(),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xl),
 
             // Repository Selection
             SettingsSection(

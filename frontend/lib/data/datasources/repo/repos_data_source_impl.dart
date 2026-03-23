@@ -22,4 +22,30 @@ class ReposDataSourceImpl implements ReposDataSource {
       },
     );
   }
+
+  @override
+  Future<Map<String, dynamic>> syncGithub(String repoFullName, {List<int>? prNumbers, bool force = false}) async {
+    final parts = repoFullName.split('/');
+    final owner = parts.length == 2 ? parts[0] : null;
+    final repoName = parts.length == 2 ? parts[1] : repoFullName;
+
+    return await _apiClient.post<Map<String, dynamic>>(
+      ApiEndpoints.syncGithub,
+      tag: 'SyncGithub',
+      data: {
+        'repo': repoName,
+        if (owner != null) 'owner': owner,
+        if (prNumbers != null && prNumbers.isNotEmpty) 'prNumbers': prNumbers,
+        if (force) 'force': true,
+      },
+    );
+  }
+
+  @override
+  Future<void> syncGithubReset() async {
+    await _apiClient.delete<dynamic>(
+      ApiEndpoints.syncGithubReset,
+      tag: 'SyncGithubReset',
+    );
+  }
 }
