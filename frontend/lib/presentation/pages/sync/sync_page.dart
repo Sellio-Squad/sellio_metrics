@@ -1,22 +1,36 @@
-/// Setting — SyncSection Widget
-///
-/// Animated multi-repo sync UI using HuxProgress.
-/// Each repo cycles: pending → in-progress (indeterminate) → done/error.
-/// Completion card shows: PRs · Lines added/deleted · Comments.
-
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
 
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
-import 'package:sellio_metrics/presentation/pages/setting/providers/sync_provider.dart';
+import 'package:sellio_metrics/presentation/pages/sync/providers/sync_provider.dart';
 
-class SyncSection extends StatelessWidget {
-  const SyncSection({super.key});
+class SyncPage extends StatelessWidget {
+  const SyncPage({super.key});
 
   @override
-  Widget build(BuildContext context) => const _SyncSectionBody();
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    
+    return Align(
+      alignment: Alignment.topLeft,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'GitHub Data Sync',
+              style: AppTypography.headline.copyWith(color: scheme.title),
+            ),
+            const SizedBox(height: AppSpacing.xxl),
+            const _SyncSectionBody(),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 // ── Body ─────────────────────────────────────────────────────────────
@@ -149,15 +163,9 @@ class _RepoSelector extends StatelessWidget {
                       horizontal: AppSpacing.md, vertical: AppSpacing.sm),
                   child: Row(
                     children: [
-                      SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: Checkbox(
-                          value: selected,
-                          onChanged: (_) => sync.toggleRepoSelection(repo),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                          visualDensity: VisualDensity.compact,
-                        ),
+                      SCheckbox(
+                        value: selected,
+                        onChanged: (_) => sync.toggleRepoSelection(repo),
                       ),
                       const SizedBox(width: AppSpacing.sm),
                       Expanded(

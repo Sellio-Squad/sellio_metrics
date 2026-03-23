@@ -22,6 +22,8 @@ import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_pr
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meet_events_provider.dart';
 import 'package:sellio_metrics/presentation/pages/observability/providers/health_status_provider.dart';
 import 'package:sellio_metrics/presentation/pages/logs/providers/logs_provider.dart';
+import 'package:sellio_metrics/presentation/pages/sync/sync_page.dart';
+import 'package:sellio_metrics/presentation/pages/sync/providers/sync_provider.dart';
 
 // ─── Route Groups ────────────────────────────────────────────
 enum NavGroup { team, product, system }
@@ -174,6 +176,18 @@ class AppNavigation {
           ..fetchAll()
           ..startAutoRefresh(),
         child: const ObservabilityPage(),
+      ),
+    ),
+    AppRoute(
+      id: 'sync',
+      path: '/sync',
+      icon: LucideIcons.gitCommit,
+      group: NavGroup.system,
+      primaryNav: false,
+      labelBuilder: (l10n) => 'Sync',
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: getIt<SyncProvider>(),
+        child: const SyncPage(),
       ),
     ),
   ];

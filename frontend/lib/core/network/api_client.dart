@@ -57,6 +57,29 @@ class ApiClient {
     }
   }
 
+  /// DELETE with automatic logging + status check.
+  Future<T> delete<T>(
+    String path, {
+    String? tag,
+    dynamic data,
+    T Function(dynamic data)? parser,
+  }) async {
+    final resolvedTag = tag ?? path;
+    appLogger.network(resolvedTag, 'DELETE', 
+        Uri.parse(_dio.options.baseUrl + path));
+
+    try {
+      final response = await _dio.delete(path, data: data);
+
+      _assertSuccess(response, resolvedTag);
+
+      if (parser != null) return parser(response.data);
+      return response.data as T;
+    } on DioException catch (e) {
+      throw _mapDioError(e, resolvedTag);
+    }
+  }
+
   void _assertSuccess(Response response, String tag) {
     if (response.statusCode == null || 
         response.statusCode! < 200 || 
