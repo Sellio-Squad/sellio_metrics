@@ -15,6 +15,7 @@ import 'package:sellio_metrics/presentation/pages/meetings/create_meeting_dialog
 import 'package:sellio_metrics/presentation/pages/meetings/meeting_detail_view.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/attendance_analytics_view.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/live_events_view.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/regular_meetings_section.dart';
 
 class MeetingsPage extends StatefulWidget {
   const MeetingsPage({super.key});
@@ -221,6 +222,9 @@ class _MeetingsPageState extends State<MeetingsPage>
 
               // Active meetings list
               _buildMeetingsList(context, provider),
+
+              const SizedBox(height: AppSpacing.xxl),
+              const RegularMeetingsSection(),
             ],
           ),
         ),

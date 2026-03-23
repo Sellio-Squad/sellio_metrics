@@ -5,7 +5,6 @@ import 'package:sellio_metrics/presentation/pages/about/about_apps_section.dart'
 import 'package:sellio_metrics/presentation/pages/about/about_features_section.dart';
 import 'package:sellio_metrics/presentation/pages/about/about_hero.dart';
 import 'package:sellio_metrics/presentation/pages/about/about_how_to_join_section.dart';
-import 'package:sellio_metrics/presentation/pages/about/about_meetings_section.dart';
 import 'package:sellio_metrics/presentation/pages/about/about_tech_stack_section.dart';
 import 'package:sellio_metrics/presentation/pages/about/about_vision_section.dart';
 
@@ -28,8 +27,6 @@ class AboutPage extends StatelessWidget {
           const AboutTechStackSection(),
           const SizedBox(height: AppSpacing.xl),
           const AboutHowToJoinSection(),
-          const SizedBox(height: AppSpacing.xl),
-          const AboutMeetingsSection(),
           const SizedBox(height: AppSpacing.xl),
           const AboutFeaturesSection(),
         ],

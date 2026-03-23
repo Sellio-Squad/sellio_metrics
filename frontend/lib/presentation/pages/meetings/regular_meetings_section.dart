@@ -7,10 +7,9 @@ import 'package:sellio_metrics/core/utils/ics_generator.dart';
 import 'package:sellio_metrics/core/utils/web_download.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import 'package:sellio_metrics/presentation/pages/about/about_section_header.dart';
 
-class AboutMeetingsSection extends StatelessWidget {
-  const AboutMeetingsSection({super.key});
+class RegularMeetingsSection extends StatelessWidget {
+  const RegularMeetingsSection({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -80,9 +79,12 @@ class AboutMeetingsSection extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        AboutSectionHeader(
-          title: l10n.aboutMeetings,
-          icon: Icons.event_note,
+        Row(
+          children: [
+            Icon(Icons.event_note, size: 20, color: context.colors.primary),
+            const SizedBox(width: AppSpacing.sm),
+            Text(l10n.aboutMeetings, style: AppTypography.title.copyWith(color: context.colors.title)),
+          ],
         ),
         const SizedBox(height: AppSpacing.lg),
         _MeetingTimeline(meetings: meetings),
