@@ -1,10 +1,9 @@
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_theme.dart';
-import '../../../../domain/enums/pr_type.dart';
-import '../../../extensions/pr_type_presentation.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/domain/enums/pr_type.dart';
+import 'package:sellio_metrics/presentation/extensions/pr_type_presentation.dart';
 
 class PrTypeBadge extends StatelessWidget {
   final PrType prType;

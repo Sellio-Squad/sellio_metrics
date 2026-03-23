@@ -1,13 +1,12 @@
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/utils/formatters.dart';
-import '../../../../core/utils/date_utils.dart';
-import '../../../../design_system/design_system.dart';
-import '../../../../domain/entities/pr_entity.dart';
-import '../../../../domain/entities/user_entity.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/utils/formatters.dart';
+import 'package:sellio_metrics/core/utils/date_utils.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/entities/user_entity.dart';
 
 class PrExpandedDetails extends StatelessWidget {
   final PrEntity pr;

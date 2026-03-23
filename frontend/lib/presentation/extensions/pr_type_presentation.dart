@@ -1,8 +1,7 @@
-library;
 
 import 'package:flutter/material.dart';
-import '../../core/theme/sellio_colors.dart';
-import '../../domain/enums/pr_type.dart';
+import 'package:sellio_metrics/core/theme/sellio_colors.dart';
+import 'package:sellio_metrics/domain/enums/pr_type.dart';
 
 extension PrTypePresentation on PrType {
   Color get color => switch (this) {

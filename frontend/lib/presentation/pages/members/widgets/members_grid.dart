@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import '../../../../core/theme/app_theme.dart';
-import '../../../../domain/entities/member_status_entity.dart';
-import 'member_card.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/domain/entities/member_status_entity.dart';
+import 'package:sellio_metrics/presentation/pages/members/widgets/member_card.dart';
 
 class MembersGrid extends StatelessWidget {
   final List<MemberStatusEntity> members;

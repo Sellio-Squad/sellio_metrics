@@ -1,12 +1,11 @@
-library;
 
 import 'package:flutter/material.dart';
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../domain/entities/kpi_entity.dart';
-import '../../../widgets/kpi_card.dart';
-import '../../../widgets/section_header.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/domain/entities/kpi_entity.dart';
+import 'package:sellio_metrics/presentation/widgets/kpi_card.dart';
+import 'package:sellio_metrics/presentation/widgets/section_header.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../../design_system/design_system.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
 
 class OpenPrsKpiGrid extends StatelessWidget {
   final KpiEntity kpis;

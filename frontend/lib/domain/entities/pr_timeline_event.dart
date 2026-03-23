@@ -1,5 +1,5 @@
-import 'pr_entity.dart';
-import 'user_entity.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/entities/user_entity.dart';
 
 class PrTimelineEvent {
   final PrTimelineEventType type;

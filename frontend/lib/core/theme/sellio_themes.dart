@@ -1,9 +1,7 @@
-library;
 
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart' show HuxTheme;
-
-import 'sellio_colors.dart';
+import 'package:sellio_metrics/core/theme/sellio_colors.dart';
 
 /// Sellio theme definitions (light/dark).
 /// Light uses Hux; dark uses enhanced Sellio design system colors.

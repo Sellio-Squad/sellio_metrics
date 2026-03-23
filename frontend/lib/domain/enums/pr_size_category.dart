@@ -2,7 +2,6 @@
 ///
 /// Classifies PR size by total lines changed (additions + deletions).
 /// Thresholds based on industry best practices for review efficiency.
-library;
 
 enum PrSizeCategory {
   xs(label: 'XS', maxLines: 10),

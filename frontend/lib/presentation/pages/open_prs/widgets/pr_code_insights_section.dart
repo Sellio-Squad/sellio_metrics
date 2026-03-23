@@ -1,15 +1,14 @@
 /// PR Code Insights Section
 ///
 /// Displays file-type breakdown and actionable insights from PR analysis.
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/theme/app_theme.dart';
-import '../../../../domain/entities/pr_code_insight.dart';
-import '../../../../domain/entities/pr_entity.dart';
-import '../../../../domain/services/pr_analysis_service.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/domain/entities/pr_code_insight.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/services/pr_analysis_service.dart';
 
 class PrCodeInsightsSection extends StatelessWidget {
   final PrEntity pr;

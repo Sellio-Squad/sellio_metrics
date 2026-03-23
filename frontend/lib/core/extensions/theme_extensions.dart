@@ -1,7 +1,6 @@
-library;
 
 import 'package:flutter/material.dart';
-import '../theme/sellio_colors.dart';
+import 'package:sellio_metrics/core/theme/sellio_colors.dart';
 
 extension ThemeX on BuildContext {
   bool get isDark => Theme.of(this).brightness == Brightness.dark;

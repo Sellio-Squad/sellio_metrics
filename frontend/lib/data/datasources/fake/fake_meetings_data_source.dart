@@ -1,11 +1,10 @@
-/// Fake Meetings Data Source
-///
-/// In-memory implementation of [MeetingsDataSource] for UI testing
-/// without a backend.
-library;
+import 'package:injectable/injectable.dart';
+import 'package:sellio_metrics/data/models/meeting/attendance_analytics_model.dart';
+import 'package:sellio_metrics/data/models/meeting/meeting_model.dart';
+import 'package:sellio_metrics/data/models/meeting/rate_limit_model.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meetings_data_source.dart';
 
-import '../meetings_data_source.dart';
-
+@Injectable(as: MeetingsDataSource, env: [Environment.dev])
 class FakeMeetingsDataSource implements MeetingsDataSource {
   final List<Map<String, dynamic>> _meetings = [
     {
@@ -14,24 +13,13 @@ class FakeMeetingsDataSource implements MeetingsDataSource {
       'spaceName': 'spaces/abc',
       'meetingUri': 'https://meet.google.com/abc-defg-hij',
       'meetingCode': 'abc-defg-hij',
-      'createdAt': DateTime.now()
-          .subtract(const Duration(hours: 24))
-          .toIso8601String(),
+      'createdAt': DateTime.now().subtract(const Duration(hours: 24)).toIso8601String(),
       'participantCount': 5,
-    },
-    {
-      'id': 'meet_2',
-      'title': 'Sprint Planning',
-      'spaceName': 'spaces/def',
-      'meetingUri': 'https://meet.google.com/def-ghij-klm',
-      'meetingCode': 'def-ghij-klm',
-      'createdAt': DateTime.now().toIso8601String(),
-      'participantCount': 0,
     },
   ];
 
   @override
-  Future<Map<String, dynamic>> createMeeting(String title) async {
+  Future<MeetingModel> createMeeting(String title) async {
     await Future.delayed(const Duration(milliseconds: 600));
     final newMeeting = {
       'id': 'meet_${DateTime.now().millisecondsSinceEpoch}',
@@ -43,142 +31,50 @@ class FakeMeetingsDataSource implements MeetingsDataSource {
       'participantCount': 0,
     };
     _meetings.insert(0, newMeeting);
-    return newMeeting;
+    return MeetingModel.fromJson(newMeeting);
   }
 
   @override
-  Future<List<Map<String, dynamic>>> fetchMeetings() async {
+  Future<List<MeetingModel>> fetchMeetings() async {
     await Future.delayed(const Duration(milliseconds: 400));
-    return List.from(_meetings);
+    return _meetings.map((m) => MeetingModel.fromJson(m)).toList();
   }
 
   @override
   Future<Map<String, dynamic>> fetchMeetingDetail(String id) async {
     await Future.delayed(const Duration(milliseconds: 500));
-    final meeting = _meetings.firstWhere(
-      (m) => m['id'] == id,
-      orElse: () => throw Exception('Meeting not found'),
-    );
-
-    return {
-      ...meeting,
-      'participants': [
-        {
-          'displayName': 'Alice Smith',
-          'email': 'alice@example.com',
-          'joinTime': DateTime.now()
-              .subtract(const Duration(minutes: 45))
-              .toIso8601String(),
-          'leaveTime': null,
-          'durationMinutes': 45,
-          'attendanceScore': 100,
-        },
-        {
-          'displayName': 'Bob Jones',
-          'email': 'bob@example.com',
-          'joinTime': DateTime.now()
-              .subtract(const Duration(minutes: 50))
-              .toIso8601String(),
-          'leaveTime': DateTime.now()
-              .subtract(const Duration(minutes: 10))
-              .toIso8601String(),
-          'durationMinutes': 40,
-          'attendanceScore': 85,
-        },
-      ],
-    };
+    return _meetings.firstWhere((m) => m['id'] == id);
   }
 
   @override
   Future<Map<String, dynamic>> fetchAttendance(String meetingId) async {
     await Future.delayed(const Duration(milliseconds: 500));
-    return {
-      'meetingId': meetingId,
-      'meetingTitle': 'Daily Standup',
-      'meetingDate': DateTime.now()
-          .subtract(const Duration(days: 1))
-          .toIso8601String(),
-      'totalDurationMinutes': 60,
-      'participants': [
-        {
-          'displayName': 'Alice Smith',
-          'email': 'alice@example.com',
-          'joinTime': DateTime.now()
-              .subtract(const Duration(hours: 1))
-              .toIso8601String(),
-          'leaveTime': DateTime.now()
-              .subtract(const Duration(minutes: 15))
-              .toIso8601String(),
-          'durationMinutes': 45,
-          'attendanceScore': 95,
-        },
-      ],
-    };
+    return {'meetingId': meetingId, 'participants': []};
   }
 
   @override
-  Future<Map<String, dynamic>> fetchAnalytics() async {
+  Future<AttendanceAnalyticsModel> fetchAnalytics() async {
     await Future.delayed(const Duration(milliseconds: 800));
-    return {
+    return AttendanceAnalyticsModel.fromJson({
       'totalMeetings': 12,
       'totalAttendees': 45,
       'averageDurationMinutes': 35,
       'averageScore': 88,
-      'mostActiveParticipants': [
-        {
-          'displayName': 'Alice Smith',
-          'email': 'alice@example.com',
-          'meetingsAttended': 10,
-          'totalMinutes': 350,
-          'averageScore': 95,
-        },
-        {
-          'displayName': 'Bob Jones',
-          'email': 'bob@example.com',
-          'meetingsAttended': 8,
-          'totalMinutes': 280,
-          'averageScore': 82,
-        },
-      ],
-      'attendanceTrends': [
-        {'date': '2023-10-01', 'attendeeCount': 5, 'averageDuration': 30},
-        {'date': '2023-10-02', 'attendeeCount': 8, 'averageDuration': 45},
-        {'date': '2023-10-03', 'attendeeCount': 6, 'averageDuration': 35},
-      ],
-    };
+      'mostActiveParticipants': [],
+      'attendanceTrends': [],
+    });
   }
 
   @override
-  Future<Map<String, dynamic>> fetchRateLimitStatus() async {
-    return {
-      'remaining': 58,
-      'limit': 60,
-      'resetAt': DateTime.now()
-          .add(const Duration(seconds: 45))
-          .toIso8601String(),
-      'isLow': false,
-    };
+  Future<RateLimitModel> fetchRateLimitStatus() async {
+    return const RateLimitModel(
+      remaining: 58,
+      limit: 60,
+      resetAt: '',
+      isLow: false,
+    );
   }
 
   @override
-  Future<bool> fetchAuthStatus() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-    return true; // Fake data always authorized
-  }
-
-  @override
-  Future<String?> fetchAuthUrl() async {
-    return 'https://fake-auth-url.com';
-  }
-
-  @override
-  Future<void> logout() async {
-    await Future.delayed(const Duration(milliseconds: 300));
-  }
-
-  @override
-  Future<void> endMeeting(String id) async {
-    await Future.delayed(const Duration(milliseconds: 800));
-    _meetings.removeWhere((m) => m['id'] == id);
-  }
+  Future<void> endMeeting(String id) async {}
 }

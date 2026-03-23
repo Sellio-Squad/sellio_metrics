@@ -2,23 +2,22 @@
 ///
 /// Full-page view for a single PR, accessed via `/prs/:prNumber`.
 /// Uses breadcrumbs for navigation back to the Open PRs list.
-library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../design_system/design_system.dart';
-import '../../../domain/entities/pr_entity.dart';
-import '../../../domain/enums/pr_size_category.dart';
-import '../../../domain/services/pr_analysis_service.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/enums/pr_size_category.dart';
+import 'package:sellio_metrics/domain/services/pr_analysis_service.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/pr_data_provider.dart';
-import 'widgets/pr_details_header.dart';
-import 'widgets/pr_code_insights_section.dart';
-import 'widgets/pr_media_section.dart';
-import 'widgets/pr_ticket_link_section.dart';
-import 'widgets/pr_expanded_details.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_details_header.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_code_insights_section.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_media_section.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_ticket_link_section.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_expanded_details.dart';
 
 class PrDetailsPage extends StatelessWidget {
   final int prNumber;

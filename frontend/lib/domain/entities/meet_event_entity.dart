@@ -1,6 +1,5 @@
 /// Meet Event Entity — domain model for real-time Google Meet events
 /// received via Workspace Events + Pub/Sub.
-library;
 
 class MeetEventEntity {
   final String id;

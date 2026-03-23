@@ -1,11 +1,10 @@
-library;
 
 import 'package:flutter/material.dart';
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../design_system/design_system.dart';
-import '../../../domain/entities/leaderboard_entry.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/leaderboard_entry.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import 'leaderboard_row.dart';
+import 'package:sellio_metrics/presentation/pages/leaderboard/leaderboard_row.dart';
 
 class LeaderboardSection extends StatelessWidget {
   final List<LeaderboardEntry> entries;

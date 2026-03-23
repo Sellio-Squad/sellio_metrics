@@ -2,10 +2,9 @@
 ///
 /// Domain-level interface for real-time Meet event tracking.
 /// Separate from MeetingsRepository (Single Responsibility).
-library;
 
 import 'dart:async';
-import '../entities/meet_event_entity.dart';
+import 'package:sellio_metrics/domain/entities/meet_event_entity.dart';
 
 abstract class MeetEventsRepository {
   /// Subscribe to Workspace Events for a meeting space.

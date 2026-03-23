@@ -2,15 +2,14 @@
 ///
 /// Manages meetings list, selected meeting details, attendance data,
 /// analytics, rate limit status, and loading/error states.
-library;
 
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../../../domain/entities/meeting_entity.dart';
-import '../../../../domain/entities/participant_entity.dart';
-import '../../../../domain/entities/attendance_analytics_entity.dart';
-import '../../../../domain/repositories/meetings_repository.dart';
+import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
+import 'package:sellio_metrics/domain/entities/participant_entity.dart';
+import 'package:sellio_metrics/domain/entities/attendance_analytics_entity.dart';
+import 'package:sellio_metrics/domain/repositories/meetings_repository.dart';
 
 @injectable
 class MeetingsProvider extends ChangeNotifier {

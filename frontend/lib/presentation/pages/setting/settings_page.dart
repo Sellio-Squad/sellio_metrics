@@ -1,17 +1,16 @@
-library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/di/injection.dart';
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../design_system/design_system.dart';
+import 'package:sellio_metrics/core/di/injection.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import 'widgets/settings_section.dart';
-import 'widgets/repository_selector.dart';
-import 'widgets/theme_toggle.dart';
-import 'widgets/language_toggle.dart';
-import 'widgets/sync_section.dart';
-import 'providers/sync_provider.dart';
+import 'package:sellio_metrics/presentation/pages/setting/widgets/settings_section.dart';
+import 'package:sellio_metrics/presentation/pages/setting/widgets/repository_selector.dart';
+import 'package:sellio_metrics/presentation/pages/setting/widgets/theme_toggle.dart';
+import 'package:sellio_metrics/presentation/pages/setting/widgets/language_toggle.dart';
+import 'package:sellio_metrics/presentation/pages/setting/widgets/sync_section.dart';
+import 'package:sellio_metrics/presentation/pages/setting/providers/sync_provider.dart';
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key});
 

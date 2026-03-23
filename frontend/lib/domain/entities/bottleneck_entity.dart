@@ -1,6 +1,5 @@
-library;
 
-import '../../domain/enums/severity.dart';
+import 'package:sellio_metrics/domain/enums/severity.dart';
 
 class BottleneckEntity {
   final int prNumber;

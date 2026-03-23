@@ -2,11 +2,10 @@
 ///
 /// Separate from MetricsRepository to follow the Single Responsibility
 /// Principle. Handles only meeting-related data operations.
-library;
 
-import '../entities/meeting_entity.dart';
-import '../entities/participant_entity.dart';
-import '../entities/attendance_analytics_entity.dart';
+import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
+import 'package:sellio_metrics/domain/entities/participant_entity.dart';
+import 'package:sellio_metrics/domain/entities/attendance_analytics_entity.dart';
 
 abstract class MeetingsRepository {
   /// Create a new meeting and return the created entity.

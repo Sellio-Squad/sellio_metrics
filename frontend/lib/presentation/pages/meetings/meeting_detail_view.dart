@@ -3,11 +3,11 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../design_system/design_system.dart';
-import '../../../domain/entities/participant_entity.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/participant_entity.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
-import '../../widgets/common/loading_screen.dart';
+import 'package:sellio_metrics/presentation/widgets/common/loading_screen.dart';
 
 class MeetingDetailView extends StatefulWidget {
   final String meetingId;

@@ -4,11 +4,10 @@
 /// All methods are static and side-effect-free for easy testing.
 /// Designed for future AI provider swap — replace method bodies
 /// without changing the interface.
-library;
 
-import '../entities/pr_code_insight.dart';
-import '../entities/pr_entity.dart';
-import '../enums/pr_size_category.dart';
+import 'package:sellio_metrics/domain/entities/pr_code_insight.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/enums/pr_size_category.dart';
 
 class PrAnalysisService {
   const PrAnalysisService._();

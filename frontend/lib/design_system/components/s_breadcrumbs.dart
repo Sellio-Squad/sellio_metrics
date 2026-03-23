@@ -2,13 +2,12 @@
 ///
 /// A breadcrumb navigation bar that renders items separated by chevrons.
 /// The last item is displayed as the current (non-clickable) page.
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../core/extensions/theme_extensions.dart';
-import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_typography.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/theme/app_spacing.dart';
+import 'package:sellio_metrics/core/theme/app_typography.dart';
 
 class SBreadcrumbItem {
   final String label;

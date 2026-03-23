@@ -1,12 +1,11 @@
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import 'empty_state.dart';
-import 'pr_list_tile.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/empty_state.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_list_tile.dart';
 
 class OpenPrsList extends StatelessWidget {
   final List<PrEntity> prs;

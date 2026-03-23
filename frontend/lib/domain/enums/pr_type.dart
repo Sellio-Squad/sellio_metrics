@@ -2,9 +2,8 @@
 ///
 /// Pure domain enum — no framework dependencies.
 /// UI concerns (colors, icons) live in presentation extensions.
-library;
 
-import '../../core/constants/app_constants.dart';
+import 'package:sellio_metrics/core/constants/app_constants.dart';
 
 enum PrType {
   feature('Feature'),

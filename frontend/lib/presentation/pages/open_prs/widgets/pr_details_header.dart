@@ -1,17 +1,16 @@
 /// PR Details Header
 ///
 /// Displays the PR title, badges, creator info, and size category.
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/utils/date_utils.dart';
-import '../../../../design_system/design_system.dart';
-import '../../../../domain/entities/pr_entity.dart';
-import '../../../../domain/enums/pr_size_category.dart';
-import '../../../../domain/enums/pr_type.dart';
-import 'pr_type_badge.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/utils/date_utils.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/enums/pr_size_category.dart';
+import 'package:sellio_metrics/domain/enums/pr_type.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_type_badge.dart';
 
 class PrDetailsHeader extends StatelessWidget {
   final PrEntity pr;

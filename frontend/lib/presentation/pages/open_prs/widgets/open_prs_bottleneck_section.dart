@@ -1,13 +1,12 @@
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../design_system/design_system.dart';
-import '../../../../domain/entities/bottleneck_entity.dart';
-import '../../../widgets/section_header.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/bottleneck_entity.dart';
+import 'package:sellio_metrics/presentation/widgets/section_header.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import 'bottleneck_item.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/bottleneck_item.dart';
 
 class OpenPrsBottleneckSection extends StatelessWidget {
   final List<BottleneckEntity> bottlenecks;

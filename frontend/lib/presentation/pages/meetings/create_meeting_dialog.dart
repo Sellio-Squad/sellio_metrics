@@ -3,8 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../design_system/design_system.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
 
 class CreateMeetingDialog extends StatefulWidget {

@@ -1,4 +1,4 @@
-import 'user_entity.dart';
+import 'package:sellio_metrics/domain/entities/user_entity.dart';
 
 class ApprovalEntity {
   final UserEntity reviewer;

@@ -1,7 +1,6 @@
 /// Domain Entity — MemberStatusEntity
 ///
 /// Immutable value object with equality support.
-library;
 
 class MemberStatusEntity {
   final String developer;

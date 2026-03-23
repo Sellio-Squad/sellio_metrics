@@ -1,12 +1,11 @@
-library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../design_system/design_system.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
 import 'package:sellio_metrics/presentation/pages/setting/providers/app_settings_provider.dart';
-import '../../../widgets/common/loading_row.dart';
+import 'package:sellio_metrics/presentation/widgets/common/loading_row.dart';
 
 class RepositorySelector extends StatelessWidget {
   const RepositorySelector({super.key});

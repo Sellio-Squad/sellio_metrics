@@ -2,15 +2,14 @@
 ///
 /// Shows a live scrolling feed of Google Meet events (joins, leaves,
 /// meeting starts/ends) with status indicators and auto-scroll.
-library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../design_system/design_system.dart';
-import '../../../domain/entities/meet_event_entity.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/meet_event_entity.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meet_events_provider.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
 

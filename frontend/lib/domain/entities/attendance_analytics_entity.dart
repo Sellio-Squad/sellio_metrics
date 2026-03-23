@@ -1,5 +1,4 @@
 /// Attendance analytics entity — aggregated attendance data from backend.
-library;
 
 class AttendanceAnalyticsEntity {
   final int totalMeetings;
@@ -17,22 +16,6 @@ class AttendanceAnalyticsEntity {
     required this.mostActiveParticipants,
     required this.attendanceTrends,
   });
-
-  factory AttendanceAnalyticsEntity.fromJson(Map<String, dynamic> json) =>
-      AttendanceAnalyticsEntity(
-        totalMeetings: json['totalMeetings'] as int? ?? 0,
-        totalAttendees: json['totalAttendees'] as int? ?? 0,
-        averageDurationMinutes: json['averageDurationMinutes'] as int? ?? 0,
-        averageScore: json['averageScore'] as int? ?? 0,
-        mostActiveParticipants: (json['mostActiveParticipants'] as List? ?? [])
-            .map(
-              (e) => MostActiveParticipant.fromJson(e as Map<String, dynamic>),
-            )
-            .toList(),
-        attendanceTrends: (json['attendanceTrends'] as List? ?? [])
-            .map((e) => AttendanceTrend.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
 
   static const empty = AttendanceAnalyticsEntity(
     totalMeetings: 0,
@@ -58,15 +41,6 @@ class MostActiveParticipant {
     required this.totalMinutes,
     required this.averageScore,
   });
-
-  factory MostActiveParticipant.fromJson(Map<String, dynamic> json) =>
-      MostActiveParticipant(
-        displayName: json['displayName'] as String? ?? 'Unknown',
-        email: json['email'] as String?,
-        meetingsAttended: json['meetingsAttended'] as int? ?? 0,
-        totalMinutes: json['totalMinutes'] as int? ?? 0,
-        averageScore: json['averageScore'] as int? ?? 0,
-      );
 }
 
 class AttendanceTrend {
@@ -79,13 +53,6 @@ class AttendanceTrend {
     required this.attendeeCount,
     required this.averageDuration,
   });
-
-  factory AttendanceTrend.fromJson(Map<String, dynamic> json) =>
-      AttendanceTrend(
-        date: json['date'] as String? ?? '',
-        attendeeCount: json['attendeeCount'] as int? ?? 0,
-        averageDuration: json['averageDuration'] as int? ?? 0,
-      );
 }
 
 /// Rate limit info from the backend.
@@ -101,14 +68,6 @@ class RateLimitEntity {
     required this.resetAt,
     required this.isLow,
   });
-
-  factory RateLimitEntity.fromJson(Map<String, dynamic> json) =>
-      RateLimitEntity(
-        remaining: json['remaining'] as int? ?? 0,
-        limit: json['limit'] as int? ?? 60,
-        resetAt: json['resetAt'] as String? ?? '',
-        isLow: json['isLow'] as bool? ?? false,
-      );
 
   static const empty = RateLimitEntity(
     remaining: 60,

@@ -2,7 +2,6 @@
 ///
 /// Wrapper around HuxBadge that isolates the presentation layer
 /// from direct Hux dependency.
-library;
 
 import 'package:hux/hux.dart';
 

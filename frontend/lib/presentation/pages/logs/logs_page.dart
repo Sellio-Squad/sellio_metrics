@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../data/datasources/fake/fake_logs.dart';
-import '../../../design_system/design_system.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/domain/entities/log_entry_entity.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/presentation/pages/logs/providers/logs_provider.dart';
 import 'package:provider/provider.dart';
 
@@ -139,28 +139,28 @@ class _LogsPageState extends State<LogsPage> {
     final timeFormat = DateFormat('MMM dd, HH:mm:ss');
     final formattedTime = timeFormat.format(log.timestamp);
     
-    IconData icon;
-    Color iconColor;
-    Color bgColor;
-
-    switch (log.severity) {
-      case LogSeverity.success:
-        icon = LucideIcons.checkCircle2;
-        iconColor = context.colors.green;
-        bgColor = context.colors.greenSubtle;
-      case LogSeverity.error:
-        icon = LucideIcons.alertOctagon;
-        iconColor = SellioColors.red;
-        bgColor = context.colors.redSubtle;
-      case LogSeverity.warning:
-        icon = LucideIcons.alertTriangle;
-        iconColor = SellioColors.amber;
-        bgColor = SellioColors.amber.withValues(alpha: 0.15);
-      case LogSeverity.info:
-        icon = LucideIcons.info;
-        iconColor = SellioColors.blue;
-        bgColor = SellioColors.blue.withValues(alpha: 0.15);
-    }
+    final (IconData icon, Color iconColor, Color bgColor) = switch (log.severity) {
+      LogSeverity.success => (
+          LucideIcons.checkCircle2,
+          context.colors.green,
+          context.colors.greenSubtle
+        ),
+      LogSeverity.error => (
+          LucideIcons.alertOctagon,
+          SellioColors.red,
+          context.colors.redSubtle
+        ),
+      LogSeverity.warning => (
+          LucideIcons.alertTriangle,
+          SellioColors.amber,
+          SellioColors.amber.withValues(alpha: 0.15)
+        ),
+      LogSeverity.info => (
+          LucideIcons.info,
+          SellioColors.blue,
+          SellioColors.blue.withValues(alpha: 0.15)
+        ),
+    };
 
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.sm),

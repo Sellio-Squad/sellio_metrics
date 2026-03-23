@@ -1,7 +1,6 @@
 /// Sellio Metrics Dashboard — Formatters
 ///
 /// Pure functions for formatting numbers, durations, and text.
-library;
 
 /// Formats a duration in minutes to a human-readable string.
 ///

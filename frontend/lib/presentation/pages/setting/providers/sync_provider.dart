@@ -1,17 +1,18 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 /// Sync Module — SyncProvider
 ///
 /// Manages the state for syncing selected GitHub repositories into D1.
 /// Calls POST /api/sync/github with { repos: [...] } for selected repos.
 /// Tracks per-repo results including diff_warning counts.
-library;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../../../core/logging/app_logger.dart';
-import '../../../../domain/entities/repo_info.dart';
-import '../../../../domain/repositories/repos_repository.dart';
+import 'package:sellio_metrics/core/logging/app_logger.dart';
+import 'package:sellio_metrics/core/network/api_call.dart';
+import 'package:sellio_metrics/domain/entities/repo_info.dart';
+import 'package:sellio_metrics/domain/repositories/repos_repository.dart';
 
 enum SyncStatus { idle, running, done, error, resetting }
 
@@ -234,15 +235,15 @@ class SyncProvider extends ChangeNotifier {
       final owner = parts.length == 2 ? parts[0] : null;
       final repoName = parts.length == 2 ? parts[1] : repo.name;
 
-      final response = await _dio.post(
-        '/api/sync/github',
+      final response = await safeApiCall(() => _dio.post(
+        ApiEndpoints.syncGithub,
         data: {
           'repo': repoName,
           if (owner != null) 'owner': owner,
           if (prNumbers != null && prNumbers.isNotEmpty) 'prNumbers': prNumbers,
           if (force) 'force': true,
         },
-      );
+      ));
 
       final body = response.data as Map<String, dynamic>;
       final fetchFailures = (body['fetchFailures'] as List<dynamic>?)
@@ -261,18 +262,10 @@ class SyncProvider extends ChangeNotifier {
       ));
     } catch (e) {
       appLogger.error('SyncProvider', 'Failed to sync ${repo.name}', null);
-      String errorMessage = e.toString();
-      // Extract cleaner message from DioException
-      if (e is DioException && e.response?.data != null) {
-        final data = e.response!.data;
-        if (data is Map && data['error'] != null) {
-          errorMessage = data['error'].toString();
-        }
-      }
       _results.add(RepoSyncResult(
         repo: repo,
         success: false,
-        error: errorMessage,
+        error: e.toString(),
       ));
     }
   }
@@ -299,7 +292,7 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _dio.delete('/api/sync/github/reset');
+      await safeApiCall(() => _dio.delete(ApiEndpoints.syncGithubReset));
       appLogger.info('SyncProvider', 'Database reset successful');
     } catch (e) {
       appLogger.error('SyncProvider', 'Database reset failed', null);
