@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
 import 'package:sellio_metrics/core/logging/app_logger.dart';
+import 'package:sellio_metrics/core/network/api_call.dart';
 import 'package:sellio_metrics/domain/entities/repo_info.dart';
 import 'package:sellio_metrics/domain/repositories/repos_repository.dart';
 
@@ -234,7 +235,7 @@ class SyncProvider extends ChangeNotifier {
       final owner = parts.length == 2 ? parts[0] : null;
       final repoName = parts.length == 2 ? parts[1] : repo.name;
 
-      final response = await _dio.post(
+      final response = await safeApiCall(() => _dio.post(
         ApiEndpoints.syncGithub,
         data: {
           'repo': repoName,
@@ -242,7 +243,7 @@ class SyncProvider extends ChangeNotifier {
           if (prNumbers != null && prNumbers.isNotEmpty) 'prNumbers': prNumbers,
           if (force) 'force': true,
         },
-      );
+      ));
 
       final body = response.data as Map<String, dynamic>;
       final fetchFailures = (body['fetchFailures'] as List<dynamic>?)
@@ -261,18 +262,10 @@ class SyncProvider extends ChangeNotifier {
       ));
     } catch (e) {
       appLogger.error('SyncProvider', 'Failed to sync ${repo.name}', null);
-      String errorMessage = e.toString();
-      // Extract cleaner message from DioException
-      if (e is DioException && e.response?.data != null) {
-        final data = e.response!.data;
-        if (data is Map && data['error'] != null) {
-          errorMessage = data['error'].toString();
-        }
-      }
       _results.add(RepoSyncResult(
         repo: repo,
         success: false,
-        error: errorMessage,
+        error: e.toString(),
       ));
     }
   }
@@ -299,7 +292,7 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _dio.delete(ApiEndpoints.syncGithubReset);
+      await safeApiCall(() => _dio.delete(ApiEndpoints.syncGithubReset));
       appLogger.info('SyncProvider', 'Database reset successful');
     } catch (e) {
       appLogger.error('SyncProvider', 'Database reset failed', null);

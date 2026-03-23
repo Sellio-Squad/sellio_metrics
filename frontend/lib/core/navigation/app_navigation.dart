@@ -144,30 +144,30 @@ class AppNavigation {
                 ),
                 routes: route.id == 'open_prs'
                     ? [
-                        GoRoute(
-                          path: ':prNumber',
-                          pageBuilder: (context, state) {
-                            final prNumber = int.tryParse(
-                                  state.pathParameters['prNumber'] ?? '',
-                                ) ??
-                                0;
-                            return NoTransitionPage(
-                              key: state.pageKey,
-                              child: MultiProvider(
-                                providers: [
-                                  ChangeNotifierProvider.value(
-                                    value: getIt<PrDataProvider>(),
-                                  ),
-                                  ChangeNotifierProvider.value(
-                                    value: getIt<AnalyticsProvider>(),
-                                  ),
-                                ],
-                                child: PrDetailsPage(prNumber: prNumber),
-                              ),
-                            );
-                          },
+                  GoRoute(
+                    path: ':prNumber',
+                    pageBuilder: (context, state) {
+                      final prNumber = int.tryParse(
+                        state.pathParameters['prNumber'] ?? '',
+                      ) ??
+                          0;
+                      return NoTransitionPage(
+                        key: state.pageKey,
+                        child: MultiProvider(
+                          providers: [
+                            ChangeNotifierProvider.value(
+                              value: getIt<PrDataProvider>(),
+                            ),
+                            ChangeNotifierProvider.value(
+                              value: getIt<AnalyticsProvider>(),
+                            ),
+                          ],
+                          child: PrDetailsPage(prNumber: prNumber),
                         ),
-                      ]
+                      );
+                    },
+                  ),
+                ]
                     : [],
               ),
             ],
