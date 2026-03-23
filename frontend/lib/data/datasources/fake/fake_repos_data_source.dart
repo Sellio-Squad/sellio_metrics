@@ -17,4 +17,21 @@ class FakeReposDataSource implements ReposDataSource {
       ),
     ];
   }
+
+  @override
+  Future<Map<String, dynamic>> syncGithub(String repoFullName, {List<int>? prNumbers, bool force = false}) async {
+    await Future.delayed(const Duration(milliseconds: 500));
+    return {
+      'prsUpserted': 5,
+      'commentsInserted': 12,
+      'linesAdded': 1500,
+      'linesDeleted': 300,
+      'fetchFailures': [],
+    };
+  }
+
+  @override
+  Future<void> syncGithubReset() async {
+    await Future.delayed(const Duration(milliseconds: 500));
+  }
 }
