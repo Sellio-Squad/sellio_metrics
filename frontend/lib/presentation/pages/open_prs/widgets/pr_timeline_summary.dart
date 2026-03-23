@@ -1,10 +1,9 @@
-library;
 
 import 'package:flutter/material.dart';
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/theme/app_theme.dart';
-import '../../../../core/utils/date_utils.dart';
-import '../../../../domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/core/utils/date_utils.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
 
 class PrTimelineSummary extends StatelessWidget {
   final PrEntity pr;

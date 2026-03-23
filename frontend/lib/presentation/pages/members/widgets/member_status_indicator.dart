@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/theme/app_theme.dart';
-import '../../../../l10n/app_localizations.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 
 class MemberStatusIndicator extends StatefulWidget {
   final bool isActive;

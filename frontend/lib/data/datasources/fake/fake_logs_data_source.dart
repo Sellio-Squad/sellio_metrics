@@ -1,6 +1,6 @@
 import 'package:injectable/injectable.dart';
-import '../../models/log/log_model.dart';
-import '../log/logs_data_source.dart';
+import 'package:sellio_metrics/data/models/log/log_model.dart';
+import 'package:sellio_metrics/data/datasources/log/logs_data_source.dart';
 
 @Injectable(as: LogsDataSource, env: [Environment.dev])
 class FakeLogsDataSource implements LogsDataSource {

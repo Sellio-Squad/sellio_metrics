@@ -1,8 +1,8 @@
 import 'package:injectable/injectable.dart';
-import '../../models/meeting/attendance_analytics_model.dart';
-import '../../models/meeting/meeting_model.dart';
-import '../../models/meeting/rate_limit_model.dart';
-import '../meeting/meetings_data_source.dart';
+import 'package:sellio_metrics/data/models/meeting/attendance_analytics_model.dart';
+import 'package:sellio_metrics/data/models/meeting/meeting_model.dart';
+import 'package:sellio_metrics/data/models/meeting/rate_limit_model.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meetings_data_source.dart';
 
 @Injectable(as: MeetingsDataSource, env: [Environment.dev])
 class FakeMeetingsDataSource implements MeetingsDataSource {

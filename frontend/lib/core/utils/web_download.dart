@@ -1,7 +1,6 @@
 /// Sellio Metrics — Web Download Utility
 ///
 /// Uses standard HTML anchor web injection to download a generated file.
-library;
 
 import 'dart:convert';
 // ignore_for_file: deprecated_member_use, avoid_web_libraries_in_flutter

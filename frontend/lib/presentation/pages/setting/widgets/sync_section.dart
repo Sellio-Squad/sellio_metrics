@@ -3,15 +3,14 @@
 /// Animated multi-repo sync UI using HuxProgress.
 /// Each repo cycles: pending → in-progress (indeterminate) → done/error.
 /// Completion card shows: PRs · Lines added/deleted · Comments.
-library;
 
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../design_system/design_system.dart';
-import '../providers/sync_provider.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/presentation/pages/setting/providers/sync_provider.dart';
 
 class SyncSection extends StatelessWidget {
   const SyncSection({super.key});

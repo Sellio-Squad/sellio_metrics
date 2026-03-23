@@ -1,14 +1,13 @@
 /// PR Media Section
 ///
 /// Detects images and videos in the PR body and displays bonus scoring.
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/theme/app_theme.dart';
-import '../../../../domain/entities/pr_entity.dart';
-import '../../../../domain/services/pr_analysis_service.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/services/pr_analysis_service.dart';
 
 class PrMediaSection extends StatelessWidget {
   final PrEntity pr;

@@ -1,17 +1,17 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 /// Sync Module — SyncProvider
 ///
 /// Manages the state for syncing selected GitHub repositories into D1.
 /// Calls POST /api/sync/github with { repos: [...] } for selected repos.
 /// Tracks per-repo results including diff_warning counts.
-library;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../../../core/logging/app_logger.dart';
-import '../../../../domain/entities/repo_info.dart';
-import '../../../../domain/repositories/repos_repository.dart';
+import 'package:sellio_metrics/core/logging/app_logger.dart';
+import 'package:sellio_metrics/domain/entities/repo_info.dart';
+import 'package:sellio_metrics/domain/repositories/repos_repository.dart';
 
 enum SyncStatus { idle, running, done, error, resetting }
 
@@ -235,7 +235,7 @@ class SyncProvider extends ChangeNotifier {
       final repoName = parts.length == 2 ? parts[1] : repo.name;
 
       final response = await _dio.post(
-        '/api/sync/github',
+        ApiEndpoints.syncGithub,
         data: {
           'repo': repoName,
           if (owner != null) 'owner': owner,
@@ -299,7 +299,7 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await _dio.delete('/api/sync/github/reset');
+      await _dio.delete(ApiEndpoints.syncGithubReset);
       appLogger.info('SyncProvider', 'Database reset successful');
     } catch (e) {
       appLogger.error('SyncProvider', 'Database reset failed', null);

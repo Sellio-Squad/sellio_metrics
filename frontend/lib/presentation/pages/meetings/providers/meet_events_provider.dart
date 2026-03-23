@@ -2,16 +2,15 @@
 ///
 /// Manages SSE connection lifecycle, event list state, and subscriptions.
 /// Uses dart:html EventSource via the data layer for real-time updates.
-library;
 
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../../../domain/entities/meet_event_entity.dart';
-import '../../../../domain/repositories/meet_events_repository.dart';
-import '../../../../core/logging/app_logger.dart';
+import 'package:sellio_metrics/domain/entities/meet_event_entity.dart';
+import 'package:sellio_metrics/domain/repositories/meet_events_repository.dart';
+import 'package:sellio_metrics/core/logging/app_logger.dart';
 
 @injectable
 class MeetEventsProvider extends ChangeNotifier {

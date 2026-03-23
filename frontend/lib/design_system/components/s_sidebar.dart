@@ -2,7 +2,6 @@
 ///
 /// Wrapper around HuxSidebar / HuxSidebarItemData that isolates
 /// the presentation layer from direct Hux dependency.
-library;
 
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';

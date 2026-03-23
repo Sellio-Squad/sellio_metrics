@@ -1,7 +1,7 @@
-import 'user_model.dart';
-import 'comment_model.dart';
-import 'approval_model.dart';
-import 'diff_stats_model.dart';
+import 'package:sellio_metrics/data/models/pr/user_model.dart';
+import 'package:sellio_metrics/data/models/pr/comment_model.dart';
+import 'package:sellio_metrics/data/models/pr/approval_model.dart';
+import 'package:sellio_metrics/data/models/pr/diff_stats_model.dart';
 
 /// Complete Pull Request model.
 class PrModel {

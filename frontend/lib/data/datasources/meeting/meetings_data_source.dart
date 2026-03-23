@@ -1,6 +1,6 @@
-import '../../models/meeting/attendance_analytics_model.dart';
-import '../../models/meeting/meeting_model.dart';
-import '../../models/meeting/rate_limit_model.dart';
+import 'package:sellio_metrics/data/models/meeting/attendance_analytics_model.dart';
+import 'package:sellio_metrics/data/models/meeting/meeting_model.dart';
+import 'package:sellio_metrics/data/models/meeting/rate_limit_model.dart';
 
 abstract class MeetingsDataSource {
   Future<MeetingModel> createMeeting(String title);

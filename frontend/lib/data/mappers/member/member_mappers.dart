@@ -1,5 +1,5 @@
-import '../../../domain/entities/member_status_entity.dart';
-import '../../models/member/member_model.dart';
+import 'package:sellio_metrics/domain/entities/member_status_entity.dart';
+import 'package:sellio_metrics/data/models/member/member_model.dart';
 
 extension MemberModelMapper on MemberModel {
   MemberStatusEntity toEntity() {

@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sellio_metrics/core/constants/layout_constants.dart';
-import '../../core/extensions/theme_extensions.dart';
-import '../navigation/app_bottom_nav.dart';
-import '../navigation/app_sidebar.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/presentation/navigation/app_bottom_nav.dart';
+import 'package:sellio_metrics/presentation/navigation/app_sidebar.dart';
 
 class DashboardPage extends StatelessWidget {
   final StatefulNavigationShell navigationShell;

@@ -1,9 +1,9 @@
 import 'package:injectable/injectable.dart';
-import '../../../../domain/entities/pr_entity.dart';
-import '../../../../domain/repositories/pr_repository.dart';
-import '../../datasources/pr/pr_data_source.dart';
-import '../../mappers/pr/pr_mappers.dart';
-import '../../models/pr/pr_model.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/repositories/pr_repository.dart';
+import 'package:sellio_metrics/data/datasources/pr/pr_data_source.dart';
+import 'package:sellio_metrics/data/mappers/pr/pr_mappers.dart';
+import 'package:sellio_metrics/data/models/pr/pr_model.dart';
 
 @LazySingleton(as: PrRepository)
 class PrRepositoryImpl implements PrRepository {

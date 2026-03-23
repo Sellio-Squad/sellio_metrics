@@ -1,9 +1,10 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 import 'package:injectable/injectable.dart';
-import '../../../core/network/api_client.dart';
-import '../../models/meeting/attendance_analytics_model.dart';
-import '../../models/meeting/meeting_model.dart';
-import '../../models/meeting/rate_limit_model.dart';
-import 'meetings_data_source.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
+import 'package:sellio_metrics/data/models/meeting/attendance_analytics_model.dart';
+import 'package:sellio_metrics/data/models/meeting/meeting_model.dart';
+import 'package:sellio_metrics/data/models/meeting/rate_limit_model.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meetings_data_source.dart';
 
 @Injectable(as: MeetingsDataSource, env: [Environment.prod])
 class MeetingsDataSourceImpl implements MeetingsDataSource {
@@ -15,7 +16,7 @@ class MeetingsDataSourceImpl implements MeetingsDataSource {
   Future<MeetingModel> createMeeting(String title) async {
     try {
       return await _apiClient.post(
-        '/api/meetings',
+        ApiEndpoints.meetings,
         data: {'title': title},
         parser: (data) => MeetingModel.fromJson(data as Map<String, dynamic>),
       );
@@ -33,7 +34,7 @@ class MeetingsDataSourceImpl implements MeetingsDataSource {
   @override
   Future<List<MeetingModel>> fetchMeetings() async {
     return await _apiClient.get<List<MeetingModel>>(
-      '/api/meetings',
+      ApiEndpoints.meetings,
       parser: (data) => (data as List)
           .map((json) => MeetingModel.fromJson(json as Map<String, dynamic>))
           .toList(),
@@ -42,18 +43,18 @@ class MeetingsDataSourceImpl implements MeetingsDataSource {
 
   @override
   Future<Map<String, dynamic>> fetchMeetingDetail(String id) async {
-    return await _apiClient.get<Map<String, dynamic>>('/api/meetings/$id');
+    return await _apiClient.get<Map<String, dynamic>>(ApiEndpoints.meetingDetail(id));
   }
 
   @override
   Future<Map<String, dynamic>> fetchAttendance(String meetingId) async {
-    return await _apiClient.get<Map<String, dynamic>>('/api/meetings/$meetingId/attendance');
+    return await _apiClient.get<Map<String, dynamic>>(ApiEndpoints.meetingAttendance(meetingId));
   }
 
   @override
   Future<AttendanceAnalyticsModel> fetchAnalytics() async {
     return await _apiClient.get<AttendanceAnalyticsModel>(
-      '/api/meetings/analytics',
+      ApiEndpoints.meetingAnalytics,
       parser: (data) => AttendanceAnalyticsModel.fromJson(data as Map<String, dynamic>),
     );
   }
@@ -61,13 +62,13 @@ class MeetingsDataSourceImpl implements MeetingsDataSource {
   @override
   Future<RateLimitModel> fetchRateLimitStatus() async {
     return await _apiClient.get<RateLimitModel>(
-      '/api/meetings/rate-limit',
+      ApiEndpoints.meetingRateLimit,
       parser: (data) => RateLimitModel.fromJson(data as Map<String, dynamic>),
     );
   }
 
   @override
   Future<void> endMeeting(String id) async {
-    await _apiClient.post('/api/meetings/$id/end');
+    await _apiClient.post(ApiEndpoints.meetingEnd(id));
   }
 }

@@ -1,13 +1,12 @@
-library;
 
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../../../core/constants/layout_constants.dart';
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/theme/app_theme.dart';
-import '../../../../domain/entities/bottleneck_entity.dart';
+import 'package:sellio_metrics/core/constants/layout_constants.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/domain/entities/bottleneck_entity.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../extensions/severity_presentation.dart';
+import 'package:sellio_metrics/presentation/extensions/severity_presentation.dart';
 
 class BottleneckItem extends StatefulWidget {
   final BottleneckEntity bottleneck;

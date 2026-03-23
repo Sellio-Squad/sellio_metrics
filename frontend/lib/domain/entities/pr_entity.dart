@@ -1,10 +1,9 @@
-library;
 
-import 'pr_timeline_event.dart';
-import 'approval_entity.dart';
-import 'comment_entity.dart';
-import 'diff_stats_entity.dart';
-import 'user_entity.dart';
+import 'package:sellio_metrics/domain/entities/pr_timeline_event.dart';
+import 'package:sellio_metrics/domain/entities/approval_entity.dart';
+import 'package:sellio_metrics/domain/entities/comment_entity.dart';
+import 'package:sellio_metrics/domain/entities/diff_stats_entity.dart';
+import 'package:sellio_metrics/domain/entities/user_entity.dart';
 
 class PrEntity {
   final int prNumber;

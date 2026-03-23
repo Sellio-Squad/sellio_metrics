@@ -1,5 +1,5 @@
 import 'package:dio/dio.dart';
-import '../logging/app_logger.dart';
+import 'package:sellio_metrics/core/logging/app_logger.dart';
 
 /// Thin wrapper around Dio that standardises logging, 
 /// status-code checks, and error mapping.

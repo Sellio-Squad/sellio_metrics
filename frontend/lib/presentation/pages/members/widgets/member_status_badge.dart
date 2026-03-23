@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/theme/app_theme.dart';
-import '../../../../l10n/app_localizations.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/l10n/app_localizations.dart';
 
 class MemberStatusBadge extends StatelessWidget {
   final bool isActive;

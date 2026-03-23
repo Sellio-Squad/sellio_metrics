@@ -1,10 +1,10 @@
 import 'package:injectable/injectable.dart';
-import '../../../../domain/entities/github_rate_limit_status.dart';
-import '../../../../domain/entities/kv_cache_quota_status.dart';
-import '../../../../domain/repositories/health_repository.dart';
-import '../../datasources/health/health_data_source.dart';
-import '../../mappers/health/health_mappers.dart';
-import '../../models/health/github_rate_limit_model.dart';
+import 'package:sellio_metrics/domain/entities/github_rate_limit_status.dart';
+import 'package:sellio_metrics/domain/entities/kv_cache_quota_status.dart';
+import 'package:sellio_metrics/domain/repositories/health_repository.dart';
+import 'package:sellio_metrics/data/datasources/health/health_data_source.dart';
+import 'package:sellio_metrics/data/mappers/health/health_mappers.dart';
+import 'package:sellio_metrics/data/models/health/github_rate_limit_model.dart';
 
 @LazySingleton(as: HealthRepository)
 class HealthRepositoryImpl implements HealthRepository {

@@ -1,13 +1,13 @@
-import '../../../domain/entities/approval_entity.dart';
-import '../../../domain/entities/comment_entity.dart';
-import '../../../domain/entities/diff_stats_entity.dart';
-import '../../../domain/entities/user_entity.dart';
-import '../../models/pr/pr_model.dart';
-import '../../models/pr/user_model.dart';
-import '../../models/pr/comment_model.dart';
-import '../../models/pr/approval_model.dart';
-import '../../models/pr/diff_stats_model.dart';
-import '../../../domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/entities/approval_entity.dart';
+import 'package:sellio_metrics/domain/entities/comment_entity.dart';
+import 'package:sellio_metrics/domain/entities/diff_stats_entity.dart';
+import 'package:sellio_metrics/domain/entities/user_entity.dart';
+import 'package:sellio_metrics/data/models/pr/pr_model.dart';
+import 'package:sellio_metrics/data/models/pr/user_model.dart';
+import 'package:sellio_metrics/data/models/pr/comment_model.dart';
+import 'package:sellio_metrics/data/models/pr/approval_model.dart';
+import 'package:sellio_metrics/data/models/pr/diff_stats_model.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
 
 extension UserModelMapper on UserModel {
   UserEntity toEntity() =>

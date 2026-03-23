@@ -1,14 +1,13 @@
 /// Sellio Metrics — KPI Service
 ///
 /// Calculates KPI metrics and spotlight analytics from PR data.
-library;
 
 import 'package:injectable/injectable.dart';
 
-import '../../core/constants/app_constants.dart';
-import '../../core/utils/formatters.dart';
-import '../entities/pr_entity.dart';
-import '../entities/kpi_entity.dart';
+import 'package:sellio_metrics/core/constants/app_constants.dart';
+import 'package:sellio_metrics/core/utils/formatters.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/entities/kpi_entity.dart';
 
 @lazySingleton
 class KpiService {

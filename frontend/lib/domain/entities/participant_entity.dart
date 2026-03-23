@@ -2,7 +2,6 @@
 ///
 /// Attendance score is computed on the backend (weighted: presence 40%,
 /// duration 35%, consistency 25%).
-library;
 
 class ParticipantEntity {
   final String displayName;

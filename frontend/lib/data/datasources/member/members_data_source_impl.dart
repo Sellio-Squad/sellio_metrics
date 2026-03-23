@@ -1,7 +1,8 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 import 'package:injectable/injectable.dart';
-import '../../../core/network/api_client.dart';
-import '../../models/member/member_model.dart';
-import 'members_data_source.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
+import 'package:sellio_metrics/data/models/member/member_model.dart';
+import 'package:sellio_metrics/data/datasources/member/members_data_source.dart';
 
 @Injectable(as: MembersDataSource, env: [Environment.prod])
 class MembersDataSourceImpl implements MembersDataSource {
@@ -12,7 +13,7 @@ class MembersDataSourceImpl implements MembersDataSource {
   @override
   Future<List<MemberModel>> fetchMembersStatus() async {
     return await _apiClient.get<List<MemberModel>>(
-      '/api/members',
+      ApiEndpoints.members,
       tag: 'MembersDataSource',
       parser: (data) {
         final body = data as Map<String, dynamic>;

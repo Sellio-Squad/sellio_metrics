@@ -1,8 +1,7 @@
-library;
 
 import 'package:flutter/material.dart';
-import '../../core/theme/sellio_colors.dart';
-import '../../domain/enums/severity.dart';
+import 'package:sellio_metrics/core/theme/sellio_colors.dart';
+import 'package:sellio_metrics/domain/enums/severity.dart';
 
 extension SeverityPresentation on Severity {
   Color get color => switch (this) {

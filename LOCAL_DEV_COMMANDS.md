@@ -28,6 +28,12 @@ flutter build web --dart-define=USE_FAKE_DATA=true
 cd frontend
 flutter build web --dart-define=API_BASE_URL=https://sellio-metrics.abdoessam743.workers.dev
 
+
+dart run build_runner build --delete-conflicting-outputs  
+
+
+dart fix --apply
+
 # List available Flutter devices
 cd frontend
 flutter devices

@@ -1,4 +1,4 @@
-import '../../domain/entities/log_entry_entity.dart';
+import 'package:sellio_metrics/domain/entities/log_entry_entity.dart';
 
 abstract class LogsRepository {
   Future<List<LogEntry>> getLogs({int limit = 50});

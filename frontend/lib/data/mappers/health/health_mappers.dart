@@ -1,7 +1,7 @@
-import '../../../domain/entities/github_rate_limit_status.dart';
-import '../../../domain/entities/kv_cache_quota_status.dart';
-import '../../models/health/github_rate_limit_model.dart';
-import '../../models/health/kv_cache_quota_model.dart';
+import 'package:sellio_metrics/domain/entities/github_rate_limit_status.dart';
+import 'package:sellio_metrics/domain/entities/kv_cache_quota_status.dart';
+import 'package:sellio_metrics/data/models/health/github_rate_limit_model.dart';
+import 'package:sellio_metrics/data/models/health/kv_cache_quota_model.dart';
 
 
 extension GitHubRateLimitModelMapper on GitHubRateLimitModel {

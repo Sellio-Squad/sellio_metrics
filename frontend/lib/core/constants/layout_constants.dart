@@ -1,4 +1,3 @@
-library;
 
 class LayoutConstants {
   const LayoutConstants._();

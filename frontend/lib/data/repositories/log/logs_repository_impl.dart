@@ -1,8 +1,8 @@
 import 'package:injectable/injectable.dart';
-import '../../../../domain/entities/log_entry_entity.dart';
-import '../../../../domain/repositories/logs_repository.dart';
-import '../../datasources/log/logs_data_source.dart';
-import '../../mappers/log/log_mappers.dart';
+import 'package:sellio_metrics/domain/entities/log_entry_entity.dart';
+import 'package:sellio_metrics/domain/repositories/logs_repository.dart';
+import 'package:sellio_metrics/data/datasources/log/logs_data_source.dart';
+import 'package:sellio_metrics/data/mappers/log/log_mappers.dart';
 
 @LazySingleton(as: LogsRepository)
 class LogsRepositoryImpl implements LogsRepository {

@@ -1,5 +1,5 @@
-import '../../../domain/entities/leaderboard_entry.dart';
-import '../../models/leaderboard/leaderboard_model.dart';
+import 'package:sellio_metrics/domain/entities/leaderboard_entry.dart';
+import 'package:sellio_metrics/data/models/leaderboard/leaderboard_model.dart';
 
 extension LeaderboardModelMapper on LeaderboardModel {
   LeaderboardEntry toEntity() {

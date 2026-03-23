@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../core/theme/app_theme.dart';
-import '../../../../domain/entities/member_status_entity.dart';
-import 'member_avatar_section.dart';
-import 'member_status_indicator.dart';
-import 'member_activity_text.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/domain/entities/member_status_entity.dart';
+import 'package:sellio_metrics/presentation/pages/members/widgets/member_avatar_section.dart';
+import 'package:sellio_metrics/presentation/pages/members/widgets/member_status_indicator.dart';
+import 'package:sellio_metrics/presentation/pages/members/widgets/member_activity_text.dart';
 
 class MemberCard extends StatelessWidget {
   final MemberStatusEntity member;

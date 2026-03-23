@@ -1,4 +1,3 @@
-library;
 
 import 'package:hux/hux.dart';
 

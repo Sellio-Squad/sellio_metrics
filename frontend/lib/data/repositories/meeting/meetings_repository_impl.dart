@@ -1,16 +1,16 @@
 import 'package:injectable/injectable.dart';
-import '../../../../domain/entities/meeting_entity.dart';
-import '../../../../domain/entities/attendance_analytics_entity.dart';
-import '../../../../domain/repositories/meetings_repository.dart';
-import '../../datasources/auth/auth_data_source.dart';
-import '../../datasources/meeting/meetings_data_source.dart';
-import '../../mappers/meeting/meeting_mappers.dart';
-import '../../models/meeting/participant_model.dart';
+import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
+import 'package:sellio_metrics/domain/entities/attendance_analytics_entity.dart';
+import 'package:sellio_metrics/domain/repositories/meetings_repository.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meet_auth_data_source.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meetings_data_source.dart';
+import 'package:sellio_metrics/data/mappers/meeting/meeting_mappers.dart';
+import 'package:sellio_metrics/data/models/meeting/participant_model.dart';
 
 @LazySingleton(as: MeetingsRepository)
 class MeetingsRepositoryImpl implements MeetingsRepository {
   final MeetingsDataSource _dataSource;
-  final AuthDataSource _authDataSource;
+  final MeetAuthDataSource _authDataSource;
 
   MeetingsRepositoryImpl(this._dataSource, this._authDataSource);
 

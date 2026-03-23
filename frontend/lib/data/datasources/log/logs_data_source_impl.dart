@@ -1,7 +1,8 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 import 'package:injectable/injectable.dart';
-import '../../../core/network/api_client.dart';
-import '../../models/log/log_model.dart';
-import 'logs_data_source.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
+import 'package:sellio_metrics/data/models/log/log_model.dart';
+import 'package:sellio_metrics/data/datasources/log/logs_data_source.dart';
 
 @Injectable(as: LogsDataSource, env: [Environment.prod])
 class LogsDataSourceImpl implements LogsDataSource {
@@ -12,7 +13,7 @@ class LogsDataSourceImpl implements LogsDataSource {
   @override
   Future<List<LogModel>> fetchLogs({int limit = 50}) async {
     return await _apiClient.get<List<LogModel>>(
-      '/api/logs',
+      ApiEndpoints.logs,
       queryParameters: {'limit': limit},
       parser: (data) {
         if (data is List) {

@@ -1,7 +1,8 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 import 'package:injectable/injectable.dart';
-import '../../../core/network/api_client.dart';
-import '../../models/repo/repo_model.dart';
-import 'repos_data_source.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
+import 'package:sellio_metrics/data/models/repo/repo_model.dart';
+import 'package:sellio_metrics/data/datasources/repo/repos_data_source.dart';
 
 @Injectable(as: ReposDataSource, env: [Environment.prod])
 class ReposDataSourceImpl implements ReposDataSource {
@@ -12,7 +13,7 @@ class ReposDataSourceImpl implements ReposDataSource {
   @override
   Future<List<RepoModel>> fetchRepositories() async {
     return await _apiClient.get<List<RepoModel>>(
-      '/api/repos',
+      ApiEndpoints.repos,
       tag: 'ReposDataSource',
       parser: (data) {
         final body = data as Map<String, dynamic>;

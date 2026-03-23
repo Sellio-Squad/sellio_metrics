@@ -1,7 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:injectable/injectable.dart';
-import '../constants/app_constants.dart';
-import '../network/api_client.dart';
+import 'package:sellio_metrics/core/constants/app_constants.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
 
 @module
 abstract class AppModule {

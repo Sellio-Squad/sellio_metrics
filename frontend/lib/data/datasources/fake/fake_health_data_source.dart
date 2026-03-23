@@ -1,6 +1,6 @@
 import 'package:injectable/injectable.dart';
-import '../../models/health/kv_cache_quota_model.dart';
-import '../health/health_data_source.dart';
+import 'package:sellio_metrics/data/models/health/kv_cache_quota_model.dart';
+import 'package:sellio_metrics/data/datasources/health/health_data_source.dart';
 
 @Injectable(as: HealthDataSource, env: [Environment.dev])
 class FakeHealthDataSource implements HealthDataSource {

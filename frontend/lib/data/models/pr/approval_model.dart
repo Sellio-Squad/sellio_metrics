@@ -1,4 +1,4 @@
-import 'user_model.dart';
+import 'package:sellio_metrics/data/models/pr/user_model.dart';
 
 /// A review approval on a PR.
 class ApprovalModel {

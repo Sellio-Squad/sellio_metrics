@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../../../domain/entities/log_entry_entity.dart';
-import '../../../../domain/repositories/logs_repository.dart';
+import 'package:sellio_metrics/domain/entities/log_entry_entity.dart';
+import 'package:sellio_metrics/domain/repositories/logs_repository.dart';
 
 @injectable
 class LogsProvider extends ChangeNotifier {

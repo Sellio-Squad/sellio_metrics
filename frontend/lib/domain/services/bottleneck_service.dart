@@ -1,14 +1,13 @@
 /// Sellio Metrics — Bottleneck Service
 ///
 /// Identifies PRs stuck in review too long.
-library;
 
 import 'package:injectable/injectable.dart';
 
-import '../../core/constants/app_constants.dart';
-import '../entities/pr_entity.dart';
-import '../entities/bottleneck_entity.dart';
-import '../enums/severity.dart';
+import 'package:sellio_metrics/core/constants/app_constants.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/entities/bottleneck_entity.dart';
+import 'package:sellio_metrics/domain/enums/severity.dart';
 
 @lazySingleton
 class BottleneckService {

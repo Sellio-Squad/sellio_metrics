@@ -1,5 +1,4 @@
 /// Meeting entity — domain model for a Google Meet meeting space.
-library;
 
 class MeetingEntity {
   final String id;

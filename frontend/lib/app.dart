@@ -1,16 +1,15 @@
-library;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:provider/provider.dart';
-import 'design_system/design_system.dart' show SellioThemes;
-import 'l10n/app_localizations.dart';
-import 'core/di/injection.dart';
+import 'package:sellio_metrics/design_system/design_system.dart' show SellioThemes;
+import 'package:sellio_metrics/l10n/app_localizations.dart';
+import 'package:sellio_metrics/core/di/injection.dart';
 import 'package:sellio_metrics/presentation/pages/setting/providers/app_settings_provider.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/filter_provider.dart';
 import 'package:sellio_metrics/presentation/pages/leaderboard/providers/leaderboard_provider.dart';
 import 'package:sellio_metrics/presentation/pages/members/providers/member_provider.dart';
-import 'core/navigation/app_navigation.dart';
+import 'package:sellio_metrics/core/navigation/app_navigation.dart';
 
 class SellioMetricsApp extends StatelessWidget {
   const SellioMetricsApp({super.key});

@@ -1,4 +1,3 @@
-library;
 
 export 'sellio_colors.dart';
 export 'app_spacing.dart';

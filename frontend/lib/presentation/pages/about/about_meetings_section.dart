@@ -1,14 +1,13 @@
 /// Sellio Metrics — About Meetings Section
-library;
 
 import 'package:flutter/material.dart';
 
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../core/utils/ics_generator.dart';
-import '../../../core/utils/web_download.dart';
-import '../../../design_system/design_system.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/utils/ics_generator.dart';
+import 'package:sellio_metrics/core/utils/web_download.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import 'about_section_header.dart';
+import 'package:sellio_metrics/presentation/pages/about/about_section_header.dart';
 
 class AboutMeetingsSection extends StatelessWidget {
   const AboutMeetingsSection({super.key});

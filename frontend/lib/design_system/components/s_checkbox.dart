@@ -1,4 +1,3 @@
-library;
 
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';

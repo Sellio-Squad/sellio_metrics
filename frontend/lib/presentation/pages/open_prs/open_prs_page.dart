@@ -1,20 +1,19 @@
-library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/di/injection.dart';
-import '../../../core/theme/app_theme.dart';
-import '../../../domain/services/filter_service.dart';
+import 'package:sellio_metrics/core/di/injection.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
+import 'package:sellio_metrics/domain/services/filter_service.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/analytics_provider.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/filter_provider.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/pr_data_provider.dart';
-import '../../widgets/common/loading_screen.dart';
-import '../../widgets/common/error_screen.dart';
-import 'widgets/open_prs_header.dart';
-import 'widgets/open_prs_kpi_grid.dart';
-import 'widgets/open_prs_list.dart';
-import 'widgets/open_prs_bottleneck_section.dart';
-import 'widgets/pr_size_overview_section.dart';
+import 'package:sellio_metrics/presentation/widgets/common/loading_screen.dart';
+import 'package:sellio_metrics/presentation/widgets/common/error_screen.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/open_prs_header.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/open_prs_kpi_grid.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/open_prs_list.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/open_prs_bottleneck_section.dart';
+import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_size_overview_section.dart';
 
 class OpenPrsPage extends StatefulWidget {
   const OpenPrsPage({super.key});

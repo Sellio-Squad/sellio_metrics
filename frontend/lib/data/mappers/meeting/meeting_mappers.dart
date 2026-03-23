@@ -1,10 +1,10 @@
-import '../../../domain/entities/attendance_analytics_entity.dart';
-import '../../../domain/entities/meeting_entity.dart';
-import '../../../domain/entities/participant_entity.dart';
-import '../../models/meeting/attendance_analytics_model.dart';
-import '../../models/meeting/meeting_model.dart';
-import '../../models/meeting/participant_model.dart';
-import '../../models/meeting/rate_limit_model.dart';
+import 'package:sellio_metrics/domain/entities/attendance_analytics_entity.dart';
+import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
+import 'package:sellio_metrics/domain/entities/participant_entity.dart';
+import 'package:sellio_metrics/data/models/meeting/attendance_analytics_model.dart';
+import 'package:sellio_metrics/data/models/meeting/meeting_model.dart';
+import 'package:sellio_metrics/data/models/meeting/participant_model.dart';
+import 'package:sellio_metrics/data/models/meeting/rate_limit_model.dart';
 
 extension MeetingModelMapper on MeetingModel {
   MeetingEntity toEntity() {

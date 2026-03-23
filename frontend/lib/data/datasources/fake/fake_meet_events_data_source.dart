@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:injectable/injectable.dart';
-import '../meeting/meet_events_data_source.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meet_events_data_source.dart';
 
 @Injectable(as: MeetEventsDataSource, env: [Environment.dev])
 class FakeMeetEventsDataSource implements MeetEventsDataSource {

@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'package:injectable/injectable.dart';
-import '../../../../domain/entities/meet_event_entity.dart';
-import '../../../../domain/repositories/meet_events_repository.dart';
-import '../../datasources/meeting/meet_events_data_source.dart';
+import 'package:sellio_metrics/domain/entities/meet_event_entity.dart';
+import 'package:sellio_metrics/domain/repositories/meet_events_repository.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meet_events_data_source.dart';
 
 @LazySingleton(as: MeetEventsRepository)
 class MeetEventsRepositoryImpl implements MeetEventsRepository {

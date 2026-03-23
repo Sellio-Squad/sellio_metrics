@@ -1,5 +1,5 @@
 import 'package:injectable/injectable.dart';
-import '../pr/pr_data_source.dart';
+import 'package:sellio_metrics/data/datasources/pr/pr_data_source.dart';
 
 @Injectable(as: PrDataSource, env: [Environment.dev])
 class FakePrDataSource implements PrDataSource {

@@ -1,11 +1,10 @@
-library;
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../../core/extensions/theme_extensions.dart';
-import '../../../design_system/design_system.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
-import '../../../core/navigation/app_navigation.dart';
+import 'package:sellio_metrics/core/navigation/app_navigation.dart';
 import 'package:sellio_metrics/presentation/pages/setting/providers/app_settings_provider.dart';
 
 class AppSidebar extends StatelessWidget {

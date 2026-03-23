@@ -1,7 +1,8 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 import 'package:injectable/injectable.dart';
-import '../../../core/network/api_client.dart';
-import '../../models/health/kv_cache_quota_model.dart';
-import 'health_data_source.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
+import 'package:sellio_metrics/data/models/health/kv_cache_quota_model.dart';
+import 'package:sellio_metrics/data/datasources/health/health_data_source.dart';
 
 @Injectable(as: HealthDataSource, env: [Environment.prod])
 class HealthDataSourceImpl implements HealthDataSource {
@@ -12,7 +13,7 @@ class HealthDataSourceImpl implements HealthDataSource {
   @override
   Future<Map<String, dynamic>?> fetchHealthStatus() async {
     try {
-      return await _apiClient.get<Map<String, dynamic>>('/api/health');
+      return await _apiClient.get<Map<String, dynamic>>(ApiEndpoints.health);
     } catch (_) {
       return null;
     }
@@ -22,7 +23,7 @@ class HealthDataSourceImpl implements HealthDataSource {
   Future<KvCacheQuotaModel?> fetchCacheQuota() async {
     try {
       return await _apiClient.get<KvCacheQuotaModel>(
-        '/api/debug/cache-quota',
+        ApiEndpoints.cacheQuota,
         parser: (data) => KvCacheQuotaModel.fromJson(data as Map<String, dynamic>),
       );
     } catch (_) {

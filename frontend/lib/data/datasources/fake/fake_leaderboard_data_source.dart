@@ -1,6 +1,6 @@
 import 'package:injectable/injectable.dart';
-import '../../models/leaderboard/leaderboard_model.dart';
-import '../leaderboard/leaderboard_data_source.dart';
+import 'package:sellio_metrics/data/models/leaderboard/leaderboard_model.dart';
+import 'package:sellio_metrics/data/datasources/leaderboard/leaderboard_data_source.dart';
 
 @Injectable(as: LeaderboardDataSource, env: [Environment.dev])
 class FakeLeaderboardDataSource implements LeaderboardDataSource {

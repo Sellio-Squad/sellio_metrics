@@ -1,6 +1,6 @@
 import 'dart:async';
-import '../../../core/network/api_client.dart';
-import 'meet_events_data_source.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meet_events_data_source.dart';
 
 class MeetEventsDataSourcePlatformImpl implements MeetEventsDataSource {
   MeetEventsDataSourcePlatformImpl(ApiClient apiClient);

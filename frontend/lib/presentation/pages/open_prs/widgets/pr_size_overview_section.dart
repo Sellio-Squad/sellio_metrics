@@ -2,17 +2,16 @@
 ///
 /// Top-level section on the Open PRs page (like bottlenecks).
 /// Highlights large PRs (L/XL) with size hints and split suggestions.
-library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../../core/extensions/theme_extensions.dart';
-import '../../../../design_system/design_system.dart';
-import '../../../../domain/entities/pr_entity.dart';
-import '../../../../domain/enums/pr_size_category.dart';
-import '../../../../domain/services/pr_analysis_service.dart';
-import '../../../widgets/section_header.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/enums/pr_size_category.dart';
+import 'package:sellio_metrics/domain/services/pr_analysis_service.dart';
+import 'package:sellio_metrics/presentation/widgets/section_header.dart';
 
 class PrSizeOverviewSection extends StatelessWidget {
   final List<PrEntity> prs;

@@ -1,6 +1,5 @@
-library;
 
-import '../constants/app_constants.dart';
+import 'package:sellio_metrics/core/constants/app_constants.dart';
 
 /// Returns the Monday (start) of the ISO week containing [date].
 DateTime getWeekStartDate(DateTime date) {

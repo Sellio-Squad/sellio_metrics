@@ -3,14 +3,13 @@
 /// Depends on [LeaderboardRepository] (interface, not concrete).
 /// Fetches server-computed leaderboard for selected repos and merges
 /// entries across repos by summing scores for each developer.
-library;
 
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../../../domain/entities/leaderboard_entry.dart';
-import '../../../../domain/repositories/leaderboard_repository.dart';
-import '../../../../core/logging/app_logger.dart';
+import 'package:sellio_metrics/domain/entities/leaderboard_entry.dart';
+import 'package:sellio_metrics/domain/repositories/leaderboard_repository.dart';
+import 'package:sellio_metrics/core/logging/app_logger.dart';
 
 @injectable
 class LeaderboardProvider extends ChangeNotifier {

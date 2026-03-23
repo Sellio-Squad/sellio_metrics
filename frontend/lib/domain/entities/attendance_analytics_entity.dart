@@ -1,5 +1,4 @@
 /// Attendance analytics entity — aggregated attendance data from backend.
-library;
 
 class AttendanceAnalyticsEntity {
   final int totalMeetings;

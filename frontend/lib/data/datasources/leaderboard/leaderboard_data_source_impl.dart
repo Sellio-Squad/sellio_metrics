@@ -1,7 +1,8 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 import 'package:injectable/injectable.dart';
-import '../../../core/network/api_client.dart';
-import '../../models/leaderboard/leaderboard_model.dart';
-import 'leaderboard_data_source.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
+import 'package:sellio_metrics/data/models/leaderboard/leaderboard_model.dart';
+import 'package:sellio_metrics/data/datasources/leaderboard/leaderboard_data_source.dart';
 
 @Injectable(as: LeaderboardDataSource, env: [Environment.prod])
 class LeaderboardDataSourceImpl implements LeaderboardDataSource {
@@ -12,7 +13,7 @@ class LeaderboardDataSourceImpl implements LeaderboardDataSource {
   @override
   Future<List<LeaderboardModel>> fetchLeaderboard() async {
     return await _apiClient.get<List<LeaderboardModel>>(
-      '/api/scores/leaderboard?period=all',
+      ApiEndpoints.leaderboard,
       tag: 'LeaderboardDataSource',
       parser: (data) {
         List<dynamic> rawList = [];

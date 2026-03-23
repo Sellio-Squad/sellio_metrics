@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/theme/app_theme.dart';
+import 'package:sellio_metrics/core/theme/app_theme.dart';
 import 'package:sellio_metrics/presentation/pages/setting/providers/app_settings_provider.dart';
 import 'package:sellio_metrics/presentation/pages/members/providers/member_provider.dart';
-import '../../widgets/common/loading_screen.dart';
-import '../../widgets/common/error_screen.dart';
-import 'widgets/members_header.dart';
-import 'widgets/members_grid.dart';
-import 'widgets/members_empty_state.dart';
+import 'package:sellio_metrics/presentation/widgets/common/loading_screen.dart';
+import 'package:sellio_metrics/presentation/widgets/common/error_screen.dart';
+import 'package:sellio_metrics/presentation/pages/members/widgets/members_header.dart';
+import 'package:sellio_metrics/presentation/pages/members/widgets/members_grid.dart';
+import 'package:sellio_metrics/presentation/pages/members/widgets/members_empty_state.dart';
 
 class MembersPage extends StatefulWidget {
   const MembersPage({super.key});

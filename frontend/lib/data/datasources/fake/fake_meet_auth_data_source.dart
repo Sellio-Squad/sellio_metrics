@@ -1,8 +1,8 @@
 import 'package:injectable/injectable.dart';
-import '../auth/auth_data_source.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meet_auth_data_source.dart';
 
-@Injectable(as: AuthDataSource, env: [Environment.dev])
-class FakeAuthDataSource implements AuthDataSource {
+@Injectable(as: MeetAuthDataSource, env: [Environment.dev])
+class FakeMeetAuthDataSource implements MeetAuthDataSource {
   @override
   Future<bool> fetchAuthStatus() async => true;
 

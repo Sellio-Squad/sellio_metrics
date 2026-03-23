@@ -3,14 +3,13 @@
 /// Manages app-wide settings: theme, locale, and selected repositories.
 /// Depends on [ReposRepository] (interface) for repo loading — NOT on
 /// MetricsRepository or any concrete class.
-library;
 
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
-import '../../../../domain/entities/repo_info.dart';
-import '../../../../domain/repositories/repos_repository.dart';
-import '../../../../core/logging/app_logger.dart';
+import 'package:sellio_metrics/domain/entities/repo_info.dart';
+import 'package:sellio_metrics/domain/repositories/repos_repository.dart';
+import 'package:sellio_metrics/core/logging/app_logger.dart';
 
 @injectable
 class AppSettingsProvider extends ChangeNotifier {

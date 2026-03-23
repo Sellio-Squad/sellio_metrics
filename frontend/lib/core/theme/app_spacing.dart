@@ -1,4 +1,3 @@
-library;
 
 class AppSpacing {
   const AppSpacing._();

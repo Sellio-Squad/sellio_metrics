@@ -1,6 +1,29 @@
-enum LogSeverity { info, warning, error, success }
+enum LogSeverity {
+  info,
+  warning,
+  error,
+  success;
 
-enum LogCategory { github, googleMeet, system }
+  static LogSeverity fromString(String? value) =>
+      _lookup[value?.toLowerCase()] ?? LogSeverity.info;
+
+  static final _lookup = {
+    for (final v in values) v.name: v,
+  };
+}
+
+enum LogCategory {
+  github,
+  googleMeet,
+  system;
+
+  static LogCategory fromString(String? value) =>
+      _lookup[value?.toLowerCase()] ?? LogCategory.system;
+
+  static final _lookup = {
+    for (final v in values) v.name.toLowerCase(): v,
+  };
+}
 
 class LogEntry {
   final String id;

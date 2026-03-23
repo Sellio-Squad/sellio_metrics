@@ -1,11 +1,12 @@
+import 'package:sellio_metrics/core/network/api_endpoints.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:js_interop';
 import 'package:web/web.dart' as web;
-import '../../../core/network/api_client.dart';
-import '../../../core/logging/app_logger.dart';
-import '../../../core/constants/app_constants.dart';
-import 'meet_events_data_source.dart';
+import 'package:sellio_metrics/core/network/api_client.dart';
+import 'package:sellio_metrics/core/logging/app_logger.dart';
+import 'package:sellio_metrics/core/constants/app_constants.dart';
+import 'package:sellio_metrics/data/datasources/meeting/meet_events_data_source.dart';
 
 class MeetEventsDataSourcePlatformImpl implements MeetEventsDataSource {
   final ApiClient _apiClient;
@@ -18,7 +19,7 @@ class MeetEventsDataSourcePlatformImpl implements MeetEventsDataSource {
   @override
   Future<Map<String, dynamic>> subscribe(String spaceName) async {
     return await _apiClient.post<Map<String, dynamic>>(
-      '/api/meet-events/subscribe',
+      ApiEndpoints.meetEventsSubscribe,
       tag: 'MeetEventsDataSource',
       data: {'spaceName': spaceName},
     );
@@ -27,7 +28,7 @@ class MeetEventsDataSourcePlatformImpl implements MeetEventsDataSource {
   @override
   Future<List<Map<String, dynamic>>> fetchEvents({int limit = 50}) async {
     return await _apiClient.get<List<Map<String, dynamic>>>(
-      '/api/meet-events/events?limit=$limit',
+      ApiEndpoints.meetEventsList,
       tag: 'MeetEventsDataSource',
       parser: (data) {
         final body = data as Map<String, dynamic>;
@@ -40,7 +41,7 @@ class MeetEventsDataSourcePlatformImpl implements MeetEventsDataSource {
   @override
   Future<List<Map<String, dynamic>>> fetchSubscriptions() async {
     return await _apiClient.get<List<Map<String, dynamic>>>(
-      '/api/meet-events/subscriptions',
+      ApiEndpoints.meetEventsSubscriptions,
       tag: 'MeetEventsDataSource',
       parser: (data) {
         final body = data as Map<String, dynamic>;

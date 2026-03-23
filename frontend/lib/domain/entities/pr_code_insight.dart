@@ -2,7 +2,6 @@
 ///
 /// Represents a single insight extracted from PR analysis.
 /// Designed for extensibility: future AI-generated insights use the same model.
-library;
 
 enum PrInsightSeverity { info, warning, tip }
 

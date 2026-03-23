@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
-import '../../core/extensions/theme_extensions.dart';
-import '../../core/theme/app_spacing.dart';
-import '../../core/theme/app_typography.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/core/theme/app_spacing.dart';
+import 'package:sellio_metrics/core/theme/app_typography.dart';
 
 class SectionHeader extends StatelessWidget {
   final IconData icon;
