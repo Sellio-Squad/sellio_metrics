@@ -146,7 +146,7 @@ export class MeetingsService {
         return session;
     }
 
-    private toParticipantResponse(r: { participantKey: string; displayName: string; startTime: string | null; endTime: string | null }): ParticipantResponse {
+    private toParticipantResponse = (r: { participantKey: string; displayName: string; startTime: string | null; endTime: string | null }): ParticipantResponse => {
         const start = r.startTime ? new Date(r.startTime).getTime() : 0;
         const end   = r.endTime   ? new Date(r.endTime).getTime()   : Date.now();
         return {

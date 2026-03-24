@@ -60,7 +60,7 @@ export class MeetingsRepository {
         return row ? this.rowToSession(row) : null;
     }
 
-    private rowToSession(r: any): MeetingSessionRow {
+    private rowToSession = (r: any): MeetingSessionRow => {
         return {
             id:          r.id,
             spaceName:   r.space_name,
@@ -149,7 +149,7 @@ export class MeetingsRepository {
         return res.results.map(this.rowToParticipant);
     }
 
-    private rowToParticipant(r: any): ParticipantSessionRow {
+    private rowToParticipant = (r: any): ParticipantSessionRow => {
         return {
             id:              r.id,
             sessionId:       r.session_id,
