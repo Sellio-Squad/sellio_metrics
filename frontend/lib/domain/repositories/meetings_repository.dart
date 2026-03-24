@@ -1,68 +1,81 @@
-/// Meetings Domain Repository — Interface
-///
-/// Separate from MetricsRepository to follow the Single Responsibility
-/// Principle. Handles only meeting-related data operations.
+// ─── Domain Repository: Meetings ─────────────────────────────────────────────
+//
+// WebSocket-driven real-time tracking.
+// Removed: attendance, analytics, rate-limit (YAGNI).
 
 import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
 import 'package:sellio_metrics/domain/entities/participant_entity.dart';
-import 'package:sellio_metrics/domain/entities/attendance_analytics_entity.dart';
 
 abstract class MeetingsRepository {
-  /// Create a new meeting and return the created entity.
-  Future<MeetingEntity> createMeeting(String title);
+  // ─── Auth ────────────────────────────────────────────────────────────────
 
-  /// List all tracked meetings.
-  Future<List<MeetingEntity>> getMeetings();
-
-  /// Get meeting details with the participant list.
-  Future<MeetingDetailResult> getMeetingDetail(String id);
-
-  /// Get attendance records with scores for a specific meeting.
-  Future<AttendanceResult> getAttendance(String meetingId);
-
-  /// Get aggregated attendance analytics across all meetings.
-  Future<AttendanceAnalyticsEntity> getAnalytics();
-
-  /// Get Google Meet API rate limit status.
-  Future<RateLimitEntity> getRateLimitStatus();
-
-  /// Check if the backend holds a valid Google Meet OAuth token.
   Future<bool> getAuthStatus();
-
-  /// Gets the OAuth sign-in URL.
   Future<String?> getAuthUrl();
-
-  /// Clears the backend's Google Meet OAuth token.
   Future<void> logout();
 
-  /// Ends an active Google Meeting
+  // ─── CRUD ─────────────────────────────────────────────────────────────────
+
+  Future<MeetingEntity> createMeeting(String title);
+  Future<List<MeetingEntity>> getMeetings();
+  Future<MeetingDetailResult> getMeetingDetail(String id);
   Future<void> endMeeting(String id);
+
+  // ─── Real-time (WebSocket) ────────────────────────────────────────────────
+
+  /// Opens a WebSocket to /api/meetings/:id/ws and emits [MeetingWsEvent]
+  /// as they arrive. The stream closes when the meeting ends (code 1000).
+  Stream<MeetingWsEvent> watchMeeting(String meetingId);
+
+  /// Closes the active WebSocket for this meeting.
+  void unwatchMeeting(String meetingId);
 }
 
-/// Combines meeting info + participants.
+// ─── Result Types ─────────────────────────────────────────────────────────────
+
 class MeetingDetailResult {
   final MeetingEntity meeting;
   final List<ParticipantEntity> participants;
 
-  const MeetingDetailResult({
-    required this.meeting,
-    required this.participants,
-  });
+  const MeetingDetailResult({required this.meeting, required this.participants});
 }
 
-/// Attendance record for a meeting.
-class AttendanceResult {
-  final String meetingId;
-  final String meetingTitle;
-  final String meetingDate;
-  final int totalDurationMinutes;
-  final List<ParticipantEntity> participants;
+// ─── WebSocket Event ──────────────────────────────────────────────────────────
 
-  const AttendanceResult({
+enum MeetingWsEventType {
+  participantJoined,
+  participantLeft,
+  meetingEnded;
+
+  static MeetingWsEventType? fromJson(String? value) => switch (value) {
+        'participant_joined' => participantJoined,
+        'participant_left'   => participantLeft,
+        'meeting_ended'      => meetingEnded,
+        _                    => null,
+      };
+}
+
+class MeetingWsEvent {
+  final MeetingWsEventType type;
+  final String meetingId;
+  final String? participantKey;
+  final String? displayName;
+  final DateTime timestamp;
+
+  const MeetingWsEvent({
+    required this.type,
     required this.meetingId,
-    required this.meetingTitle,
-    required this.meetingDate,
-    required this.totalDurationMinutes,
-    required this.participants,
+    this.participantKey,
+    this.displayName,
+    required this.timestamp,
   });
+
+  factory MeetingWsEvent.fromJson(Map<String, dynamic> json) {
+    return MeetingWsEvent(
+      type:           MeetingWsEventType.fromJson(json['type'] as String?) ?? MeetingWsEventType.meetingEnded,
+      meetingId:      json['meetingId'] as String? ?? '',
+      participantKey: (json['participant'] as Map?)? ['participantKey'] as String?,
+      displayName:    (json['participant'] as Map?)? ['displayName']    as String?,
+      timestamp:      DateTime.tryParse(json['timestamp'] as String? ?? '') ?? DateTime.now(),
+    );
+  }
 }

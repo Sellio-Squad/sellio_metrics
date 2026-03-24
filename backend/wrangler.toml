@@ -52,6 +52,19 @@ database_name = "sellio-metrics-db"
 database_id = "a7ae3b9f-87c7-4696-be19-8660777703c7"
 migrations_dir = "migrations"
 
+# ─── Durable Objects ─────────────────────────────────────────
+# MeetingRoom — one instance per meeting session.
+# Maintains WebSocket connections + broadcasts events.
+# Provisioned automatically on first access.
+
+[[durable_objects.bindings]]
+name = "MEETING_ROOMS"
+class_name = "MeetingRoom"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["MeetingRoom"]
+
 # ─── Cloudflare Queues ───────────────────────────────────────
 # Queue for offloading heavy webhook background tasks
 # (score recomputation, etc.)
@@ -70,3 +83,4 @@ max_retries = 3
 
 [triggers]
 crons = ["0 */6 * * *"]
+

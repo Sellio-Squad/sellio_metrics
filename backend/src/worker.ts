@@ -13,11 +13,9 @@
  *   GET|PUT /api/points/rules
  *   GET  /api/scores/leaderboard
  *   GET  /api/members
- *   POST /api/attendance/check-in | check-out
- *   GET  /api/attendance/history
  *   DELETE /api/developers/:id/events
  *   GET|POST|DELETE /api/meetings/*
- *   GET|POST|DELETE /api/meet-events/*
+ *   GET  /api/meetings/:id/ws  (WebSocket via MeetingRoom Durable Object)
  *   GET  /api/debug/* | /api/logs
  */
 
@@ -39,12 +37,13 @@ import webhookRoutes    from "./modules/webhook/webhook.routes";
 import pointsRoutes     from "./modules/points/points.routes";
 import scoresRoutes     from "./modules/scores/scores.routes";
 import membersRoutes    from "./modules/members/members.routes";
-import attendanceRoutes from "./modules/attendance/attendance.routes";
 import developersRoutes from "./modules/developers/developers.routes";
-import meetingsRoutes   from "./modules/meetings/meetings.routes";
-import meetEventsRoutes from "./modules/meet-events/meet-events.routes";
+import { meetingsRoutes, type CFDurableObjectNamespace } from "./modules/meetings/meetings.routes";
 import debugRoutes      from "./modules/debug/debug.routes";
 import logsRoutes       from "./modules/logs/logs.routes";
+
+// ─── Durable Object export (required by Cloudflare runtime) ────────────────
+export { MeetingRoom } from "./modules/meetings/meeting-room.do";
 
 // ─── Cloudflare Worker bindings ────────────────────────────────────────
 
@@ -64,6 +63,7 @@ interface WorkerEnv {
     ATTENDANCE_KV:  KVNamespace;
     DB:             D1Database;
     WEBHOOK_QUEUE?: any;
+    MEETING_ROOMS:  CFDurableObjectNamespace;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.GOOGLE_PUBSUB_TOPIC)   process.env.GOOGLE_PUBSUB_TOPIC  = workerEnv.GOOGLE_PUBSUB_TOPIC;
 }
 
-function buildApp(cradle: Cradle) {
+function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
     const app = new Hono<HonoEnv>();
 
     // 1. CORS — must be first
@@ -106,10 +106,12 @@ function buildApp(cradle: Cradle) {
     app.route("/api/points",      pointsRoutes);
     app.route("/api/scores",      scoresRoutes);
     app.route("/api/members",     membersRoutes);
-    app.route("/api/attendance",  attendanceRoutes);
     app.route("/api/developers",  developersRoutes);
-    app.route("/api/meetings",    meetingsRoutes);
-    app.route("/api/meet-events", meetEventsRoutes);
+    app.route("/api/meetings",    meetingsRoutes(
+        cradle.meetingsService,
+        cradle.webhookHandlerService,
+        meetingRooms,
+    ));
     app.route("/api/debug",       debugRoutes);
     app.route("/api/logs",        logsRoutes);
 
@@ -134,7 +136,7 @@ export default {
                 workerEnv.WEBHOOK_QUEUE || null,
             );
 
-            const app = buildApp(container.cradle);
+            const app = buildApp(container.cradle, workerEnv.MEETING_ROOMS);
 
             return app.fetch(request, workerEnv as any, ctx);
         } catch (e: any) {

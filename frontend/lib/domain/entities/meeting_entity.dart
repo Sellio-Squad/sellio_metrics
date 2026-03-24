@@ -1,4 +1,4 @@
-/// Meeting entity — domain model for a Google Meet meeting space.
+// ─── Domain Entity: Meeting ──────────────────────────────────────────────────
 
 class MeetingEntity {
   final String id;
@@ -7,7 +7,10 @@ class MeetingEntity {
   final String meetingUri;
   final String meetingCode;
   final DateTime createdAt;
+  final DateTime? endedAt;
   final int participantCount;
+  /// false when Pub/Sub subscription could not be created at meeting creation time.
+  final bool subscribed;
 
   const MeetingEntity({
     required this.id,
@@ -16,7 +19,10 @@ class MeetingEntity {
     required this.meetingUri,
     required this.meetingCode,
     required this.createdAt,
+    this.endedAt,
     required this.participantCount,
+    this.subscribed = true,
   });
 
+  bool get isEnded => endedAt != null;
 }

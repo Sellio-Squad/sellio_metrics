@@ -38,16 +38,6 @@ debug.get("/meet-subscribe", safe(async (c) => {
     const kvToken   = await cradle.cacheService.get<any>("google_oauth_tokens");
     const isReady   = await cradle.meetingsService.isReady();
     const spaceName = c.req.query("spaceName") || "spaces/ONkdRwFFaFMB";
-    let subscribeResult: any = null;
-    let subscribeError: string | null = null;
-
-    if (isReady && cradle.env.googlePubsubTopic) {
-        subscribeResult = await cradle.meetEventsService.subscribe(spaceName);
-    } else {
-        subscribeError = !isReady
-            ? "NOT_READY: OAuth token missing. Please re-authenticate."
-            : "No GOOGLE_PUBSUB_TOPIC configured.";
-    }
 
     return c.json({
         tokenInfo: {
@@ -60,10 +50,12 @@ debug.get("/meet-subscribe", safe(async (c) => {
             cachedAt:     kvToken?.cachedAt ?? null,
         },
         isReady,
-        pubsubTopic:    cradle.env.googlePubsubTopic || "NOT_SET",
+        pubsubTopic: cradle.env.googlePubsubTopic || "NOT_SET",
         spaceName,
-        subscribeResult,
-        subscribeError,
+        // Workspace Events subscription is now handled via wrangler.toml
+        // Pub/Sub push route: POST /api/meetings/events/webhook
+        subscribeResult: null,
+        subscribeError: "Use Pub/Sub push subscription (wrangler.toml) — meet-events module removed.",
     });
 }));
 
