@@ -10,6 +10,7 @@
 import type { MeetingsRepository } from "./meetings.repository";
 import type { Logger } from "../../core/logger";
 import type { PubSubPushBody } from "./meetings.types";
+import type { LogsService } from "../logs/logs.service";
 
 /** Shape of the decoded Workspace Events CloudEvent payload */
 interface WorkspaceEventPayload {
@@ -58,11 +59,12 @@ export class WebhookHandlerService {
      *
      * Returns 200 quickly so Pub/Sub does not retry.
      */
-    async handle(request: Request, meetingsRepo: MeetingsRepository, meetingRooms: DurableObjectNamespace): Promise<Response> {
+    async handle(request: Request, meetingsRepo: MeetingsRepository, meetingRooms: DurableObjectNamespace, logsService?: LogsService): Promise<Response> {
         // 1. Verify Pub/Sub OIDC JWT token
         const authError = await this.verifyPubSubJwt(request);
         if (authError) {
             this.logger.warn({ authError }, "Webhook JWT verification failed — rejecting");
+            if (logsService) await logsService.log(`Webhook JWT verification failed: ${authError}`, "error", "googleMeet");
             return new Response("Unauthorized", { status: 401 });
         }
 
@@ -82,16 +84,19 @@ export class WebhookHandlerService {
             payload = JSON.parse(atob(dataPadded));
         } catch {
             this.logger.warn("Failed to decode Pub/Sub message data");
+            if (logsService) await logsService.log("Failed to decode Pub/Sub message data", "error", "googleMeet");
             return new Response("Bad Request: invalid message data", { status: 400 });
         }
 
         const event = this.extractEvent(payload, body.message.publishTime);
         this.logger.info({ type: event.type, spaceName: event.spaceName }, "Meet event received");
+        if (logsService) await logsService.log(`Meet event received: ${event.type}`, "info", "googleMeet", { spaceName: event.spaceName, participant: event.displayName });
 
         // 4. Resolve space name → meeting session ID
         const session = await meetingsRepo.getSessionBySpaceName(event.spaceName);
         if (!session) {
             this.logger.info({ spaceName: event.spaceName }, "Unknown space — ignoring event");
+            if (logsService) await logsService.log(`Unknown space — ignoring event`, "warning", "googleMeet", { spaceName: event.spaceName });
             return new Response("OK", { status: 200 });
         }
 

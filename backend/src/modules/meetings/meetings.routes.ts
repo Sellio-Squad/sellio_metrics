@@ -81,8 +81,8 @@ export function meetingsRoutes(
     // and forwards to the correct MeetingRoom Durable Object.
 
     app.post("/events/webhook", async (c) => {
-        const { meetingsRepo } = c.get("cradle");
-        return webhookHandler.handle(c.req.raw, meetingsRepo, meetingRooms as any);
+        const { meetingsRepo, logsService } = c.get("cradle");
+        return webhookHandler.handle(c.req.raw, meetingsRepo, meetingRooms as any, logsService);
     });
 
     // ─── WebSocket (real-time participant updates) ────────────────────────────
