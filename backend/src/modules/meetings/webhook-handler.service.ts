@@ -77,7 +77,9 @@ export class WebhookHandlerService {
         // 3. Decode base64 Pub/Sub message
         let payload: WorkspaceEventPayload;
         try {
-            payload = JSON.parse(atob(body.message.data));
+            const b64Data = body.message.data.replace(/-/g, "+").replace(/_/g, "/");
+            const dataPadded = b64Data + "===".slice((b64Data.length + 3) % 4);
+            payload = JSON.parse(atob(dataPadded));
         } catch {
             this.logger.warn("Failed to decode Pub/Sub message data");
             return new Response("Bad Request: invalid message data", { status: 400 });
@@ -124,10 +126,16 @@ export class WebhookHandlerService {
         const token = authHeader.slice(7);
 
         try {
+            const b64Dec = (str: string) => {
+                let s = str.replace(/-/g, "+").replace(/_/g, "/");
+                while (s.length % 4) s += "=";
+                return atob(s);
+            };
+
             // Decode header + payload without verification first to get kid
             const [headerB64, payloadB64] = token.split(".");
-            const header  = JSON.parse(atob(headerB64.replace(/-/g, "+").replace(/_/g, "/")));
-            const claims  = JSON.parse(atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/")));
+            const header  = JSON.parse(b64Dec(headerB64));
+            const claims  = JSON.parse(b64Dec(payloadB64));
 
             // Fetch Google's public certs (JWKS)
             const jwksRes  = await fetch("https://www.googleapis.com/oauth2/v3/certs");
@@ -144,7 +152,7 @@ export class WebhookHandlerService {
             );
 
             const [, , sigB64] = token.split(".");
-            const sig          = Uint8Array.from(atob(sigB64.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+            const sig          = Uint8Array.from(b64Dec(sigB64), c => c.charCodeAt(0));
             const data         = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
             const valid        = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, sig, data);
             if (!valid) return "Invalid signature";
