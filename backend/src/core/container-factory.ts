@@ -50,8 +50,6 @@ async function buildContainer(
     const { OpenPrsService } = await import("../modules/prs/open-prs.service");
     const { GoogleMeetClient } = await import("../infra/google/google-meet.client");
     const { MeetingsService } = await import("../modules/meetings/meetings.service");
-    const { WorkspaceEventsClient } = await import("../infra/google/workspace-events.client");
-    const { MeetEventsService } = await import("../modules/meet-events/meet-events.service");
     const { LogsService } = await import("../modules/logs/logs.service");
     const { PointsRulesService } = await import("../modules/points/points-rules.service");
     const { ScoreAggregationService } = await import("../modules/scores/score-aggregation.service");
@@ -60,9 +58,8 @@ async function buildContainer(
     const { CommentsRepository } = await import("../modules/prs/comments.repository");
     const { ScoresRepository } = await import("../modules/scores/scores.repository");
     const { DeveloperRepository } = await import("../modules/developers/developer.repository");
-    const { AttendanceRepository } = await import("../modules/attendance/attendance.repository");
     const { MeetingsRepository } = await import("../modules/meetings/meetings.repository");
-    const { AttendanceService } = await import("../modules/attendance/attendance.service");
+    const { WebhookHandlerService } = await import("../modules/meetings/webhook-handler.service");
     const { WebhookService } = await import("../modules/webhook/webhook.service");
 
     const logger = createConsoleLogger();
@@ -105,7 +102,6 @@ async function buildContainer(
         prsRepo: asFunction(({ logger, developerRepo }: Cradle) => new PrsRepository(d1Database, logger, developerRepo)).singleton(),
         commentsRepo: asFunction(({ logger, developerRepo }: Cradle) => new CommentsRepository(d1Database, logger, developerRepo)).singleton(),
         scoresRepo: asFunction(({ logger }: Cradle) => new ScoresRepository(d1Database, logger)).singleton(),
-        attendanceRepo: asFunction(({ logger }: Cradle) => new AttendanceRepository(d1Database, logger)).singleton(),
         meetingsRepo: asFunction(({ logger }: Cradle) => new MeetingsRepository(d1Database, logger)).singleton(),
 
         rateLimitGuard: asFunction(({ logger, env }: Cradle) =>
@@ -131,10 +127,6 @@ async function buildContainer(
             new ScoreAggregationService({ scoresRepo, scoresKvCache, logger }),
         ).singleton(),
 
-        attendanceService: asFunction(({ attendanceRepo, developerRepo, meetingsRepo, attendanceKvCache, logger }: Cradle) =>
-            new AttendanceService({ attendanceRepo, developerRepo, meetingsRepo, attendanceKvCache, logger }),
-        ).singleton(),
-
         // Google Meet
         googleMeetClient: asFunction(({ logger, env, cacheService }: Cradle) =>
             new GoogleMeetClient({
@@ -145,17 +137,11 @@ async function buildContainer(
                 cacheService,
             }),
         ).singleton(),
-        meetingsService: asClass(MeetingsService).singleton(),
-        workspaceEventsClient: asFunction(({ logger, cacheService }: Cradle) =>
-            new WorkspaceEventsClient({ logger, cacheService }),
+        meetingsService: asFunction(({ logger, googleMeetClient, meetingsRepo, env }: Cradle) =>
+            new MeetingsService(googleMeetClient, meetingsRepo, env.googlePubsubTopic, logger),
         ).singleton(),
-        meetEventsService: asFunction(({ logger, workspaceEventsClient, cacheService, env }: Cradle) =>
-            new MeetEventsService({
-                logger,
-                workspaceEventsClient,
-                cacheService,
-                pubsubTopic: env.googlePubsubTopic,
-            }),
+        webhookHandlerService: asFunction(({ logger }: Cradle) =>
+            new WebhookHandlerService({ logger }),
         ).singleton(),
 
         // Webhook

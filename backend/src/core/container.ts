@@ -13,7 +13,6 @@ import type { PrsRepository } from "../modules/prs/prs.repository";
 import type { CommentsRepository } from "../modules/prs/comments.repository";
 import type { ScoresRepository } from "../modules/scores/scores.repository";
 import type { DeveloperRepository } from "../modules/developers/developer.repository";
-import type { AttendanceRepository } from "../modules/attendance/attendance.repository";
 import type { MeetingsRepository } from "../modules/meetings/meetings.repository";
 import type { RateLimitGuard } from "../infra/github/rate-limit-guard";
 import type { CachedGitHubClient } from "../infra/github/cached-github.client";
@@ -21,13 +20,11 @@ import type { ReposService } from "../modules/repos/repos.service";
 import type { PrFetcherService } from "../modules/metrics/pr-fetcher.service";
 import type { OpenPrsService } from "../modules/prs/open-prs.service";
 import type { GoogleMeetClient } from "../infra/google/google-meet.client";
-import type { WorkspaceEventsClient } from "../infra/google/workspace-events.client";
 import type { MeetingsService } from "../modules/meetings/meetings.service";
-import type { MeetEventsService } from "../modules/meet-events/meet-events.service";
+import type { WebhookHandlerService } from "../modules/meetings/webhook-handler.service";
 import type { LogsService } from "../modules/logs/logs.service";
 import type { PointsRulesService } from "../modules/points/points-rules.service";
 import type { ScoreAggregationService } from "../modules/scores/score-aggregation.service";
-import type { AttendanceService } from "../modules/attendance/attendance.service";
 import type { WebhookService } from "../modules/webhook/webhook.service";
 import type { env } from "../config/env";
 import type { Logger } from "./logger";
@@ -66,7 +63,6 @@ export interface Cradle {
     prsRepo: PrsRepository;
     commentsRepo: CommentsRepository;
     scoresRepo: ScoresRepository;
-    attendanceRepo: AttendanceRepository;
     meetingsRepo: MeetingsRepository;
 
     // Repos
@@ -81,13 +77,11 @@ export interface Cradle {
     // Scoring
     pointsRulesService: PointsRulesService;
     scoreAggregationService: ScoreAggregationService;
-    attendanceService: AttendanceService;
 
     // Google Meet
     googleMeetClient: GoogleMeetClient;
-    workspaceEventsClient: WorkspaceEventsClient;
     meetingsService: MeetingsService;
-    meetEventsService: MeetEventsService;
+    webhookHandlerService: WebhookHandlerService;
 
     // Logs
     logsService: LogsService;

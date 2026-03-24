@@ -1,98 +1,100 @@
-/**
- * Meetings Routes (Google Meet)
- * GET    /api/meetings/auth-url
- * GET    /api/meetings/auth-status
- * GET    /api/meetings/oauth2callback
- * POST   /api/meetings/auth-logout
- * GET    /api/meetings/rate-limit
- * GET    /api/meetings/analytics
- * GET    /api/meetings
- * POST   /api/meetings
- * GET    /api/meetings/:id
- * GET    /api/meetings/:id/attendance
- * POST   /api/meetings/:id/end
- */
-
 import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
-import { useCradle, safe, oauthSuccessHtml, oauthErrorHtml, oauthFailHtml } from "../../lib/route-helpers";
-import { AppError } from "../../core/app-error";
-import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
+import type { MeetingsService } from "./meetings.service";
+import type { WebhookHandlerService } from "./webhook-handler.service";
 
-const createMeetingSchema = z.object({ title: z.string() });
-type CreateMeetingBody = z.infer<typeof createMeetingSchema>;
+// Narrow local interface — avoids generics conflict with @cloudflare/workers-types
+export interface CFDurableObjectNamespace {
+    idFromName(name: string): { toString(): string };
+    get(id: { toString(): string }): { fetch(req: Request): Promise<Response> };
+}
 
-const meetings = new Hono<HonoEnv>();
+export function meetingsRoutes(
+    meetingsService: MeetingsService,
+    webhookHandler: WebhookHandlerService,
+    meetingRooms: CFDurableObjectNamespace,
+) {
+    const app = new Hono<HonoEnv>();
 
-meetings.get("/auth-url", (c) =>
-    c.json({ authUrl: useCradle(c).meetingsService.getAuthUrl() }),
-);
+    // ─── OAuth ───────────────────────────────────────────────────────────────
 
-meetings.get("/auth-status", safe(async (c) =>
-    c.json({ isReady: await useCradle(c).meetingsService.isReady() }),
-));
+    app.get("/auth-url", async (c) => {
+        const url = meetingsService.getAuthUrl();
+        return c.json({ url });
+    });
 
-meetings.get("/oauth2callback", async (c) => {
-    const { meetingsService } = useCradle(c);
-    const code  = c.req.query("code");
-    const error = c.req.query("error");
+    app.get("/auth-status", async (c) => {
+        const authenticated = await meetingsService.isReady();
+        return c.json({ authenticated });
+    });
 
-    if (error) return oauthErrorHtml(error,
-        "Check that this Google account is added as a test user in " +
-        "<a href='https://console.cloud.google.com/apis/credentials/consent' target='_blank'>" +
-        "Google Cloud Console → OAuth consent screen</a>.",
-    );
-    if (!code) throw new AppError("Missing code", 400);
-
-    try {
+    app.get("/oauth2callback", async (c) => {
+        const code = c.req.query("code");
+        if (!code) return c.json({ error: "Missing authorization code" }, 400);
         await meetingsService.authorize(code);
-        return oauthSuccessHtml();
-    } catch (e: any) {
-        return oauthFailHtml(e?.message || "Unknown error");
-    }
-});
+        return c.text("Authentication successful — you can close this tab.");
+    });
 
-meetings.post("/auth-logout", safe(async (c) => {
-    await useCradle(c).meetingsService.clearCredentials();
-    return c.json({ success: true });
-}));
+    app.post("/auth-logout", async (c) => {
+        await meetingsService.clearCredentials();
+        return c.json({ success: true });
+    });
 
-meetings.get("/rate-limit", (c) =>
-    c.json(useCradle(c).meetingsService.getRateLimitStatus()),
-);
+    // ─── Meeting CRUD ─────────────────────────────────────────────────────────
 
-meetings.get("/analytics", safe(async (c) =>
-    c.json(await useCradle(c).meetingsService.getAnalytics()),
-));
+    app.post("/", async (c) => {
+        const isReady = await meetingsService.isReady();
+        if (!isReady) {
+            const authUrl = meetingsService.getAuthUrl();
+            return c.json({ error: "Not authenticated", requiresAuth: true, authUrl }, 401);
+        }
+        const body = await c.req.json<{ title?: string }>();
+        const title = body?.title?.trim();
+        if (!title) return c.json({ error: "title is required" }, 400);
+        const meeting = await meetingsService.createMeeting(title);
+        return c.json(meeting, 201);
+    });
 
-meetings.get("/", safe(async (c) =>
-    c.json(await useCradle(c).meetingsService.listMeetings()),
-));
+    app.get("/", async (c) => {
+        const meetings = await meetingsService.listMeetings();
+        return c.json(meetings);
+    });
 
-meetings.post("/", zValidator("json", createMeetingSchema), safe(async (c) => {
-    const { meetingsService } = useCradle(c);
-    if (!(await meetingsService.isReady())) {
-        return c.json(
-            { error: "UNAUTHORIZED", message: "Sign in required.", authUrl: meetingsService.getAuthUrl() },
-            401,
-        );
-    }
-    const body = c.req.valid("json") as CreateMeetingBody;
-    return c.json(await meetingsService.createMeeting(body.title));
-}));
+    app.get("/:id", async (c) => {
+        const meeting = await meetingsService.getMeeting(c.req.param("id"));
+        return c.json(meeting);
+    });
 
-meetings.get("/:id/attendance", safe(async (c) =>
-    c.json(await useCradle(c).meetingsService.getAttendance(c.req.param("id")!)),
-));
+    app.get("/:id/participants", async (c) => {
+        const participants = await meetingsService.getActiveParticipants(c.req.param("id"));
+        return c.json(participants);
+    });
 
-meetings.get("/:id", safe(async (c) =>
-    c.json(await useCradle(c).meetingsService.getMeeting(c.req.param("id")!)),
-));
+    app.post("/:id/end", async (c) => {
+        await meetingsService.endMeeting(c.req.param("id"));
+        return c.json({ success: true });
+    });
 
-meetings.post("/:id/end", safe(async (c) => {
-    await useCradle(c).meetingsService.endMeeting(c.req.param("id")!);
-    return c.json({ success: true });
-}));
+    // ─── Pub/Sub Webhook ─────────────────────────────────────────────────────
+    // Google Workspace Events pushes CloudEvents here via Pub/Sub.
+    // WebhookHandlerService verifies the JWT, decodes the payload,
+    // and forwards to the correct MeetingRoom Durable Object.
 
-export default meetings;
+    app.post("/events/webhook", async (c) => {
+        const { meetingsRepo } = c.get("cradle");
+        return webhookHandler.handle(c.req.raw, meetingsRepo, meetingRooms as any);
+    });
+
+    // ─── WebSocket (real-time participant updates) ────────────────────────────
+    // Flutter connects to this endpoint to receive participant_joined /
+    // participant_left / meeting_ended events in real-time.
+
+    app.get("/:id/ws", (c) => {
+        const id     = c.req.param("id");
+        const doId   = meetingRooms.idFromName(id);
+        const doStub = meetingRooms.get(doId);
+        return doStub.fetch(c.req.raw);
+    });
+
+    return app;
+}

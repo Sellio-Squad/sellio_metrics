@@ -1,69 +1,98 @@
 /**
- * Sellio Metrics Backend — Google Meet Client
+ * Google Meet Client
  *
- * Low-level wrapper around the Google Meet REST API.
- * Handles OAuth2 authentication and native fetch to Google APIs
- * (avoids @google-apps/meet which crashes on Cloudflare Workers due to protobuf eval).
+ * Low-level wrapper for the Google Meet REST API and Workspace Events API.
+ * Handles OAuth2 with automatic token refresh and full nextPageToken pagination.
+ *
+ * Combined from the old google-meet.client.ts and workspace-events.client.ts
+ * to eliminate the duplicated apiFetch / auth logic.
  */
 
 import { OAuth2Client } from "google-auth-library";
 import type { CacheService } from "../cache/cache.service";
 import type { Logger } from "../../core/logger";
 
-// ─── Rate-limit tracking ────────────────────────────────────
+const MEET_BASE       = "https://meet.googleapis.com/v2";
+const WS_EVENTS_BASE  = "https://workspaceevents.googleapis.com/v1";
 
-export interface RateLimitState {
-    remaining: number;
-    limit: number;
-    resetAt: number; // unix seconds
-    lastCallAt: number;
-    callCount: number;
+const MEET_EVENT_TYPES = [
+    "google.workspace.meet.conference.v2.started",
+    "google.workspace.meet.conference.v2.ended",
+    "google.workspace.meet.participant.v2.joined",
+    "google.workspace.meet.participant.v2.left",
+];
+
+// ─── Exported sub-types ─────────────────────────────────────────────────────
+
+export interface MeetSpace {
+    spaceName:   string;
+    meetingUri:  string;
+    meetingCode: string;
 }
 
-// ─── Client ─────────────────────────────────────────────────
+export interface ConferenceRecord {
+    name:      string;
+    startTime: string;
+    endTime:   string;
+}
+
+export interface RawParticipant {
+    name:               string;
+    displayName:        string;
+    /**
+     * "users/{userId}" for signed-in users, null for anonymous.
+     * Interoperable with Admin SDK and People API.
+     */
+    participantKey:     string | null;
+    earliestStartTime:  string;
+    latestEndTime:      string;
+}
+
+export interface WorkspaceSubscription {
+    name:           string;
+    targetResource: string;
+    eventTypes:     string[];
+    pubsubTopic:    string;
+    state:          string;
+    expireTime:     string;
+}
+
+// ─── Client ─────────────────────────────────────────────────────────────────
 
 export class GoogleMeetClient {
-    private readonly logger: Logger;
+    private readonly logger:       Logger;
     private readonly cacheService: CacheService;
-    private oauth2Client: OAuth2Client;
-    private readonly rateLimit: RateLimitState;
-    private currentToken: string | null = null;
+    private readonly oauth2Client: OAuth2Client;
 
-    constructor({ logger, clientId, clientSecret, redirectUri, cacheService }: { logger: Logger; clientId: string; clientSecret: string; redirectUri: string; cacheService: CacheService }) {
-        this.logger = logger.child({ module: "google-meet-client" });
+    constructor({
+        logger,
+        clientId,
+        clientSecret,
+        redirectUri,
+        cacheService,
+    }: {
+        logger:        Logger;
+        clientId:      string;
+        clientSecret:  string;
+        redirectUri:   string;
+        cacheService:  CacheService;
+    }) {
+        this.logger       = logger.child({ module: "google-meet-client" });
         this.cacheService = cacheService;
-
-        this.oauth2Client = new OAuth2Client(
-            clientId,
-            clientSecret,
-            redirectUri
-        );
-
-        this.rateLimit = {
-            remaining: 60,
-            limit: 60,
-            resetAt: 0,
-            lastCallAt: 0,
-            callCount: 0,
-        };
+        this.oauth2Client = new OAuth2Client(clientId, clientSecret, redirectUri);
     }
 
-    async setCredentials(tokens: any) {
-        this.oauth2Client.setCredentials(tokens);
-        this.currentToken = tokens.access_token || null;
-        await this.cacheService.set("google_oauth_tokens", tokens, 30 * 24 * 60 * 60); // 30 days
-        this.logger.info("✅ Google Meet OAuth2 Credentials configured.");
-    }
+    // ─── OAuth2 ─────────────────────────────────────────────────────────────
 
     getAuthUrl(): string {
         return this.oauth2Client.generateAuthUrl({
-            access_type: 'offline',
+            access_type: "offline",
             scope: [
                 "https://www.googleapis.com/auth/meetings.space.created",
                 "https://www.googleapis.com/auth/meetings.space.readonly",
                 "https://www.googleapis.com/auth/pubsub",
             ],
-            prompt: 'consent'
+            prompt: "consent",
         });
     }
 
@@ -74,151 +103,174 @@ export class GoogleMeetClient {
     }
 
     async isReady(): Promise<boolean> {
-        if (this.currentToken) return true;
+        if (this.oauth2Client.credentials?.access_token) return true;
 
-        // Check cache on new instances
         const cached = await this.cacheService.get<any>("google_oauth_tokens");
         if (cached?.data) {
             this.oauth2Client.setCredentials(cached.data);
-            this.currentToken = cached.data.access_token || null;
             return true;
         }
-
         return false;
     }
 
     async clearCredentials(): Promise<void> {
         this.oauth2Client.setCredentials({});
-        this.currentToken = null;
         await this.cacheService.del("google_oauth_tokens");
     }
 
-    // ─── Rate Limit Tracking ────────────────────────────────
-
-    private trackCall(): void {
-        const now = Math.floor(Date.now() / 1000);
-        if (now - this.rateLimit.lastCallAt > 60) {
-            this.rateLimit.callCount = 0;
-        }
-        this.rateLimit.callCount++;
-        this.rateLimit.lastCallAt = now;
-        this.rateLimit.remaining = Math.max(0, this.rateLimit.limit - this.rateLimit.callCount);
-        this.rateLimit.resetAt = now + 60;
+    private async setCredentials(tokens: any): Promise<void> {
+        this.oauth2Client.setCredentials(tokens);
+        await this.cacheService.set("google_oauth_tokens", tokens, 30 * 24 * 60 * 60);
+        this.logger.info("OAuth2 credentials stored");
     }
 
-    getRateLimitStatus(): { remaining: number; limit: number; resetAt: string; isLow: boolean } {
-        return {
-            remaining: this.rateLimit.remaining,
-            limit: this.rateLimit.limit,
-            resetAt: this.rateLimit.resetAt > 0
-                ? new Date(this.rateLimit.resetAt * 1000).toISOString()
-                : "",
-            isLow: this.rateLimit.remaining <= 10,
-        };
+    // ─── Generic Fetch (Meet API) ────────────────────────────────────────────
+
+    private async meetFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+        return this.apiFetch<T>(`${MEET_BASE}/${path}`, options);
     }
 
-    // ─── Generic Fetch Wrapper ─────────────────────────────
+    // ─── Generic Fetch (Workspace Events API) ───────────────────────────────
 
-    private async apiFetch<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-        if (!(await this.isReady())) throw new Error("Not authorized");
+    private async wsFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+        const url = path.startsWith("http") ? path : `${WS_EVENTS_BASE}/${path}`;
+        return this.apiFetch<T>(url, options);
+    }
 
-        const url = `https://meet.googleapis.com/v2/${endpoint}`;
-        const accessToken = (await this.oauth2Client.getAccessToken()).token;
-        if (!accessToken) throw new Error("Failed to get access token");
+    // ─── Core Fetch with Token Refresh + Retry ───────────────────────────────
 
-        this.currentToken = accessToken; // Keep updated
+    private async apiFetch<T>(url: string, options: RequestInit = {}, isRetry = false): Promise<T> {
+        if (!(await this.isReady())) throw new Error("Not authorized — sign in first");
 
-        const fetchOptions: RequestInit = {
+        const token = (await this.oauth2Client.getAccessToken()).token;
+        if (!token) throw new Error("Failed to get access token");
+
+        const res = await fetch(url, {
             ...options,
             headers: {
-                "Authorization": `Bearer ${this.currentToken}`,
-                "Content-Type": "application/json",
+                "Authorization": `Bearer ${token}`,
+                "Content-Type":  "application/json",
                 ...options.headers,
             },
-        };
-
-        const maxRetries = 3;
-        for (let attempt = 0; attempt <= maxRetries; attempt++) {
-            this.trackCall();
-            const res = await fetch(url, fetchOptions);
-
-            if (res.ok) {
-                // Return empty object for 204 No Content
-                if (res.status === 204 || res.headers.get("content-length") === "0") return {} as T;
-                return await res.json() as T;
-            }
-
-            if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
-                if (attempt < maxRetries) {
-                    const delayMs = Math.pow(2, attempt) * 1000 + Math.random() * 500;
-                    this.logger.warn({ attempt, delayMs, status: res.status, url }, `⚠️ Rate limited / Server Error — retrying fetch`);
-                    await new Promise(r => setTimeout(r, delayMs));
-                    continue;
-                }
-            }
-
-            let errBody = "";
-            try { errBody = await res.text(); } catch { }
-            throw new Error(`Google Meet API failed: ${res.status} ${res.statusText} - ${errBody}`);
-        }
-        throw new Error("Exhausted retries");
-    }
-
-    // ─── Space Operations ───────────────────────────────────
-
-    async createSpace(): Promise<{ spaceName: string; meetingUri: string; meetingCode: string; }> {
-        const space = await this.apiFetch<any>("spaces", {
-            method: "POST",
-            body: JSON.stringify({ config: { accessType: "OPEN" } })
         });
 
-        return {
-            spaceName: space.name ?? "",
-            meetingUri: space.meetingUri ?? "",
-            meetingCode: space.meetingCode ?? "",
-        };
+        // Transparent token refresh on 401
+        if (res.status === 401 && !isRetry) {
+            this.logger.warn({ url }, "Access token expired — refreshing");
+            const { credentials } = await this.oauth2Client.refreshAccessToken();
+            await this.setCredentials(credentials);
+            return this.apiFetch<T>(url, options, true /* isRetry */);
+        }
+
+        if (res.ok) {
+            if (res.status === 204 || res.headers.get("content-length") === "0") return {} as T;
+            return res.json() as Promise<T>;
+        }
+
+        // Retry on transient 5xx / 429
+        if (!isRetry && (res.status === 429 || res.status >= 500)) {
+            const delay = res.status === 429 ? 2000 : 1000;
+            this.logger.warn({ url, status: res.status }, `Transient error — retrying after ${delay}ms`);
+            await new Promise(r => setTimeout(r, delay));
+            return this.apiFetch<T>(url, options, true /* isRetry */);
+        }
+
+        let body = "";
+        try { body = await res.text(); } catch { /* ignore */ }
+        throw new Error(`Google API ${res.status} ${res.statusText}: ${body}`);
     }
 
-    async getSpace(spaceName: string): Promise<{ spaceName: string; meetingUri: string; meetingCode: string; }> {
-        const space = await this.apiFetch<any>(spaceName);
+    // ─── Meet Space Operations ───────────────────────────────────────────────
+
+    async createSpace(): Promise<MeetSpace> {
+        const space = await this.meetFetch<any>("spaces", {
+            method: "POST",
+            body: JSON.stringify({ config: { accessType: "OPEN" } }),
+        });
         return {
-            spaceName: space.name ?? "",
-            meetingUri: space.meetingUri ?? "",
-            meetingCode: space.meetingCode ?? "",
+            spaceName:   space.name        ?? "",
+            meetingUri:  space.meetingUri   ?? "",
+            meetingCode: space.meetingCode  ?? "",
         };
     }
 
     async endSpace(spaceName: string): Promise<void> {
-        await this.apiFetch(`${spaceName}:endActiveConference`, { method: "POST", body: "{}" });
+        await this.meetFetch(`${spaceName}:endActiveConference`, { method: "POST", body: "{}" });
     }
 
-    // ─── Conference Analytics ───────────────────────────────
+    // ─── Conference Records (paginated) ─────────────────────────────────────
 
-    async listConferenceRecords(spaceName: string): Promise<Array<{ name: string; startTime: string; endTime: string; }>> {
-        const query = encodeURIComponent(`space.name="${spaceName}"`);
-        const res = await this.apiFetch<any>(`conferenceRecords?filter=${query}`);
-        const records = res.conferenceRecords || [];
+    async listConferenceRecords(spaceName: string): Promise<ConferenceRecord[]> {
+        const filter = encodeURIComponent(`space.name="${spaceName}"`);
+        const records: ConferenceRecord[] = [];
+        let pageToken: string | undefined;
 
-        return records.map((r: any) => ({
-            name: r.name ?? "",
-            startTime: r.startTime ?? "",
-            endTime: r.endTime ?? "",
-        }));
+        do {
+            const url = `conferenceRecords?filter=${filter}${pageToken ? `&pageToken=${pageToken}` : ""}`;
+            const res = await this.meetFetch<any>(url);
+            for (const r of res.conferenceRecords ?? []) {
+                records.push({ name: r.name ?? "", startTime: r.startTime ?? "", endTime: r.endTime ?? "" });
+            }
+            pageToken = res.nextPageToken;
+        } while (pageToken);
+
+        return records;
     }
 
-    async listParticipants(conferenceRecordName: string): Promise<Array<{
-        name: string; displayName: string; email: string | null;
-        earliestStartTime: string; latestEndTime: string;
-    }>> {
-        const res = await this.apiFetch<any>(`${conferenceRecordName}/participants`);
-        const participants = res.participants || [];
+    // ─── Participants (paginated) ────────────────────────────────────────────
 
-        return participants.map((p: any) => ({
-            name: p.name ?? "",
-            displayName: p.signedinUser?.displayName ?? p.anonymousUser?.displayName ?? "Unknown",
-            email: p.signedinUser?.user ? p.signedinUser.user.replace("users/", "") : null, // Not always valid format if no gmail, but fallback
-            earliestStartTime: p.earliestStartTime ?? "",
-            latestEndTime: p.latestEndTime ?? "",
-        }));
+    async listParticipants(conferenceRecordName: string): Promise<RawParticipant[]> {
+        const participants: RawParticipant[] = [];
+        let pageToken: string | undefined;
+
+        do {
+            const url = `${conferenceRecordName}/participants${pageToken ? `?pageToken=${pageToken}` : ""}`;
+            const res = await this.meetFetch<any>(url);
+            for (const p of res.participants ?? []) {
+                participants.push({
+                    name:              p.name ?? "",
+                    displayName:       p.signedinUser?.displayName ?? p.anonymousUser?.displayName ?? p.phoneUser?.displayName ?? "Unknown",
+                    participantKey:    p.signedinUser?.user ?? null, // "users/{userId}" or null
+                    earliestStartTime: p.earliestStartTime ?? "",
+                    latestEndTime:     p.latestEndTime     ?? "",
+                });
+            }
+            pageToken = res.nextPageToken;
+        } while (pageToken);
+
+        return participants;
+    }
+
+    // ─── Workspace Events Subscriptions ─────────────────────────────────────
+
+    async createEventSubscription(spaceName: string, pubsubTopic: string): Promise<WorkspaceSubscription> {
+        this.logger.info({ spaceName, pubsubTopic }, "Creating Workspace Events subscription");
+
+        const body = {
+            targetResource: `//meet.googleapis.com/${spaceName}`,
+            eventTypes: MEET_EVENT_TYPES,
+            notificationEndpoint: { pubsubTopic },
+        };
+
+        const result = await this.wsFetch<any>("subscriptions", {
+            method: "POST",
+            body: JSON.stringify(body),
+        });
+
+        // createSubscription returns a long-running Operation; actual sub is in .response
+        const sub = result.response ?? result;
+        return {
+            name:           sub.name           ?? "",
+            targetResource: sub.targetResource  ?? body.targetResource,
+            eventTypes:     sub.eventTypes      ?? MEET_EVENT_TYPES,
+            pubsubTopic:    sub.notificationEndpoint?.pubsubTopic ?? pubsubTopic,
+            state:          sub.state           ?? "ACTIVE",
+            expireTime:     sub.expireTime       ?? "",
+        };
+    }
+
+    async deleteEventSubscription(subscriptionName: string): Promise<void> {
+        await this.wsFetch(subscriptionName, { method: "DELETE" });
+        this.logger.info({ subscriptionName }, "Subscription deleted");
     }
 }

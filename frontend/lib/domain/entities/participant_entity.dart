@@ -1,25 +1,24 @@
-/// Participant entity — domain model for a meeting participant.
-///
-/// Attendance score is computed on the backend (weighted: presence 40%,
-/// duration 35%, consistency 25%).
+// ─── Domain Entity: Participant ──────────────────────────────────────────────
+//
+// Uses Google's stable `users/{userId}` identifier instead of email.
+// Supports multiple sessions per participant (rejoin-safe).
 
 class ParticipantEntity {
+  /// "users/{userId}" for signed-in users, display name for anonymous.
+  final String participantKey;
   final String displayName;
-  final String? email;
-  final DateTime joinTime;
-  final DateTime? leaveTime;
-  final int durationMinutes;
-  final int attendanceScore;
+  final DateTime startTime;
+  final DateTime? endTime; // null = currently in the meeting
+  final int totalDurationMinutes;
 
   const ParticipantEntity({
+    required this.participantKey,
     required this.displayName,
-    this.email,
-    required this.joinTime,
-    this.leaveTime,
-    required this.durationMinutes,
-    required this.attendanceScore,
+    required this.startTime,
+    this.endTime,
+    required this.totalDurationMinutes,
   });
 
-  /// Whether the participant is currently in the meeting (no leave time).
-  bool get isCurrentlyPresent => leaveTime == null;
+  /// True when the participant has no end time (still inside the meeting).
+  bool get isCurrentlyPresent => endTime == null;
 }
