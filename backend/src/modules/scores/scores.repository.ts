@@ -24,11 +24,11 @@ export class ScoresRepository {
 
         const prFilter     = since ? `AND mp.merged_at >= '${since}'` : "";
         const cmtFilter    = since ? `AND pc.commented_at >= '${since}'` : "";
-        const attendFilter = since ? `AND ma.joined_at >= '${since}'` : "";
+        const attendFilter = since ? `AND ps.start_time >= '${since}'` : "";
         
         const prUntil      = until ? `AND mp.merged_at <= '${until}'` : "";
         const cmtUntil     = until ? `AND pc.commented_at <= '${until}'` : "";
-        const attendUntil  = until ? `AND ma.joined_at <= '${until}'` : "";
+        const attendUntil  = until ? `AND ps.start_time <= '${until}'` : "";
 
         const query = `
             WITH pr_scores AS (
@@ -69,16 +69,16 @@ export class ScoresRepository {
             ),
             attendance_scores AS (
                 SELECT
-                    ma.developer_login               AS developer_login,
+                    ps.display_name                  AS developer_login,
                     0                                AS pr_count,
                     0                                AS comment_count,
-                    COALESCE(SUM(ma.duration_minutes), 0) AS attendance_minutes,
+                    COALESCE(SUM(ROUND((julianday(IFNULL(ps.end_time, datetime('now'))) - julianday(ps.start_time)) * 24 * 60)), 0) AS attendance_minutes,
                     0                                AS line_additions,
                     0                                AS line_deletions,
-                    ROUND(COALESCE(SUM(ma.duration_minutes), 0) * COALESCE((SELECT points FROM point_rules WHERE event_type = 'ATTENDANCE_DURATION'), 0), 2) AS points
-                FROM meeting_attendance ma
+                    ROUND(COALESCE(SUM(ROUND((julianday(IFNULL(ps.end_time, datetime('now'))) - julianday(ps.start_time)) * 24 * 60)), 0) * COALESCE((SELECT points FROM point_rules WHERE event_type = 'ATTENDANCE_DURATION'), 0), 2) AS points
+                FROM participant_sessions ps
                 WHERE 1=1 ${attendFilter} ${attendUntil}
-                GROUP BY ma.developer_login
+                GROUP BY ps.display_name
             )
             SELECT
                 developer_login,
@@ -114,7 +114,7 @@ export class ScoresRepository {
         const [r1, r2, r3] = await this.db.batch([
             this.db.prepare("DELETE FROM merged_prs       WHERE author           = ?1").bind(login),
             this.db.prepare("DELETE FROM pr_comments      WHERE author           = ?1").bind(login),
-            this.db.prepare("DELETE FROM meeting_attendance WHERE developer_login = ?1").bind(login),
+            this.db.prepare("DELETE FROM participant_sessions WHERE display_name = ?1").bind(login),
         ]);
         return { 
             prs:        r1.meta?.changes ?? 0, 
