@@ -104,7 +104,7 @@ export class D1Service {
             this.db.prepare("DELETE FROM merged_prs"),
             this.db.prepare("DELETE FROM repos"),
             // Delete members who have no attendance records to avoid wiping historical Google Meet data (Foreign Key constraint limit)
-            this.db.prepare("DELETE FROM members WHERE login NOT IN (SELECT developer_login FROM meeting_attendance)"),
+            this.db.prepare("DELETE FROM members WHERE login NOT IN (SELECT display_name FROM participant_sessions)"),
         ]);
 
         return {

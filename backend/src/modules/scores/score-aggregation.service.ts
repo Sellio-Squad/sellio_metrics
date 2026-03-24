@@ -2,8 +2,8 @@
  * Scores Module — Score Aggregation Service (Relational)
  *
  * Computes leaderboards from the normalized relational tables
- * (merged_prs, pr_comment_summary, meeting_attendance) using
- * D1RelationalService.
+ * The source tables (merged_prs, pr_comment_summary, participant_sessions)
+ * using static multipliers.vice.
  *
  * Supports incremental updates — only refreshes the affected developer's
  * entry in the cached snapshot when called from a webhook.

@@ -86,7 +86,7 @@ export class DeveloperRepository {
                 UNION ALL
                 SELECT author         AS developer_login, MAX(commented_at) AS last_ts FROM pr_comments      GROUP BY author
                 UNION ALL
-                SELECT developer_login,                   MAX(joined_at)    AS last_ts FROM meeting_attendance GROUP BY developer_login
+                SELECT display_name   AS developer_login, MAX(start_time)   AS last_ts FROM participant_sessions GROUP BY display_name
             )
             GROUP BY developer_login
         `).all<{ developer_login: string; last_active: string }>();
