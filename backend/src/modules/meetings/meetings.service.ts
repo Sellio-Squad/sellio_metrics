@@ -1,63 +1,37 @@
 /**
- * Meetings Service — Google Meet + D1
+ * Meetings Service
  *
- * Persists meetings to `meeting_sessions` and attendance to `meeting_attendance`
- * in D1 (instead of the old in-memory KV approach).
- *
- * Flow:
- *   createMeeting()  → Google Meet API createSpace() → D1 upsertMeetingSession()
- *   getAttendance()  → Google Meet API listConferenceRecords/listParticipants
- *                    → D1 upsertMeetingAttendance() (for each participant)
- *                    → returns persisted rows
- *   listMeetings()   → D1 getMeetingSessions()
- *   endMeeting()     → Google Meet API endSpace() → D1 update ended_at
+ * Single responsibility: OAuth + meeting CRUD.
+ * Does NOT handle webhook events (that is WebhookHandlerService's job).
  */
 
 import type { GoogleMeetClient } from "../../infra/google/google-meet.client";
 import type { MeetingsRepository } from "./meetings.repository";
-import type { AttendanceRepository, MeetingAttendance } from "../attendance/attendance.repository";
 import type { Logger } from "../../core/logger";
 import type {
-    MeetingSpace,
-    MeetingDetail,
-    AttendanceRecord,
-    AttendanceAnalytics,
-    RateLimitInfo,
-    Participant,
+    MeetingResponse,
+    MeetingDetailResponse,
+    ParticipantResponse,
 } from "./meetings.types";
-import { mapParticipants, aggregateAnalytics } from "./meetings.mapper";
-
-// ─── Service ────────────────────────────────────────────────────
 
 export class MeetingsService {
     private readonly logger: Logger;
-    private readonly meetClient: GoogleMeetClient;
-    private readonly meetingsRepo: MeetingsRepository;
-    private readonly attendanceRepo: AttendanceRepository;
 
-    constructor({
-        logger,
-        googleMeetClient,
-        meetingsRepo,
-        attendanceRepo,
-    }: {
-        logger: Logger;
-        googleMeetClient: GoogleMeetClient;
-        meetingsRepo: MeetingsRepository;
-        attendanceRepo: AttendanceRepository;
-    }) {
-        this.logger         = logger.child({ module: "meetings" });
-        this.meetClient     = googleMeetClient;
-        this.meetingsRepo   = meetingsRepo;
-        this.attendanceRepo = attendanceRepo;
+    constructor(
+        private readonly meetClient: GoogleMeetClient,
+        private readonly meetingsRepo: MeetingsRepository,
+        private readonly pubsubTopic: string,
+        logger: Logger,
+    ) {
+        this.logger = logger.child({ module: "meetings-service" });
     }
 
-    // ─── OAuth2 ───────────────────────────────────────────────
+    // ─── OAuth ───────────────────────────────────────────────────────────────
 
     getAuthUrl(): string { return this.meetClient.getAuthUrl(); }
 
     async authorize(code: string): Promise<any> {
-        this.logger.info("Exchanging auth code for tokens…");
+        this.logger.info("Exchanging auth code for tokens");
         return this.meetClient.authorize(code);
     }
 
@@ -65,15 +39,14 @@ export class MeetingsService {
 
     async clearCredentials(): Promise<void> { return this.meetClient.clearCredentials(); }
 
-    getRateLimitStatus(): RateLimitInfo { return this.meetClient.getRateLimitStatus(); }
+    // ─── Create ──────────────────────────────────────────────────────────────
 
-    // ─── Create ───────────────────────────────────────────────
-
-    async createMeeting(title: string): Promise<MeetingSpace> {
+    async createMeeting(title: string): Promise<MeetingResponse> {
         this.logger.info({ title }, "Creating meeting space");
 
         const space = await this.meetClient.createSpace();
         const id    = `meet_${Date.now()}`;
+        const now   = new Date().toISOString();
 
         await this.meetingsRepo.upsertSession({
             id,
@@ -81,180 +54,108 @@ export class MeetingsService {
             meetingUri:  space.meetingUri,
             meetingCode: space.meetingCode,
             title,
+            startedAt:   now,
         });
-        this.logger.info({ id, meetingUri: space.meetingUri }, "✅ Meeting created + persisted to D1");
 
-        return { id, title, ...space, createdAt: new Date().toISOString(), participantCount: 0 };
+        // Subscribe to Workspace Events so the Pub/Sub webhook fires on join/leave.
+        // Failure is non-fatal — the meeting is still usable without real-time events.
+        let subscribed = false;
+        if (this.pubsubTopic) {
+            try {
+                await this.meetClient.createEventSubscription(space.spaceName, this.pubsubTopic);
+                subscribed = true;
+                this.logger.info({ id }, "Workspace Events subscription created");
+            } catch (err: any) {
+                this.logger.warn({ err: err?.message, id }, "createEventSubscription failed — real-time events disabled");
+            }
+        }
+
+        this.logger.info({ id, meetingUri: space.meetingUri }, "Meeting created");
+        return {
+            id,
+            title,
+            spaceName:        space.spaceName,
+            meetingUri:       space.meetingUri,
+            meetingCode:      space.meetingCode,
+            createdAt:        now,
+            endedAt:          null,
+            participantCount: 0,
+            subscribed,
+        };
     }
 
-    // ─── List ─────────────────────────────────────────────────
+    // ─── List ────────────────────────────────────────────────────────────────
 
-    async listMeetings(limit = 50): Promise<MeetingSpace[]> {
+    async listMeetings(limit = 50): Promise<MeetingResponse[]> {
         const sessions = await this.meetingsRepo.getSessions(limit);
         return sessions.map((s) => ({
-            id:           s.id,
-            title:        s.title ?? s.spaceName,
-            spaceName:    s.spaceName,
-            meetingUri:   s.meetingUri ?? "",
-            meetingCode:  s.meetingCode ?? "",
-            createdAt:    s.startedAt ?? "",
+            id:               s.id,
+            title:            s.title,
+            spaceName:        s.spaceName,
+            meetingUri:       s.meetingUri,
+            meetingCode:      s.meetingCode,
+            createdAt:        s.startedAt ?? "",
+            endedAt:          s.endedAt   ?? null,
             participantCount: 0,
+            subscribed:       true,
         }));
     }
 
-    // ─── Get Detail ───────────────────────────────────────────
+    // ─── Detail ──────────────────────────────────────────────────────────────
 
-    async getMeeting(id: string): Promise<MeetingDetail> {
-        const sessions = await this.meetingsRepo.getSessions(500);
-        const session  = sessions.find((s) => s.id === id);
-        if (!session) throw new Error(`Meeting not found: ${id}`);
-
-        const attendanceRows = await this.attendanceRepo.getAttendanceForSession(id);
-
-        const participants: Participant[] = attendanceRows.map((a) => ({
-            displayName:     a.displayName ?? a.developerLogin,
-            email:           a.email ?? null,
-            joinedAt:        a.joinedAt,
-            leftAt:          a.leftAt ?? null,
-            durationMinutes: a.durationMinutes,
-            attendanceScore: a.durationMinutes,
-        }));
+    async getMeeting(id: string): Promise<MeetingDetailResponse> {
+        const session = await this.requireSession(id);
+        const rows    = await this.meetingsRepo.getAllParticipants(id);
 
         return {
-            id:              session.id,
-            title:           session.title ?? session.spaceName,
-            spaceName:       session.spaceName,
-            meetingUri:      session.meetingUri ?? "",
-            meetingCode:     session.meetingCode ?? "",
-            createdAt:       session.startedAt ?? "",
-            participantCount: participants.length,
-            participants,
+            id:               session.id,
+            title:            session.title,
+            spaceName:        session.spaceName,
+            meetingUri:       session.meetingUri,
+            meetingCode:      session.meetingCode,
+            createdAt:        session.startedAt   ?? "",
+            endedAt:          session.endedAt     ?? null,
+            participantCount: rows.filter(r => !r.endTime).length,
+            subscribed:       true,
+            participants:     rows.map(this.toParticipantResponse),
         };
     }
 
-    // ─── End Meeting ──────────────────────────────────────────
+    // ─── Participants (active only) ───────────────────────────────────────────
+
+    async getActiveParticipants(id: string): Promise<ParticipantResponse[]> {
+        await this.requireSession(id);
+        const rows = await this.meetingsRepo.getActiveParticipants(id);
+        return rows.map(this.toParticipantResponse);
+    }
+
+    // ─── End ─────────────────────────────────────────────────────────────────
 
     async endMeeting(id: string): Promise<void> {
-        const sessions = await this.meetingsRepo.getSessions(500);
-        const session  = sessions.find((s) => s.id === id);
-        if (!session) throw new Error(`Meeting not found: ${id}`);
-
+        const session = await this.requireSession(id);
         await this.meetClient.endSpace(session.spaceName);
-
-        // Persist ended_at — reuse upsert since it overwrites on space_name conflict
-        await this.meetingsRepo.upsertSession({
-            ...session,
-            endedAt: new Date().toISOString(),
-        });
-
-        this.logger.info({ id, spaceName: session.spaceName }, "Meeting ended");
+        await this.meetingsRepo.upsertSession({ ...session, endedAt: new Date().toISOString() });
+        this.logger.info({ id }, "Meeting ended");
     }
 
-    // ─── Attendance (sync from Google Meet API → D1) ──────────
+    // ─── Helpers ─────────────────────────────────────────────────────────────
 
-    async getAttendance(meetingId: string): Promise<AttendanceRecord> {
-        const sessions = await this.meetingsRepo.getSessions(500);
-        const session  = sessions.find((s) => s.id === meetingId);
-        if (!session) throw new Error(`Meeting not found: ${meetingId}`);
+    private async requireSession(id: string) {
+        const session = await this.meetingsRepo.getSessionById(id);
+        if (!session) throw new Error(`Meeting not found: ${id}`);
+        return session;
+    }
 
-        let participants: Participant[] = [];
-        let totalDurationMinutes        = 0;
-
-        try {
-            const records = await this.meetClient.listConferenceRecords(session.spaceName);
-
-            // Parallelize API calls using Promise.all
-            const participantsResults = await Promise.all(
-                records.map(r => this.meetClient.listParticipants(r.name))
-            );
-
-            for (let i = 0; i < records.length; i++) {
-                const record = records[i];
-                const rawParticipants = participantsResults[i];
-                const mapped          = mapParticipants(rawParticipants, record.startTime, record.endTime || null);
-
-                // Persist each participant to D1
-                for (const p of mapped) {
-                    const row: MeetingAttendance = {
-                        id:              `${meetingId}:${p.email ?? p.displayName}`,
-                        sessionId:       meetingId,
-                        developerLogin:  p.email?.split("@")[0] ?? p.displayName,
-                        displayName:     p.displayName,
-                        email:           p.email ?? undefined,
-                        joinedAt:        p.joinedAt ?? record.startTime,
-                        leftAt:          p.leftAt ?? undefined,
-                        durationMinutes: p.durationMinutes,
-                    };
-                    await this.attendanceRepo.upsertAttendance(row);
-                }
-
-                participants.push(...mapped);
-
-                const start = new Date(record.startTime).getTime();
-                const end   = record.endTime ? new Date(record.endTime).getTime() : Date.now();
-                totalDurationMinutes += Math.round((end - start) / 60000);
-            }
-        } catch (e: any) {
-            this.logger.warn({ err: e, meetingId }, "Could not fetch live attendance from Google Meet API");
-            // Fall back to persisted rows
-            const persisted = await this.attendanceRepo.getAttendanceForSession(meetingId);
-            participants     = persisted.map((a) => ({
-                displayName:     a.displayName ?? a.developerLogin,
-                email:           a.email ?? null,
-                joinedAt:        a.joinedAt,
-                leftAt:          a.leftAt ?? null,
-                durationMinutes: a.durationMinutes,
-                attendanceScore: a.durationMinutes,
-            }));
-        }
-
-        // De-duplicate across conference records (same person, multiple sessions)
-        const uniqueMap = new Map<string, Participant>();
-        for (const p of participants) {
-            const key      = p.email ?? p.displayName;
-            const existing = uniqueMap.get(key);
-            if (!existing || p.durationMinutes > existing.durationMinutes) {
-                uniqueMap.set(key, p);
-            }
-        }
-
-        const deduped = Array.from(uniqueMap.values()).sort((a, b) => b.attendanceScore - a.attendanceScore);
-
+    private toParticipantResponse(r: { participantKey: string; displayName: string; startTime: string | null; endTime: string | null }): ParticipantResponse {
+        const start = r.startTime ? new Date(r.startTime).getTime() : 0;
+        const end   = r.endTime   ? new Date(r.endTime).getTime()   : Date.now();
         return {
-            meetingId:           session.id,
-            meetingTitle:        session.title ?? session.spaceName,
-            meetingDate:         session.startedAt ?? "",
-            totalDurationMinutes,
-            participants: deduped,
+            participantKey:      r.participantKey,
+            displayName:         r.displayName,
+            startTime:           r.startTime  ?? "",
+            endTime:             r.endTime    ?? null,
+            isActive:            r.endTime === null,
+            totalDurationMinutes: Math.max(0, Math.round((end - start) / 60000)),
         };
-    }
-
-    // ─── Analytics ────────────────────────────────────────────
-
-    async getAnalytics(): Promise<AttendanceAnalytics> {
-        const sessions = await this.meetingsRepo.getSessions(100);
-
-        const meetingsWithParticipants: Array<{
-            id: string; title: string; createdAt: string; participants: Participant[];
-        }> = [];
-
-        for (const session of sessions) {
-            const rows = await this.attendanceRepo.getAttendanceForSession(session.id);
-            meetingsWithParticipants.push({
-                id:           session.id,
-                title:        session.title ?? session.spaceName,
-                createdAt:    session.startedAt ?? "",
-                participants: rows.map((a) => ({
-                    displayName:     a.displayName ?? a.developerLogin,
-                    email:           a.email ?? null,
-                    joinedAt:        a.joinedAt,
-                    leftAt:          a.leftAt ?? null,
-                    durationMinutes: a.durationMinutes,
-                    attendanceScore: a.durationMinutes,
-                })),
-            });
-        }
-
-        return aggregateAnalytics(meetingsWithParticipants);
     }
 }

@@ -9,12 +9,9 @@ import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
-import 'package:sellio_metrics/presentation/pages/meetings/providers/meet_events_provider.dart';
 import 'package:sellio_metrics/presentation/widgets/common/loading_screen.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/create_meeting_dialog.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/meeting_detail_view.dart';
-import 'package:sellio_metrics/presentation/pages/meetings/attendance_analytics_view.dart';
-import 'package:sellio_metrics/presentation/pages/meetings/live_events_view.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/regular_meetings_section.dart';
 
 class MeetingsPage extends StatefulWidget {
@@ -24,30 +21,22 @@ class MeetingsPage extends StatefulWidget {
   State<MeetingsPage> createState() => _MeetingsPageState();
 }
 
-class _MeetingsPageState extends State<MeetingsPage>
-    with SingleTickerProviderStateMixin {
+class _MeetingsPageState extends State<MeetingsPage> {
   Timer? _authPollingTimer;
-  late final TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final provider = context.read<MeetingsProvider>();
-      // Only load if empty to prevent unnecessary requests on tab switch
-      if (provider.meetings.isEmpty) {
-        provider.loadMeetings();
-        provider.loadAnalytics();
-      }
+      if (provider.meetings.isEmpty) provider.loadMeetings();
     });
   }
 
   @override
   void dispose() {
     _authPollingTimer?.cancel();
-    _tabController.dispose();
     super.dispose();
   }
 
@@ -58,25 +47,11 @@ class _MeetingsPageState extends State<MeetingsPage>
         if (provider.isLoading && provider.meetings.isEmpty) {
           return const LoadingScreen();
         }
-
         return Column(
           children: [
-            // Tab bar header
-            _buildTabBar(context, provider),
-            // Tab content
+            _buildHeader(context, provider),
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  // Tab 1: Meetings list
-                  _buildMeetingsTab(context, provider),
-                  // Tab 2: Live events
-                  const Padding(
-                    padding: EdgeInsets.all(AppSpacing.xl),
-                    child: LiveEventsView(),
-                  ),
-                ],
-              ),
+              child: _buildBody(context, provider),
             ),
           ],
         );
@@ -84,123 +59,75 @@ class _MeetingsPageState extends State<MeetingsPage>
     );
   }
 
-  Widget _buildTabBar(BuildContext context, MeetingsProvider provider) {
-    final scheme = context.colors;
-    final eventsProvider = context.watch<MeetEventsProvider>();
+  // ─── Header ──────────────────────────────────────────────────────────────
 
+  Widget _buildHeader(BuildContext context, MeetingsProvider provider) {
+    final scheme = context.colors;
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: scheme.stroke)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
-        child: Row(
-          children: [
-            Expanded(
-              child: TabBar(
-                controller: _tabController,
-                isScrollable: true,
-                labelColor: scheme.primary,
-                unselectedLabelColor: scheme.hint,
-                indicatorColor: scheme.primary,
-                indicatorWeight: 2,
-                labelStyle: AppTypography.subtitle.copyWith(fontSize: 14),
-                tabAlignment: TabAlignment.start,
-                tabs: [
-                  const Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.video, size: 16),
-                        SizedBox(width: AppSpacing.sm),
-                        Text('Meetings'),
-                      ],
-                    ),
-                  ),
-                  Tab(
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.radio, size: 16),
-                        const SizedBox(width: AppSpacing.sm),
-                        const Text('Live Events'),
-                        if (eventsProvider.isStreaming) ...[
-                          const SizedBox(width: AppSpacing.sm),
-                          Container(
-                            width: 8,
-                            height: 8,
-                            decoration: const BoxDecoration(
-                              color: SellioColors.green,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                        ],
-                        if (eventsProvider.events.isNotEmpty) ...[
-                          const SizedBox(width: AppSpacing.xs),
-                          SBadge(
-                            label: '${eventsProvider.events.length}',
-                            variant: SBadgeVariant.secondary,
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.xl,
+        vertical: AppSpacing.md,
+      ),
+      child: Row(
+        children: [
+          Icon(LucideIcons.video, size: 20, color: scheme.primary),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            'Meetings',
+            style: AppTypography.subtitle.copyWith(color: scheme.title),
+          ),
+          const Spacer(),
+          if (provider.isAuthenticated) ...[
+            SButton(
+              variant: SButtonVariant.ghost,
+              onPressed: () => provider.logout(),
+              child: const Text('Sign Out'),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            SButton(
+              onPressed: () => _showCreateDialog(context),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(LucideIcons.plus, size: 16),
+                  const SizedBox(width: AppSpacing.sm),
+                  Text(AppLocalizations.of(context).newMeeting),
                 ],
               ),
             ),
-            // Action buttons (always visible)
-            if (provider.isAuthenticated) ...[
-              SButton(
-                variant: SButtonVariant.ghost,
-                onPressed: () => provider.logout(),
-                child: const Text('Sign Out'),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              SButton(
-                onPressed: () => _showCreateMeetingDialog(context),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(LucideIcons.plus, size: 16),
+          ] else ...[
+            SButton(
+              variant: SButtonVariant.primary,
+              onPressed: provider.isLoading ? null : () => _handleLogin(provider),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (provider.isLoading) ...[
+                    const SizedBox(
+                      width: 16, height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    ),
                     const SizedBox(width: AppSpacing.sm),
-                    Text(AppLocalizations.of(context).newMeeting),
+                  ] else ...[
+                    const Icon(LucideIcons.chrome, size: 16),
+                    const SizedBox(width: AppSpacing.sm),
                   ],
-                ),
+                  const Text('Sign In with Google'),
+                ],
               ),
-            ] else ...[
-              SButton(
-                variant: SButtonVariant.primary,
-                onPressed:
-                    provider.isLoading ? null : () => _handleLogin(provider),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (provider.isLoading) ...[
-                      const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                    ] else ...[
-                      const Icon(LucideIcons.chrome, size: 16),
-                      const SizedBox(width: AppSpacing.sm),
-                    ],
-                    const Text('Sign In with Google'),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _buildMeetingsTab(BuildContext context, MeetingsProvider provider) {
+  // ─── Body ─────────────────────────────────────────────────────────────────
+
+  Widget _buildBody(BuildContext context, MeetingsProvider provider) {
     return Align(
       alignment: Alignment.topLeft,
       child: SingleChildScrollView(
@@ -210,19 +137,11 @@ class _MeetingsPageState extends State<MeetingsPage>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Optional: rate limit banner warning if low
-              if (provider.rateLimit.isLow)
-                _buildRateLimitBanner(context, provider),
+              // Subscription warning banner
+              if (provider.meetings.any((m) => !m.subscribed))
+                _buildSubscriptionWarning(context),
 
-              // Analytics section
-              if (provider.analytics.totalMeetings > 0) ...[
-                const AttendanceAnalyticsView(),
-                const SizedBox(height: AppSpacing.xxl),
-              ],
-
-              // Active meetings list
               _buildMeetingsList(context, provider),
-
               const SizedBox(height: AppSpacing.xxl),
               const RegularMeetingsSection(),
             ],
@@ -232,54 +151,7 @@ class _MeetingsPageState extends State<MeetingsPage>
     );
   }
 
-  Future<void> _handleLogin(MeetingsProvider provider) async {
-    await provider.login();
-    if (provider.authUrl != null && provider.authUrl!.isNotEmpty) {
-      final uri = Uri.parse(provider.authUrl!);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-        
-        _authPollingTimer?.cancel();
-        _authPollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
-          if (!mounted) {
-            timer.cancel();
-            return;
-          }
-          await provider.checkAuthStatus();
-          if (provider.isAuthenticated) {
-            timer.cancel();
-            provider.loadMeetings();
-            provider.loadAnalytics();
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Successfully signed in with Google!'),
-                  backgroundColor: SellioColors.green,
-                ),
-              );
-            }
-          }
-        });
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Could not open sign in page')),
-          );
-        }
-      }
-    } else if (provider.error != null && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(provider.error!)));
-    }
-  }
-
-  Widget _buildRateLimitBanner(
-    BuildContext context,
-    MeetingsProvider provider,
-  ) {
-    final l10n = AppLocalizations.of(context);
-    final limit = provider.rateLimit;
+  Widget _buildSubscriptionWarning(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: AppSpacing.xl),
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -292,13 +164,11 @@ class _MeetingsPageState extends State<MeetingsPage>
         children: [
           const Icon(LucideIcons.alertTriangle, color: SellioColors.red),
           const SizedBox(width: AppSpacing.md),
-          Expanded(
+          const Expanded(
             child: Text(
-              '${l10n.rateLimit}: ${limit.remaining}/${limit.limit} (${l10n.resetsIn} ${limit.resetAt})',
-              style: AppTypography.body.copyWith(
-                color: SellioColors.red,
-                fontWeight: FontWeight.w600,
-              ),
+              'Some meetings are not subscribed to real-time events. '
+              'Participant tracking will be unavailable for those meetings.',
+              style: TextStyle(color: SellioColors.red),
             ),
           ),
         ],
@@ -357,21 +227,59 @@ class _MeetingsPageState extends State<MeetingsPage>
           ),
           itemCount: provider.meetings.length,
           itemBuilder: (context, index) {
-            final meeting = provider.meetings[index];
-            return _MeetingCard(meeting: meeting);
+            return _MeetingCard(meeting: provider.meetings[index]);
           },
         ),
       ],
     );
   }
 
-  void _showCreateMeetingDialog(BuildContext context) {
+  // ─── Auth flow ────────────────────────────────────────────────────────────
+
+  Future<void> _handleLogin(MeetingsProvider provider) async {
+    await provider.login();
+    if (provider.authUrl != null && provider.authUrl!.isNotEmpty) {
+      final uri = Uri.parse(provider.authUrl!);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+        _authPollingTimer?.cancel();
+        _authPollingTimer = Timer.periodic(const Duration(seconds: 2), (timer) async {
+          if (!mounted) { timer.cancel(); return; }
+          await provider.checkAuthStatus();
+          if (provider.isAuthenticated) {
+            timer.cancel();
+            provider.loadMeetings();
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Successfully signed in with Google!'),
+                  backgroundColor: SellioColors.green,
+                ),
+              );
+            }
+          }
+        });
+      }
+    } else if (provider.error != null && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(provider.error!)),
+      );
+    }
+  }
+
+  void _showCreateDialog(BuildContext context) {
+    final provider = context.read<MeetingsProvider>();
     showDialog(
       context: context,
-      builder: (context) => const CreateMeetingDialog(),
+      builder: (_) => ChangeNotifierProvider<MeetingsProvider>.value(
+        value: provider,
+        child: const CreateMeetingDialog(),
+      ),
     );
   }
 }
+
+// ─── Meeting Card ─────────────────────────────────────────────────────────────
 
 class _MeetingCard extends StatelessWidget {
   final MeetingEntity meeting;
@@ -380,18 +288,20 @@ class _MeetingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context);
-    final scheme = context.colors;
+    final l10n      = AppLocalizations.of(context);
+    final scheme    = context.colors;
     final formatter = DateFormat('MMM d, h:mm a');
-
-    // Simple heuristic: if created in the last 2 hours, consider it "live" roughly
-    final isRecent = DateTime.now().difference(meeting.createdAt).inHours < 2;
+    final isRecent  = DateTime.now().difference(meeting.createdAt).inHours < 2;
 
     return InkWell(
       onTap: () {
+        final provider = context.read<MeetingsProvider>();
         showDialog(
           context: context,
-          builder: (context) => MeetingDetailView(meetingId: meeting.id),
+          builder: (_) => ChangeNotifierProvider<MeetingsProvider>.value(
+            value: provider,
+            child: MeetingDetailView(meetingId: meeting.id),
+          ),
         );
       },
       borderRadius: AppRadius.mdAll,
@@ -428,16 +338,27 @@ class _MeetingCard extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                if (isRecent)
-                  SBadge(label: l10n.live, variant: SBadgeVariant.success),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (!meeting.subscribed)
+                      Padding(
+                        padding: const EdgeInsets.only(right: AppSpacing.xs),
+                        child: Tooltip(
+                          message: 'Real-time tracking unavailable',
+                          child: Icon(LucideIcons.wifiOff, size: 14, color: scheme.hint),
+                        ),
+                      ),
+                    if (isRecent)
+                      SBadge(label: l10n.live, variant: SBadgeVariant.success),
+                  ],
+                ),
               ],
             ),
-
             Text(
               formatter.format(meeting.createdAt),
               style: AppTypography.caption.copyWith(color: scheme.hint),
             ),
-
             Row(
               children: [
                 Icon(LucideIcons.users, size: 16, color: scheme.primary),
@@ -451,9 +372,6 @@ class _MeetingCard extends StatelessWidget {
                 ),
               ],
             ),
-
-            const SizedBox(height: AppSpacing.sm),
-
             Row(
               children: [
                 Expanded(
@@ -461,9 +379,7 @@ class _MeetingCard extends StatelessWidget {
                     variant: SButtonVariant.primary,
                     onPressed: () async {
                       final url = Uri.parse(meeting.meetingUri);
-                      if (await canLaunchUrl(url)) {
-                        await launchUrl(url);
-                      }
+                      if (await canLaunchUrl(url)) await launchUrl(url);
                     },
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.center,

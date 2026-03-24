@@ -19,7 +19,6 @@ import 'package:sellio_metrics/presentation/pages/members/providers/member_provi
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/pr_data_provider.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/analytics_provider.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
-import 'package:sellio_metrics/presentation/pages/meetings/providers/meet_events_provider.dart';
 import 'package:sellio_metrics/presentation/pages/observability/providers/health_status_provider.dart';
 import 'package:sellio_metrics/presentation/pages/logs/providers/logs_provider.dart';
 import 'package:sellio_metrics/presentation/pages/sync/sync_page.dart';
@@ -119,11 +118,8 @@ class AppNavigation {
       group: NavGroup.product,
       primaryNav: true,
       labelBuilder: (l10n) => l10n.navMeetings,
-      pageBuilder: (_) => MultiProvider(
-        providers: [
-          ChangeNotifierProvider.value(value: getIt<MeetingsProvider>()),
-          ChangeNotifierProvider.value(value: getIt<MeetEventsProvider>()),
-        ],
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: getIt<MeetingsProvider>(),
         child: const MeetingsPage(),
       ),
     ),

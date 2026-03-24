@@ -1,103 +1,87 @@
 /**
  * Meetings Module — Domain Types
  *
- * Shared types for the meetings feature.
- * Used by the service, mapper, and route layers.
+ * DB row shapes, API response types, and WebSocket event payload.
+ * Uses Google's stable `users/{userId}` identifier instead of email.
  */
 
-// ─── Meeting Space ──────────────────────────────────────────
+// ─── DB Row Shapes ──────────────────────────────────────────────────────────
 
-export interface MeetingSpace {
-    /** Internal tracking ID (auto-generated). */
+export interface MeetingSessionRow {
     id: string;
-    /** Human-readable meeting title. */
-    title: string;
-    /** Google Meet space resource name (e.g. "spaces/abc123"). */
     spaceName: string;
-    /** The joinable meeting URI (e.g. "https://meet.google.com/abc-defg-hij"). */
     meetingUri: string;
-    /** Short meeting code (e.g. "abc-defg-hij"). */
     meetingCode: string;
-    /** ISO timestamp when the meeting was created. */
+    title: string;
+    startedAt: string | null;
+    endedAt: string | null;
+}
+
+/** One row per join-leave pair. Rejoin = new row. */
+export interface ParticipantSessionRow {
+    /** Composite: "{sessionId}:{participantKey}:{epochMs}" */
+    id: string;
+    sessionId: string;
+    /** "users/{userId}" for signed-in users, display name for anonymous */
+    participantKey: string;
+    displayName: string;
+    startTime: string | null;
+    endTime: string | null; // NULL = still inside the meeting
+}
+
+// ─── API Response Shapes ────────────────────────────────────────────────────
+
+export interface MeetingResponse {
+    id: string;
+    title: string;
+    spaceName: string;
+    meetingUri: string;
+    meetingCode: string;
     createdAt: string;
-    /** Current participant count (live). */
+    endedAt: string | null;
     participantCount: number;
+    /** false when Pub/Sub subscription could not be created */
+    subscribed: boolean;
 }
 
-// ─── Participant ────────────────────────────────────────────
-
-export interface Participant {
-    /** Display name from Google Meet. */
+export interface ParticipantResponse {
+    participantKey: string;
     displayName: string;
-    /** Email address (if available). */
-    email: string | null;
-    /** ISO timestamp when participant first joined. */
-    joinedAt: string;
-    /** ISO timestamp when participant left (null if still in meeting). */
-    leftAt: string | null;
-    /** Duration in minutes spent in the meeting. */
-    durationMinutes: number;
-    /** Attendance score (0–100), computed on backend. */
-    attendanceScore: number;
-}
-
-// ─── Participant Session (raw join/leave event) ─────────────
-
-export interface ParticipantSession {
-    displayName: string;
-    email: string | null;
     startTime: string;
     endTime: string | null;
-}
-
-// ─── Attendance Record ──────────────────────────────────────
-
-export interface AttendanceRecord {
-    meetingId: string;
-    meetingTitle: string;
-    meetingDate: string;
+    /** true when end_time IS NULL */
+    isActive: boolean;
     totalDurationMinutes: number;
-    participants: Participant[];
 }
 
-// ─── Attendance Analytics ───────────────────────────────────
-
-export interface AttendanceAnalytics {
-    totalMeetings: number;
-    totalAttendees: number;
-    averageDurationMinutes: number;
-    averageScore: number;
-    mostActiveParticipants: Array<{
-        displayName: string;
-        email: string | null;
-        meetingsAttended: number;
-        totalMinutes: number;
-        averageScore: number;
-    }>;
-    attendanceTrends: Array<{
-        date: string;
-        attendeeCount: number;
-        averageDuration: number;
-    }>;
+export interface MeetingDetailResponse extends MeetingResponse {
+    participants: ParticipantResponse[];
 }
 
-// ─── Rate Limit Info ────────────────────────────────────────
+// ─── WebSocket / Broadcast Event ────────────────────────────────────────────
 
-export interface RateLimitInfo {
-    remaining: number;
-    limit: number;
-    resetAt: string;
-    isLow: boolean;
+export type MeetingWSEventType =
+    | 'participant_joined'
+    | 'participant_left'
+    | 'meeting_ended';
+
+export interface MeetingWSEvent {
+    type: MeetingWSEventType;
+    meetingId: string;
+    participant?: Pick<ParticipantResponse, 'participantKey' | 'displayName'>;
+    timestamp: string;
 }
 
-// ─── Meeting Detail (meeting + participants) ────────────────
+// ─── Pub/Sub Webhook Input ──────────────────────────────────────────────────
 
-export interface MeetingDetail extends MeetingSpace {
-    participants: Participant[];
+export interface PubSubMessage {
+    data: string;       // base64-encoded JSON
+    messageId: string;
+    publishTime: string;
+    attributes?: Record<string, string>;
 }
 
-// ─── Create Meeting Request ─────────────────────────────────
-
-export interface CreateMeetingRequest {
-    title: string;
+export interface PubSubPushBody {
+    message: PubSubMessage;
+    subscription: string;
 }
