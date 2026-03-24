@@ -1,3 +1,9 @@
+/// Meeting Detail View
+///
+/// Uses a locally-owned MeetingWatchProvider to open a WebSocket
+/// and push real-time participant_joined / participant_left events.
+/// No polling. The stream closes on meeting_ended.
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -56,6 +62,8 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
         width: 800,
         height: 600,
         padding: const EdgeInsets.all(AppSpacing.xxl),
+        // Layer two ChangeNotifiers: MeetingsProvider (for meeting metadata)
+        // and our local MeetingWatchProvider (for real-time participants).
         child: Consumer<MeetingsProvider>(
           builder: (context, meetingsProvider, _) {
             final meeting = meetingsProvider.selectedMeeting;
