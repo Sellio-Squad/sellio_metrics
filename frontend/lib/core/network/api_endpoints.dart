@@ -34,8 +34,12 @@ class ApiEndpoints {
   // ─── Meetings — WebSocket (real-time) ───
   /// Returns a ws:// or wss:// URL for the meeting's Durable Object.
   static String meetingWs(String id) {
-    // Replace http(s) scheme with ws(s) from the base URL
-    const base = String.fromEnvironment('API_BASE_URL', defaultValue: 'wss://sellio-metrics.abdoessam743.workers.dev');
+    var base = const String.fromEnvironment('API_BASE_URL', defaultValue: 'wss://sellio-metrics.abdoessam743.workers.dev');
+    if (base.startsWith('https://')) {
+      base = base.replaceFirst('https://', 'wss://');
+    } else if (base.startsWith('http://')) {
+      base = base.replaceFirst('http://', 'ws://');
+    }
     return '$base/api/meetings/$id/ws';
   }
 
