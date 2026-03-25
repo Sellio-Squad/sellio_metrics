@@ -29,7 +29,7 @@ class MeetingWatchProvider extends ChangeNotifier {
   /// so we can retroactively populate initial state instantly into the UI.
   void initializeWithRestData(List<ParticipantEntity> participants) {
     if (_isInitialized) return;
-    _active = participants.where((p) => p.isActive).toList();
+    _active = participants.where((p) => p.endTime == null).toList();
     _history = List.from(participants);
     _isInitialized = true;
     notifyListeners();

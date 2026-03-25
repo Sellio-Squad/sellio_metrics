@@ -78,7 +78,7 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
               animation: _watch,
               builder: (context, _) {
                 // Instantly absorb existing snapshot
-                _watch.initializeWithRestData(meeting.participants);
+                _watch.initializeWithRestData(meetingsProvider.participants);
 
                 final active  = _watch.active;
                 final history = _watch.history;
