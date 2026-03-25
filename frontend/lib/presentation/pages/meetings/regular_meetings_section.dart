@@ -1,7 +1,4 @@
-/// Sellio Metrics — About Meetings Section
-
 import 'package:flutter/material.dart';
-
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/core/utils/ics_generator.dart';
 import 'package:sellio_metrics/core/utils/web_download.dart';
@@ -119,12 +116,12 @@ class _MeetingTimeline extends StatelessWidget {
         return Stack(
           clipBehavior: Clip.none,
           children: [
-            // Timeline connector line
+
             if (!isLast)
               Positioned(
-                top: 32, // Start below the dot
-                bottom: -AppSpacing.sm, // Connect down to the next dot
-                left: 15, // Centered in the 32px wide column
+                top: 32,
+                bottom: -AppSpacing.sm,
+                left: 15,
                 width: 2,
                 child: Container(
                   color: context.colors.stroke,

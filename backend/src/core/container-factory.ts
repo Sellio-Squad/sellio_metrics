@@ -140,8 +140,8 @@ async function buildContainer(
         meetingsService: asFunction(({ logger, googleMeetClient, meetingsRepo, env }: Cradle) =>
             new MeetingsService(googleMeetClient, meetingsRepo, env.googlePubsubTopic, logger),
         ).singleton(),
-        webhookHandlerService: asFunction(({ logger }: Cradle) =>
-            new WebhookHandlerService({ logger }),
+        webhookHandlerService: asFunction(({ logger, googleMeetClient }: Cradle) =>
+            new WebhookHandlerService({ logger, googleMeetClient }),
         ).singleton(),
 
         // Webhook

@@ -1,9 +1,4 @@
-/// Meeting Detail View
-///
-/// Uses a locally-owned MeetingWatchProvider to open a WebSocket
-/// and push real-time participant_joined / participant_left events.
-/// No polling. The stream closes on meeting_ended.
-
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -62,8 +57,6 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
         width: 800,
         height: 600,
         padding: const EdgeInsets.all(AppSpacing.xxl),
-        // Layer two ChangeNotifiers: MeetingsProvider (for meeting metadata)
-        // and our local MeetingWatchProvider (for real-time participants).
         child: Consumer<MeetingsProvider>(
           builder: (context, meetingsProvider, _) {
             final meeting = meetingsProvider.selectedMeeting;
@@ -161,7 +154,6 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
                     ),
                     const SizedBox(height: AppSpacing.xxl),
 
-                    // ─── KPIs ─────────────────────────────────────────────
                     Row(
                       children: [
                         _KpiCard(
@@ -189,14 +181,19 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
 
                     // ─── Participants list ────────────────────────────────
                     Text(
-                      active.isNotEmpty ? 'Participants (Live)' : 'Attendance History',
+                      'Attendance History',
                       style: AppTypography.title.copyWith(fontSize: 18, color: scheme.title),
                     ),
                     const SizedBox(height: AppSpacing.md),
 
                     Expanded(
                       child: Builder(builder: (ctx) {
-                        final list = active.isNotEmpty ? active : history;
+                        final list = List.of(history)..sort((a, b) {
+                            if (a.isCurrentlyPresent && !b.isCurrentlyPresent) return -1;
+                            if (!a.isCurrentlyPresent && b.isCurrentlyPresent) return 1;
+                            return b.startTime.compareTo(a.startTime);
+                        });
+                        
                         if (list.isEmpty) {
                           return Center(
                             child: Text(
@@ -222,8 +219,6 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
     );
   }
 }
-
-// ─── KPI Card ─────────────────────────────────────────────────────────────────
 
 class _KpiCard extends StatelessWidget {
   final String label;
@@ -278,30 +273,76 @@ class _KpiCard extends StatelessWidget {
 
 // ─── Participant Row ───────────────────────────────────────────────────────────
 
-class _ParticipantRow extends StatelessWidget {
+class _ParticipantRow extends StatefulWidget {
   final ParticipantEntity participant;
 
   const _ParticipantRow({required this.participant});
 
   @override
+  State<_ParticipantRow> createState() => _ParticipantRowState();
+}
+
+class _ParticipantRowState extends State<_ParticipantRow> {
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _startTimerIfNeeded();
+  }
+
+  @override
+  void didUpdateWidget(covariant _ParticipantRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.participant.isCurrentlyPresent) {
+      _timer?.cancel();
+    } else if (_timer == null || !_timer!.isActive) {
+      _startTimerIfNeeded();
+    }
+  }
+
+  void _startTimerIfNeeded() {
+    if (widget.participant.isCurrentlyPresent) {
+      _timer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (mounted) setState(() {});
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scheme    = context.colors;
     final l10n      = AppLocalizations.of(context);
-    final isLive    = participant.isCurrentlyPresent;
+    final isLive    = widget.participant.isCurrentlyPresent;
     final formatter = DateFormat('h:mm a');
+    
+    final start = widget.participant.startTime;
+    final end   = widget.participant.endTime ?? DateTime.now();
+    int currentDuration = end.difference(start).inMinutes.clamp(0, 9999);
+    
+    // Fallback to the saved duration if it's already recorded strictly (for history logic)
+    if (!isLive && widget.participant.totalDurationMinutes > 0) {
+      currentDuration = widget.participant.totalDurationMinutes;
+    }
 
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
       child: Row(
         children: [
-          SAvatar(name: participant.displayName, size: SAvatarSize.medium),
+          SAvatar(name: widget.participant.displayName, size: SAvatarSize.medium),
           const SizedBox(width: AppSpacing.lg),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  participant.displayName,
+                  widget.participant.displayName,
                   style: AppTypography.body.copyWith(
                     fontWeight: FontWeight.w600,
                     color: scheme.title,
@@ -309,7 +350,7 @@ class _ParticipantRow extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  participant.participantKey,
+                  widget.participant.participantKey,
                   style: AppTypography.caption.copyWith(color: scheme.hint),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -319,16 +360,15 @@ class _ParticipantRow extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              if (participant.totalDurationMinutes > 0)
-                Text(
-                  '${participant.totalDurationMinutes} min',
-                  style: AppTypography.body.copyWith(color: scheme.title),
-                ),
+              Text(
+                currentDuration < 1 ? '< 1 min' : '$currentDuration min',
+                style: AppTypography.body.copyWith(color: scheme.title),
+              ),
               const SizedBox(height: 2),
               Text(
                 isLive
-                    ? 'In since ${formatter.format(participant.startTime)}'
-                    : '${formatter.format(participant.startTime)} — ${formatter.format(participant.endTime!)}',
+                    ? 'In since ${formatter.format(widget.participant.startTime)}'
+                    : '${formatter.format(widget.participant.startTime)} — ${formatter.format(widget.participant.endTime!)}',
                 style: AppTypography.caption.copyWith(color: scheme.hint),
               ),
             ],

@@ -241,6 +241,18 @@ export class GoogleMeetClient {
         return participants;
     }
 
+    async getParticipant(participantName: string): Promise<RawParticipant> {
+        // e.g. "conferenceRecords/xxx/participants/yyy"
+        const p = await this.meetFetch<any>(participantName);
+        return {
+            name:              p.name ?? participantName,
+            displayName:       p.signedinUser?.displayName ?? p.anonymousUser?.displayName ?? p.phoneUser?.displayName ?? "Unknown",
+            participantKey:    p.signedinUser?.user ?? null,
+            earliestStartTime: p.earliestStartTime ?? "",
+            latestEndTime:     p.latestEndTime     ?? "",
+        };
+    }
+
     // ─── Workspace Events Subscriptions ─────────────────────────────────────
 
     async createEventSubscription(spaceName: string, pubsubTopic: string): Promise<WorkspaceSubscription> {
