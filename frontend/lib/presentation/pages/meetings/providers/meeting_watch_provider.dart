@@ -1,11 +1,3 @@
-/// Meeting Watch Provider
-///
-/// Single responsibility: manage the WebSocket connection for ONE meeting
-/// and expose the real-time participant list to the UI.
-///
-/// Lifecycle: createWatchProvider per meeting dialog/page.
-/// Dispose when the dialog closes — the WebSocket is cleanly closed.
-
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:sellio_metrics/domain/entities/participant_entity.dart';
@@ -24,15 +16,17 @@ class MeetingWatchProvider extends ChangeNotifier {
   }) : _repository = repository {
     _connect();
   }
-
-  /// Called when the REST API has finished fetching the meeting details,
-  /// so we can retroactively populate initial state instantly into the UI.
-  void initializeWithRestData(List<ParticipantEntity> participants) {
-    if (_isInitialized) return;
+  void _updateFromRestData(List<ParticipantEntity> participants) {
     _active = participants.where((p) => p.endTime == null).toList();
     _history = List.from(participants);
-    _isInitialized = true;
     notifyListeners();
+  }
+
+  /// Called when the REST API has finished fetching the meeting details initially
+  void initializeWithRestData(List<ParticipantEntity> participants) {
+    if (_isInitialized) return;
+    _updateFromRestData(participants);
+    _isInitialized = true;
   }
 
   // ─── State ────────────────────────────────────────────────────────────────
@@ -60,7 +54,7 @@ class MeetingWatchProvider extends ChangeNotifier {
 
   void _connect() {
     _subscription = _repository.watchMeeting(meetingId).listen(
-      (event) {
+          (event) {
         _isConnected = true;
         _error = null;
         _handleEvent(event);

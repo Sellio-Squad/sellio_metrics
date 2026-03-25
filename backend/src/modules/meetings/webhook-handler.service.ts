@@ -7,6 +7,10 @@
  * The MeetingRoom DO handles persistence + WebSocket broadcast.
  */
 
+
+ // TODO: USE WS FOR WEBSOCKET
+
+
 import type { MeetingsRepository } from "./meetings.repository";
 import type { Logger } from "../../core/logger";
 import type { PubSubPushBody } from "./meetings.types";
@@ -44,11 +48,15 @@ export interface ParsedMeetEvent {
     timestamp: string;
 }
 
+import type { GoogleMeetClient } from "../../infra/google/google-meet.client";
+
 export class WebhookHandlerService {
     private readonly logger: Logger;
+    private readonly googleMeetClient: GoogleMeetClient;
 
-    constructor({ logger }: { logger: Logger }) {
+    constructor({ logger, googleMeetClient }: { logger: Logger; googleMeetClient: GoogleMeetClient }) {
         this.logger = logger.child({ module: "webhook-handler" });
+        this.googleMeetClient = googleMeetClient;
     }
 
     // ─── Entry point ─────────────────────────────────────────────────────────
@@ -90,7 +98,14 @@ export class WebhookHandlerService {
             return new Response("Bad Request: invalid message data", { status: 400 });
         }
 
-        const event = this.extractEvent(payload, body.message.attributes ?? {}, body.message.publishTime);
+        let event: ParsedMeetEvent;
+        try {
+            event = await this.extractEvent(payload, body.message.attributes ?? {}, body.message.publishTime, this.googleMeetClient);
+        } catch (err: any) {
+            this.logger.error({ err: err?.message }, "Failed to extract event payload");
+            return new Response("OK", { status: 200 }); // acknowledge bad payloads gracefully
+        }
+
         this.logger.info({ type: event.type, spaceName: event.spaceName }, "Meet event received");
         if (logsService) await logsService.log(`Meet parsed: ${event.type}`, "info", "googleMeet", { spaceName: event.spaceName, participant: event.displayName });
 
@@ -178,7 +193,12 @@ export class WebhookHandlerService {
 
     // ─── Payload Extraction ──────────────────────────────────────────────────
 
-    private extractEvent(payload: any, attrs: Record<string, string>, publishTime: string): ParsedMeetEvent {
+    private async extractEvent(
+        payload: any, 
+        attrs: Record<string, string>, 
+        publishTime: string, 
+        googleMeetClient: GoogleMeetClient
+    ): Promise<ParsedMeetEvent> {
         // CloudEvent "type" is often in ce-type attribute or root json "type"
         const type      = (attrs["ce-type"] ?? attrs["eventType"] ?? payload.type ?? "unknown") as MeetEventType;
         
@@ -190,17 +210,33 @@ export class WebhookHandlerService {
         else if (payload.space?.name) spaceName = payload.space.name;
         else if (payload.conferenceRecord?.space?.name) spaceName = payload.conferenceRecord.space.name;
         
-        // Safely extract the inner object whether it's wrapped in `data` or not
-        const inner = payload.data ?? payload;
-        const participantObj = inner.participant ?? inner;
-
-        const participantKey =
-            participantObj?.signedinUser?.user ?? null;  // "users/{userId}" or null
-
-        const displayName =
-            participantObj?.signedinUser?.displayName ??
-            participantObj?.anonymousUser?.displayName ??
-            "Unknown";
+        let participantKey: string | null = null;
+        let displayName = "Unknown";
+        
+        try {
+            // Some events pack data in `payload.data` 
+            const inner = payload.data ?? payload;
+            
+            // Webhooks often only provide lightweight session identifiers
+            // e.g. conferenceRecords/XXX/participants/YYY/participantSessions/ZZZ
+            if (inner.participantSession?.name) {
+                const sessionName = inner.participantSession.name as string;
+                // We must strip `/participantSessions/...` to query the actual participant details
+                const participantPath = sessionName.split("/participantSessions/")[0];
+                if (participantPath) {
+                    const realParticipant = await googleMeetClient.getParticipant(participantPath);
+                    participantKey = realParticipant.participantKey;
+                    displayName    = realParticipant.displayName;
+                }
+            } else if (inner.participant) {
+                participantKey = inner.participant.signedinUser?.user ?? null;
+                displayName    = inner.participant.signedinUser?.displayName ??
+                                 inner.participant.anonymousUser?.displayName ??
+                                 "Unknown";
+            }
+        } catch (err: any) {
+            this.logger.warn({ err: err?.message, spaceName }, "Failed to resolve participant real name from session");
+        }
 
         return { type, spaceName, participantKey, displayName, timestamp: publishTime };
     }
