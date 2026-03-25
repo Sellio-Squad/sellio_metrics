@@ -16,9 +16,23 @@ class MeetingWatchProvider extends ChangeNotifier {
   final MeetingsRepository _repository;
   final String meetingId;
 
-  MeetingWatchProvider({required MeetingsRepository repository, required this.meetingId})
-      : _repository = repository {
+  bool _isInitialized = false;
+
+  MeetingWatchProvider({
+    required MeetingsRepository repository,
+    required this.meetingId,
+  }) : _repository = repository {
     _connect();
+  }
+
+  /// Called when the REST API has finished fetching the meeting details,
+  /// so we can retroactively populate initial state instantly into the UI.
+  void initializeWithRestData(List<ParticipantEntity> participants) {
+    if (_isInitialized) return;
+    _active = participants.where((p) => p.isActive).toList();
+    _history = List.from(participants);
+    _isInitialized = true;
+    notifyListeners();
   }
 
   // ─── State ────────────────────────────────────────────────────────────────

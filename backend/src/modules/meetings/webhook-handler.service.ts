@@ -81,16 +81,18 @@ export class WebhookHandlerService {
         try {
             const b64Data = body.message.data.replace(/-/g, "+").replace(/_/g, "/");
             const dataPadded = b64Data + "===".slice((b64Data.length + 3) % 4);
-            payload = JSON.parse(atob(dataPadded));
+            const decodedStr = atob(dataPadded);
+            if (logsService) await logsService.log("Decoded Pub/Sub data", "info", "googleMeet", { rawData: decodedStr, attributes: body.message.attributes });
+            payload = JSON.parse(decodedStr);
         } catch {
             this.logger.warn("Failed to decode Pub/Sub message data");
             if (logsService) await logsService.log("Failed to decode Pub/Sub message data", "error", "googleMeet");
             return new Response("Bad Request: invalid message data", { status: 400 });
         }
 
-        const event = this.extractEvent(payload, body.message.publishTime);
+        const event = this.extractEvent(payload, body.message.attributes ?? {}, body.message.publishTime);
         this.logger.info({ type: event.type, spaceName: event.spaceName }, "Meet event received");
-        if (logsService) await logsService.log(`Meet event received: ${event.type}`, "info", "googleMeet", { spaceName: event.spaceName, participant: event.displayName });
+        if (logsService) await logsService.log(`Meet parsed: ${event.type}`, "info", "googleMeet", { spaceName: event.spaceName, participant: event.displayName });
 
         // 4. Resolve space name → meeting session ID
         const session = await meetingsRepo.getSessionBySpaceName(event.spaceName);
@@ -176,28 +178,31 @@ export class WebhookHandlerService {
 
     // ─── Payload Extraction ──────────────────────────────────────────────────
 
-    private extractEvent(payload: WorkspaceEventPayload, publishTime: string): ParsedMeetEvent {
-        const type      = (payload.type ?? "unknown") as MeetEventType;
-        const spaceName = this.extractSpaceName(payload);
+    private extractEvent(payload: any, attrs: Record<string, string>, publishTime: string): ParsedMeetEvent {
+        // CloudEvent "type" is often in ce-type attribute or root json "type"
+        const type      = (attrs["ce-type"] ?? attrs["eventType"] ?? payload.type ?? "unknown") as MeetEventType;
+        
+        // Find spaceName realistically
+        const subject = attrs["ce-subject"] ?? "";
+        let spaceName = "";
+        const m = subject.match(/spaces\/[^/]+/);
+        if (m) spaceName = m[0];
+        else if (payload.space?.name) spaceName = payload.space.name;
+        else if (payload.conferenceRecord?.space?.name) spaceName = payload.conferenceRecord.space.name;
+        
+        // Safely extract the inner object whether it's wrapped in `data` or not
+        const inner = payload.data ?? payload;
+        const participantObj = inner.participant ?? inner;
 
         const participantKey =
-            payload.participant?.signedinUser?.user ?? null;  // "users/{userId}" or null
+            participantObj?.signedinUser?.user ?? null;  // "users/{userId}" or null
 
         const displayName =
-            payload.participant?.signedinUser?.displayName ??
-            payload.participant?.anonymousUser?.displayName ??
+            participantObj?.signedinUser?.displayName ??
+            participantObj?.anonymousUser?.displayName ??
             "Unknown";
 
         return { type, spaceName, participantKey, displayName, timestamp: publishTime };
-    }
-
-    private extractSpaceName(payload: WorkspaceEventPayload): string {
-        // From resourceName like "//meet.googleapis.com/spaces/abc/..."
-        if (payload.resourceName) {
-            const m = String(payload.resourceName).match(/spaces\/[^/]+/);
-            if (m) return m[0];
-        }
-        return payload.conferenceRecord?.space?.name ?? "";
     }
 }
 

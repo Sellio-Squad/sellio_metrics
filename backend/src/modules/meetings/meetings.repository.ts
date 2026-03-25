@@ -60,6 +60,19 @@ export class MeetingsRepository {
         return row ? this.rowToSession(row) : null;
     }
 
+    async getActiveParticipantCounts(): Promise<Record<string, number>> {
+        if (!this.db) return {};
+        const res = await this.db.prepare(
+            `SELECT session_id, COUNT(*) as c 
+             FROM participant_sessions 
+             WHERE end_time IS NULL 
+             GROUP BY session_id`
+        ).all<{ session_id: string; c: number }>();
+
+        const counts: Record<string, number> = {};
+        for (const r of res.results) counts[r.session_id] = r.c;
+        return counts;
+    }
     private rowToSession = (r: any): MeetingSessionRow => {
         return {
             id:          r.id,

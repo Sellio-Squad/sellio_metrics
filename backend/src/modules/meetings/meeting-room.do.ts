@@ -19,6 +19,8 @@ import type { Logger } from "../../core/logger";
 import { MeetingsRepository } from "./meetings.repository";
 import type { MeetingWSEvent, ParticipantSessionRow } from "./meetings.types";
 import { createConsoleLogger } from "../../core/console-logger";
+import { LogsService } from "../logs/logs.service";
+import { CacheService } from "../../infra/cache/cache.service";
 
 interface IncomingEvent {
     sessionId: string;
@@ -35,11 +37,16 @@ export class MeetingRoom {
     private readonly state:  DurableObjectState;
     private readonly db:     D1Database | null;
     private readonly logger: Logger;
+    private readonly logsService: LogsService | null = null;
 
-    constructor(state: DurableObjectState, env: { DB?: D1Database }) {
+    constructor(state: DurableObjectState, env: any) {
         this.state  = state;
         this.db     = env.DB ?? null;
         this.logger = createConsoleLogger().child({ module: "meeting-room-do" });
+        if (env.CACHE) {
+            const cache = new CacheService({ kvNamespace: env.CACHE, logger: this.logger });
+            this.logsService = new LogsService({ cacheService: cache, logger: this.logger });
+        }
     }
 
     // ─── Durable Object Fetch Handler ────────────────────────────────────────
@@ -127,6 +134,7 @@ export class MeetingRoom {
             }
         } catch (err: any) {
             this.logger.error({ err: err?.message, sessionId, type: event.type }, "Error processing event");
+            if (this.logsService) await this.logsService.log(`DO error: ${err?.message}`, "error", "googleMeet", { type: event.type, trace: err?.stack });
         }
 
         return new Response("OK", { status: 200 });
@@ -151,7 +159,17 @@ export class MeetingRoom {
             endTime:        null,
         };
 
-        await repo.insertParticipantJoin(row);
+        if (!this.db) {
+            if (this.logsService) await this.logsService.log("DO env.DB is null! D1 binding missing in DO env.", "error", "googleMeet");
+        }
+
+        try {
+            await repo.insertParticipantJoin(row);
+            if (this.logsService) await this.logsService.log(`DB inserted joined: ${participantKey}`, "success", "googleMeet");
+        } catch (err: any) {
+            if (this.logsService) await this.logsService.log(`DB insert error: ${err.message}`, "error", "googleMeet", { stack: err.stack });
+            throw err;
+        }
 
         this.broadcast({
             type:        "participant_joined",
