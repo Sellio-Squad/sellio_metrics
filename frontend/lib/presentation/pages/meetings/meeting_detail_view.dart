@@ -77,6 +77,9 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
             return AnimatedBuilder(
               animation: _watch,
               builder: (context, _) {
+                // Instantly absorb existing snapshot
+                _watch.initializeWithRestData(meeting.participants);
+
                 final active  = _watch.active;
                 final history = _watch.history;
                 final formatter = DateFormat('MMM d, h:mm a');

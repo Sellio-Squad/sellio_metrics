@@ -88,6 +88,8 @@ export class MeetingsService {
 
     async listMeetings(limit = 50): Promise<MeetingResponse[]> {
         const sessions = await this.meetingsRepo.getSessions(limit);
+        const counts   = await this.meetingsRepo.getActiveParticipantCounts();
+
         return sessions.map((s) => ({
             id:               s.id,
             title:            s.title,
@@ -96,7 +98,7 @@ export class MeetingsService {
             meetingCode:      s.meetingCode,
             createdAt:        s.startedAt ?? "",
             endedAt:          s.endedAt   ?? null,
-            participantCount: 0,
+            participantCount: counts[s.id] ?? 0,
             subscribed:       true,
         }));
     }
@@ -133,7 +135,13 @@ export class MeetingsService {
 
     async endMeeting(id: string): Promise<void> {
         const session = await this.requireSession(id);
-        await this.meetClient.endSpace(session.spaceName);
+        
+        try {
+            await this.meetClient.endSpace(session.spaceName);
+        } catch (err: any) {
+            this.logger.warn({ id, err: err?.message }, "Failed to end Space on Google Meet API (likely already ended or never started), but marking session as ended locally");
+        }
+
         await this.meetingsRepo.upsertSession({ ...session, endedAt: new Date().toISOString() });
         this.logger.info({ id }, "Meeting ended");
     }

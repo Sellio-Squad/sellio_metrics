@@ -10,6 +10,7 @@
 import type { MeetingsRepository } from "./meetings.repository";
 import type { Logger } from "../../core/logger";
 import type { PubSubPushBody } from "./meetings.types";
+import type { LogsService } from "../logs/logs.service";
 
 /** Shape of the decoded Workspace Events CloudEvent payload */
 interface WorkspaceEventPayload {
@@ -58,11 +59,12 @@ export class WebhookHandlerService {
      *
      * Returns 200 quickly so Pub/Sub does not retry.
      */
-    async handle(request: Request, meetingsRepo: MeetingsRepository, meetingRooms: DurableObjectNamespace): Promise<Response> {
+    async handle(request: Request, meetingsRepo: MeetingsRepository, meetingRooms: DurableObjectNamespace, logsService?: LogsService): Promise<Response> {
         // 1. Verify Pub/Sub OIDC JWT token
         const authError = await this.verifyPubSubJwt(request);
         if (authError) {
             this.logger.warn({ authError }, "Webhook JWT verification failed — rejecting");
+            if (logsService) await logsService.log(`Webhook JWT verification failed: ${authError}`, "error", "googleMeet");
             return new Response("Unauthorized", { status: 401 });
         }
 
@@ -77,19 +79,26 @@ export class WebhookHandlerService {
         // 3. Decode base64 Pub/Sub message
         let payload: WorkspaceEventPayload;
         try {
-            payload = JSON.parse(atob(body.message.data));
+            const b64Data = body.message.data.replace(/-/g, "+").replace(/_/g, "/");
+            const dataPadded = b64Data + "===".slice((b64Data.length + 3) % 4);
+            const decodedStr = atob(dataPadded);
+            if (logsService) await logsService.log("Decoded Pub/Sub data", "info", "googleMeet", { rawData: decodedStr, attributes: body.message.attributes });
+            payload = JSON.parse(decodedStr);
         } catch {
             this.logger.warn("Failed to decode Pub/Sub message data");
+            if (logsService) await logsService.log("Failed to decode Pub/Sub message data", "error", "googleMeet");
             return new Response("Bad Request: invalid message data", { status: 400 });
         }
 
-        const event = this.extractEvent(payload, body.message.publishTime);
+        const event = this.extractEvent(payload, body.message.attributes ?? {}, body.message.publishTime);
         this.logger.info({ type: event.type, spaceName: event.spaceName }, "Meet event received");
+        if (logsService) await logsService.log(`Meet parsed: ${event.type}`, "info", "googleMeet", { spaceName: event.spaceName, participant: event.displayName });
 
         // 4. Resolve space name → meeting session ID
         const session = await meetingsRepo.getSessionBySpaceName(event.spaceName);
         if (!session) {
             this.logger.info({ spaceName: event.spaceName }, "Unknown space — ignoring event");
+            if (logsService) await logsService.log(`Unknown space — ignoring event`, "warning", "googleMeet", { spaceName: event.spaceName });
             return new Response("OK", { status: 200 });
         }
 
@@ -124,10 +133,16 @@ export class WebhookHandlerService {
         const token = authHeader.slice(7);
 
         try {
+            const b64Dec = (str: string) => {
+                let s = str.replace(/-/g, "+").replace(/_/g, "/");
+                while (s.length % 4) s += "=";
+                return atob(s);
+            };
+
             // Decode header + payload without verification first to get kid
             const [headerB64, payloadB64] = token.split(".");
-            const header  = JSON.parse(atob(headerB64.replace(/-/g, "+").replace(/_/g, "/")));
-            const claims  = JSON.parse(atob(payloadB64.replace(/-/g, "+").replace(/_/g, "/")));
+            const header  = JSON.parse(b64Dec(headerB64));
+            const claims  = JSON.parse(b64Dec(payloadB64));
 
             // Fetch Google's public certs (JWKS)
             const jwksRes  = await fetch("https://www.googleapis.com/oauth2/v3/certs");
@@ -144,7 +159,7 @@ export class WebhookHandlerService {
             );
 
             const [, , sigB64] = token.split(".");
-            const sig          = Uint8Array.from(atob(sigB64.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+            const sig          = Uint8Array.from(b64Dec(sigB64), c => c.charCodeAt(0));
             const data         = new TextEncoder().encode(`${headerB64}.${payloadB64}`);
             const valid        = await crypto.subtle.verify("RSASSA-PKCS1-v1_5", publicKey, sig, data);
             if (!valid) return "Invalid signature";
@@ -163,28 +178,31 @@ export class WebhookHandlerService {
 
     // ─── Payload Extraction ──────────────────────────────────────────────────
 
-    private extractEvent(payload: WorkspaceEventPayload, publishTime: string): ParsedMeetEvent {
-        const type      = (payload.type ?? "unknown") as MeetEventType;
-        const spaceName = this.extractSpaceName(payload);
+    private extractEvent(payload: any, attrs: Record<string, string>, publishTime: string): ParsedMeetEvent {
+        // CloudEvent "type" is often in ce-type attribute or root json "type"
+        const type      = (attrs["ce-type"] ?? attrs["eventType"] ?? payload.type ?? "unknown") as MeetEventType;
+        
+        // Find spaceName realistically
+        const subject = attrs["ce-subject"] ?? "";
+        let spaceName = "";
+        const m = subject.match(/spaces\/[^/]+/);
+        if (m) spaceName = m[0];
+        else if (payload.space?.name) spaceName = payload.space.name;
+        else if (payload.conferenceRecord?.space?.name) spaceName = payload.conferenceRecord.space.name;
+        
+        // Safely extract the inner object whether it's wrapped in `data` or not
+        const inner = payload.data ?? payload;
+        const participantObj = inner.participant ?? inner;
 
         const participantKey =
-            payload.participant?.signedinUser?.user ?? null;  // "users/{userId}" or null
+            participantObj?.signedinUser?.user ?? null;  // "users/{userId}" or null
 
         const displayName =
-            payload.participant?.signedinUser?.displayName ??
-            payload.participant?.anonymousUser?.displayName ??
+            participantObj?.signedinUser?.displayName ??
+            participantObj?.anonymousUser?.displayName ??
             "Unknown";
 
         return { type, spaceName, participantKey, displayName, timestamp: publishTime };
-    }
-
-    private extractSpaceName(payload: WorkspaceEventPayload): string {
-        // From resourceName like "//meet.googleapis.com/spaces/abc/..."
-        if (payload.resourceName) {
-            const m = String(payload.resourceName).match(/spaces\/[^/]+/);
-            if (m) return m[0];
-        }
-        return payload.conferenceRecord?.space?.name ?? "";
     }
 }
 

@@ -44,8 +44,8 @@ export class LogsService {
                 logs.length = MAX_LOGS;
             }
 
-            // Fire and forget so we don't block the caller too long
-            this.cacheService.set(LOGS_CACHE_KEY, logs, LOGS_TTL).catch(err => {
+            // Await to ensure Cloudflare does not drop the background promise!
+            await this.cacheService.set(LOGS_CACHE_KEY, logs, LOGS_TTL).catch(err => {
                 this.logger.warn({ err: err.message }, "Failed to persist log to KV");
             });
         } catch (err: any) {
