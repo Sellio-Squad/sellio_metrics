@@ -129,6 +129,7 @@ interface EnvSchema {
     GOOGLE_CLIENT_SECRET?: string;
     GOOGLE_REDIRECT_URI?: string;
     GOOGLE_PUBSUB_TOPIC?: string;
+    GEMINI_API_KEY?: string;
 }
 
 function requireEnv(name: keyof EnvSchema): string {
@@ -211,6 +212,9 @@ function _createEnv() {
 
         /** Google Pub/Sub topic for Workspace Events (e.g. "projects/my-proj/topics/meet-events-topic"). */
         googlePubsubTopic: optionalEnv("GOOGLE_PUBSUB_TOPIC", ""),
+
+        /** Google Gemini API key for AI code review. */
+        geminiApiKey: optionalEnv("GEMINI_API_KEY", ""),
     });
 }
 

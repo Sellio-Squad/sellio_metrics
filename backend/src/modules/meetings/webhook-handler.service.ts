@@ -8,9 +8,6 @@
  */
 
 
- // TODO: USE WS FOR WEBSOCKET
-
-
 import type { MeetingsRepository } from "./meetings.repository";
 import type { Logger } from "../../core/logger";
 import type { PubSubPushBody } from "./meetings.types";
