@@ -64,7 +64,31 @@ async function buildContainer(
     const { GeminiClient } = await import("../infra/ai/gemini.client");
     const { ReviewService } = await import("../modules/review/review.service");
 
-    const logger = createConsoleLogger();
+    let isLogging = false;
+    let logsServiceRef: any = null;
+
+    const logger = createConsoleLogger({}, (level, msg, obj) => {
+        if (!logsServiceRef || isLogging) return;
+        isLogging = true;
+        
+        try {
+            const objAny = obj as any;
+            if (objAny && objAny.module === "logs") {
+                return;
+            }
+
+            let category = "system";
+            if (objAny) {
+               if (objAny.err?.message?.includes("github") || objAny.module === "github" || objAny.module === "webhook" || objAny.module === "sync" || objAny.module === "repos" || objAny.module === "prs") category = "github";
+               if (objAny.module === "google-meet" || objAny.module === "meetings") category = "googleMeet";
+               if (objAny.category) category = objAny.category;
+            }
+
+            logsServiceRef.log(msg, level as any, category, obj).catch(() => {});
+        } finally {
+            isLogging = false;
+        }
+    });
     const container = createContainer<Cradle>({ injectionMode: InjectionMode.PROXY });
 
     // Build a single CacheRegistry so all namespaces live in one place
@@ -162,6 +186,12 @@ async function buildContainer(
             new ReviewService({ cachedGithubClient, geminiClient, logger }),
         ).singleton(),
     });
+
+    try {
+        logsServiceRef = container.resolve("logsService");
+    } catch (e) {
+        /* ignore */
+    }
 
     return container;
 }
