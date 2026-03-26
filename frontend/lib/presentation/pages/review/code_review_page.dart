@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/pr_entity.dart';
+import 'package:sellio_metrics/domain/entities/repo_info.dart';
 import 'package:sellio_metrics/domain/entities/review_entity.dart';
 import 'package:sellio_metrics/presentation/pages/review/providers/review_provider.dart';
 
@@ -15,27 +16,20 @@ class CodeReviewPage extends StatefulWidget {
 
 class _CodeReviewPageState extends State<CodeReviewPage>
     with SingleTickerProviderStateMixin {
-  final _ownerController = TextEditingController();
-  final _repoController = TextEditingController();
-  final _prController = TextEditingController();
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
-
-    final provider = context.read<ReviewProvider>();
-    _ownerController.text = provider.selectedOwner;
-    _repoController.text = provider.selectedRepo;
-    _prController.text = provider.prNumber.toString();
+    // Load repos + PRs for dropdowns
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<ReviewProvider>().loadMeta();
+    });
   }
 
   @override
   void dispose() {
-    _ownerController.dispose();
-    _repoController.dispose();
-    _prController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -53,11 +47,8 @@ class _CodeReviewPageState extends State<CodeReviewPage>
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Left Panel — Input Form
-                    _InputPanel(
-                      ownerController: _ownerController,
-                      repoController: _repoController,
-                      prController: _prController,
+                    // Left Panel — Dropdowns
+                    _SelectionPanel(
                       provider: provider,
                       tabController: _tabController,
                     ),
@@ -94,9 +85,7 @@ class _ReviewHeader extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: scheme.surfaceLow,
-        border: Border(
-          bottom: BorderSide(color: scheme.stroke, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: scheme.stroke, width: 1)),
       ),
       child: Row(
         children: [
@@ -107,11 +96,7 @@ class _ReviewHeader extends StatelessWidget {
               gradient: SellioColors.primaryGradient,
               borderRadius: BorderRadius.circular(AppRadius.sm),
             ),
-            child: Icon(
-              LucideIcons.searchCode,
-              size: 18,
-              color: scheme.onPrimary,
-            ),
+            child: Icon(LucideIcons.searchCode, size: 18, color: scheme.onPrimary),
           ),
           const SizedBox(width: AppSpacing.md),
           Column(
@@ -127,10 +112,7 @@ class _ReviewHeader extends StatelessWidget {
               ),
               Text(
                 'Powered by Gemini · Production-level analysis',
-                style: AppTypography.caption.copyWith(
-                  color: scheme.hint,
-                  fontSize: 11,
-                ),
+                style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 11),
               ),
             ],
           ),
@@ -141,23 +123,14 @@ class _ReviewHeader extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// INPUT PANEL (Left side)
+// SELECTION PANEL (Left)
 // ═══════════════════════════════════════════════════════
 
-class _InputPanel extends StatelessWidget {
-  final TextEditingController ownerController;
-  final TextEditingController repoController;
-  final TextEditingController prController;
+class _SelectionPanel extends StatelessWidget {
   final ReviewProvider provider;
   final TabController tabController;
 
-  const _InputPanel({
-    required this.ownerController,
-    required this.repoController,
-    required this.prController,
-    required this.provider,
-    required this.tabController,
-  });
+  const _SelectionPanel({required this.provider, required this.tabController});
 
   @override
   Widget build(BuildContext context) {
@@ -172,46 +145,37 @@ class _InputPanel extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.all(AppSpacing.lg),
         children: [
-          // ─── Form card ────────────────────────────────
-          _SectionLabel('Pull Request', scheme),
-          const SizedBox(height: AppSpacing.sm),
-          _FieldLabel('Organization / Owner', scheme),
-          const SizedBox(height: AppSpacing.xs),
-          _StyledTextField(
-            controller: ownerController,
-            hint: 'e.g. Sellio-Squad',
-            icon: LucideIcons.building2,
-            onChanged: (v) => provider.setOwner(v),
-          ),
+          _SectionLabel('Select Target', scheme),
           const SizedBox(height: AppSpacing.md),
-          _FieldLabel('Repository', scheme),
+
+          // ─── Repo Dropdown ─────────────────────────────
+          _DropdownLabel('Repository', scheme),
           const SizedBox(height: AppSpacing.xs),
-          _StyledTextField(
-            controller: repoController,
-            hint: 'e.g. sellio_mobile',
-            icon: LucideIcons.gitBranch,
-            onChanged: (v) => provider.setRepo(v),
-          ),
-          const SizedBox(height: AppSpacing.md),
-          _FieldLabel('PR Number', scheme),
+          provider.loadingMeta
+              ? _LoadingDropdown(scheme: scheme)
+              : _RepoDropdown(provider: provider),
+
+          const SizedBox(height: AppSpacing.lg),
+
+          // ─── PR Dropdown ───────────────────────────────
+          _DropdownLabel('Pull Request', scheme),
           const SizedBox(height: AppSpacing.xs),
-          _StyledTextField(
-            controller: prController,
-            hint: 'e.g. 42',
-            icon: LucideIcons.gitPullRequest,
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            onChanged: (v) {
-              final n = int.tryParse(v);
-              if (n != null && n > 0) provider.setPrNumber(n);
-            },
-          ),
+          provider.loadingMeta
+              ? _LoadingDropdown(scheme: scheme)
+              : _PrDropdown(provider: provider),
+
           const SizedBox(height: AppSpacing.xl),
 
-          // ─── Submit button ────────────────────────────
+          // ─── PR Info card (if PR selected) ────────────
+          if (provider.selectedPr != null) ...[
+            _SelectedPrCard(pr: provider.selectedPr!, scheme: scheme),
+            const SizedBox(height: AppSpacing.xl),
+          ],
+
+          // ─── Analyze Button ────────────────────────────
           _AnalyzeButton(provider: provider, tabController: tabController),
 
-          // ─── Stats (if result available) ────────────
+          // ─── Stats after review ────────────────────────
           if (provider.hasResult) ...[
             const SizedBox(height: AppSpacing.xl),
             _SectionLabel('Results', scheme),
@@ -249,10 +213,10 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _FieldLabel extends StatelessWidget {
+class _DropdownLabel extends StatelessWidget {
   final String text;
   final SellioColorScheme scheme;
-  const _FieldLabel(this.text, this.scheme);
+  const _DropdownLabel(this.text, this.scheme);
 
   @override
   Widget build(BuildContext context) {
@@ -267,58 +231,178 @@ class _FieldLabel extends StatelessWidget {
   }
 }
 
-class _StyledTextField extends StatelessWidget {
-  final TextEditingController controller;
-  final String hint;
-  final IconData icon;
-  final TextInputType? keyboardType;
-  final List<TextInputFormatter>? inputFormatters;
-  final ValueChanged<String>? onChanged;
-
-  const _StyledTextField({
-    required this.controller,
-    required this.hint,
-    required this.icon,
-    this.keyboardType,
-    this.inputFormatters,
-    this.onChanged,
-  });
+class _LoadingDropdown extends StatelessWidget {
+  final SellioColorScheme scheme;
+  const _LoadingDropdown({required this.scheme});
 
   @override
   Widget build(BuildContext context) {
-    final scheme = context.colors;
     return Container(
       height: 44,
       decoration: BoxDecoration(
         color: scheme.surface,
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        border: Border.all(color: scheme.stroke, width: 1),
+        border: Border.all(color: scheme.stroke),
       ),
       child: Row(
         children: [
           const SizedBox(width: AppSpacing.md),
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(strokeWidth: 2, color: scheme.hint),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            'Loading…',
+            style: AppTypography.body.copyWith(color: scheme.hint, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Repo Dropdown ─────────────────────────────────────
+
+class _RepoDropdown extends StatelessWidget {
+  final ReviewProvider provider;
+  const _RepoDropdown({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final repos = provider.repos;
+
+    if (repos.isEmpty) {
+      return _EmptyDropdownHint(
+        icon: LucideIcons.gitBranch,
+        label: 'No repositories found',
+        scheme: scheme,
+      );
+    }
+
+    return _StyledDropdown<RepoInfo>(
+      value: provider.selectedRepo,
+      icon: LucideIcons.gitBranch,
+      hint: 'Select a repository',
+      items: repos,
+      labelBuilder: (r) => r.name,
+      onChanged: provider.selectRepo,
+      scheme: scheme,
+    );
+  }
+}
+
+// ─── PR Dropdown ───────────────────────────────────────
+
+class _PrDropdown extends StatelessWidget {
+  final ReviewProvider provider;
+  const _PrDropdown({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final prs = provider.prsForSelectedRepo;
+
+    if (provider.selectedRepo == null) {
+      return _EmptyDropdownHint(
+        icon: LucideIcons.gitPullRequest,
+        label: 'Select a repo first',
+        scheme: scheme,
+      );
+    }
+
+    if (prs.isEmpty) {
+      return _EmptyDropdownHint(
+        icon: LucideIcons.gitPullRequest,
+        label: 'No open PRs in this repo',
+        scheme: scheme,
+      );
+    }
+
+    // Ensure the selected PR exists in this list
+    final validSelected = provider.selectedPr != null &&
+            prs.any((p) => p.prNumber == provider.selectedPr!.prNumber)
+        ? provider.selectedPr
+        : null;
+
+    return _StyledDropdown<PrEntity>(
+      value: validSelected,
+      icon: LucideIcons.gitPullRequest,
+      hint: 'Select a pull request',
+      items: prs,
+      labelBuilder: (pr) => '#${pr.prNumber} · ${pr.title}',
+      onChanged: provider.selectPr,
+      scheme: scheme,
+    );
+  }
+}
+
+// ─── Generic Styled Dropdown ───────────────────────────
+
+class _StyledDropdown<T> extends StatelessWidget {
+  final T? value;
+  final IconData icon;
+  final String hint;
+  final List<T> items;
+  final String Function(T) labelBuilder;
+  final ValueChanged<T> onChanged;
+  final SellioColorScheme scheme;
+
+  const _StyledDropdown({
+    required this.value,
+    required this.icon,
+    required this.hint,
+    required this.items,
+    required this.labelBuilder,
+    required this.onChanged,
+    required this.scheme,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: scheme.stroke),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Row(
+        children: [
           Icon(icon, size: 15, color: scheme.hint),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: TextField(
-              controller: controller,
-              keyboardType: keyboardType,
-              inputFormatters: inputFormatters,
-              onChanged: onChanged,
-              style: AppTypography.body.copyWith(
-                color: scheme.title,
-                fontSize: 13,
+            child: DropdownButton<T>(
+              value: value,
+              hint: Text(
+                hint,
+                style: AppTypography.body.copyWith(color: scheme.hint, fontSize: 13),
               ),
-              decoration: InputDecoration(
-                hintText: hint,
-                hintStyle: AppTypography.body.copyWith(
-                  color: scheme.hint,
-                  fontSize: 13,
-                ),
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.zero,
-              ),
+              isExpanded: true,
+              underline: const SizedBox.shrink(),
+              icon: Icon(LucideIcons.chevronDown, size: 15, color: scheme.hint),
+              dropdownColor: scheme.surfaceLow,
+              style: AppTypography.body.copyWith(color: scheme.title, fontSize: 13),
+              items: items.map((item) {
+                final label = labelBuilder(item);
+                return DropdownMenuItem<T>(
+                  value: item,
+                  child: Tooltip(
+                    message: label,
+                    child: Text(
+                      label,
+                      overflow: TextOverflow.ellipsis,
+                      maxLines: 1,
+                    ),
+                  ),
+                );
+              }).toList(),
+              onChanged: (v) {
+                if (v != null) onChanged(v);
+              },
             ),
           ),
         ],
@@ -326,6 +410,123 @@ class _StyledTextField extends StatelessWidget {
     );
   }
 }
+
+class _EmptyDropdownHint extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final SellioColorScheme scheme;
+  const _EmptyDropdownHint(
+      {required this.icon, required this.label, required this.scheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 44,
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: scheme.stroke),
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+      child: Row(
+        children: [
+          Icon(icon, size: 15, color: scheme.disabled),
+          const SizedBox(width: AppSpacing.sm),
+          Text(
+            label,
+            style: AppTypography.body.copyWith(color: scheme.hint, fontSize: 13),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Selected PR info card ─────────────────────────────
+
+class _SelectedPrCard extends StatelessWidget {
+  final PrEntity pr;
+  final SellioColorScheme scheme;
+  const _SelectedPrCard({required this.pr, required this.scheme});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: scheme.primaryVariant,
+        borderRadius: BorderRadius.circular(AppRadius.sm),
+        border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: scheme.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  '#${pr.prNumber}',
+                  style: AppTypography.caption.copyWith(
+                    color: scheme.primary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 10,
+                  ),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  pr.title,
+                  style: AppTypography.body.copyWith(
+                    color: scheme.title,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Row(
+            children: [
+              Icon(LucideIcons.user, size: 11, color: scheme.hint),
+              const SizedBox(width: 3),
+              Text(
+                pr.creator.login,
+                style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 11),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(LucideIcons.filePlus2, size: 11, color: scheme.green),
+              const SizedBox(width: 3),
+              Text(
+                '+${pr.diffStats.additions}',
+                style: AppTypography.caption.copyWith(
+                    color: scheme.green, fontWeight: FontWeight.w600, fontSize: 11),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(LucideIcons.fileMinus2, size: 11, color: scheme.red),
+              const SizedBox(width: 3),
+              Text(
+                '-${pr.diffStats.deletions}',
+                style: AppTypography.caption.copyWith(
+                    color: scheme.red, fontWeight: FontWeight.w600, fontSize: 11),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Analyze Button ────────────────────────────────────
 
 class _AnalyzeButton extends StatelessWidget {
   final ReviewProvider provider;
@@ -335,67 +536,67 @@ class _AnalyzeButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      child: Material(
+    final canReview = provider.canReview;
+
+    return Material(
+      borderRadius: BorderRadius.circular(AppRadius.sm),
+      color: provider.isLoading
+          ? scheme.disabled
+          : canReview
+              ? scheme.primary
+              : scheme.disabled,
+      child: InkWell(
         borderRadius: BorderRadius.circular(AppRadius.sm),
-        color: provider.isLoading ? scheme.disabled : scheme.primary,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(AppRadius.sm),
-          onTap: provider.isLoading
-              ? null
-              : () {
-                  provider.runReview();
-                  tabController.animateTo(0);
-                },
-          child: Container(
-            height: 44,
-            alignment: Alignment.center,
-            child: provider.isLoading
-                ? Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: scheme.onPrimary,
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        'Analyzing...',
-                        style: AppTypography.body.copyWith(
+        onTap: (provider.isLoading || !canReview)
+            ? null
+            : () {
+                provider.runReview();
+                tabController.animateTo(0);
+              },
+        child: Container(
+          height: 44,
+          alignment: Alignment.center,
+          child: provider.isLoading
+              ? Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: scheme.onPrimary),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      'Analyzing…',
+                      style: AppTypography.body.copyWith(
                           color: scheme.onPrimary,
                           fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  )
-                : Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(LucideIcons.sparkles,
-                          size: 16, color: scheme.onPrimary),
-                      const SizedBox(width: AppSpacing.sm),
-                      Text(
-                        'Analyze with AI',
-                        style: AppTypography.body.copyWith(
+                          fontSize: 13),
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(LucideIcons.sparkles, size: 16, color: scheme.onPrimary),
+                    const SizedBox(width: AppSpacing.sm),
+                    Text(
+                      'Analyze with AI',
+                      style: AppTypography.body.copyWith(
                           color: scheme.onPrimary,
                           fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ],
-                  ),
-          ),
+                          fontSize: 13),
+                    ),
+                  ],
+                ),
         ),
       ),
     );
   }
 }
+
+// ─── Stats ─────────────────────────────────────────────
 
 class _StatsWidget extends StatelessWidget {
   final ReviewEntity review;
@@ -406,25 +607,16 @@ class _StatsWidget extends StatelessWidget {
     final scheme = context.colors;
     return Column(
       children: [
-        _StatRow('Total Issues', '${review.totalIssues}',
+        _StatRow('Issues', '${review.totalIssues}',
             LucideIcons.alertTriangle, scheme.secondary, scheme),
-        _StatRow('Critical', '${review.criticalCount}', LucideIcons.alertOctagon,
-            scheme.red, scheme),
-        _StatRow(
-            'Bugs',
-            '${review.bugs.length}',
-            LucideIcons.bug,
-            review.bugs.isEmpty ? scheme.green : scheme.red,
-            scheme),
-        _StatRow(
-            'Security',
-            '${review.security.length}',
+        _StatRow('Critical', '${review.criticalCount}',
+            LucideIcons.alertOctagon, scheme.red, scheme),
+        _StatRow('Bugs', '${review.bugs.length}', LucideIcons.bug,
+            review.bugs.isEmpty ? scheme.green : scheme.red, scheme),
+        _StatRow('Security', '${review.security.length}',
             LucideIcons.shieldAlert,
-            review.security.isEmpty ? scheme.green : scheme.red,
-            scheme),
-        _StatRow(
-            'Performance',
-            '${review.performance.length}',
+            review.security.isEmpty ? scheme.green : scheme.red, scheme),
+        _StatRow('Performance', '${review.performance.length}',
             LucideIcons.zap,
             review.performance.isEmpty ? scheme.green : scheme.secondary,
             scheme),
@@ -439,7 +631,6 @@ class _StatRow extends StatelessWidget {
   final IconData icon;
   final Color color;
   final SellioColorScheme scheme;
-
   const _StatRow(this.label, this.value, this.icon, this.color, this.scheme);
 
   @override
@@ -451,17 +642,12 @@ class _StatRow extends StatelessWidget {
           Icon(icon, size: 13, color: color),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
-            child: Text(
-              label,
-              style: AppTypography.caption.copyWith(
-                color: scheme.body,
-                fontSize: 12,
-              ),
-            ),
+            child: Text(label,
+                style: AppTypography.caption
+                    .copyWith(color: scheme.body, fontSize: 12)),
           ),
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(12),
@@ -469,10 +655,7 @@ class _StatRow extends StatelessWidget {
             child: Text(
               value,
               style: AppTypography.caption.copyWith(
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w700,
-              ),
+                  color: color, fontSize: 11, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -491,26 +674,20 @@ class _ResetButton extends StatelessWidget {
     return TextButton.icon(
       onPressed: provider.reset,
       icon: Icon(LucideIcons.rotateCcw, size: 13, color: scheme.hint),
-      label: Text(
-        'Clear & Reset',
-        style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 12),
-      ),
+      label: Text('Clear Results',
+          style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 12)),
     );
   }
 }
 
 // ═══════════════════════════════════════════════════════
-// RESULTS PANEL (Right side)
+// RESULTS PANEL (Right)
 // ═══════════════════════════════════════════════════════
 
 class _ResultsPanel extends StatelessWidget {
   final ReviewProvider provider;
   final TabController tabController;
-
-  const _ResultsPanel({
-    required this.provider,
-    required this.tabController,
-  });
+  const _ResultsPanel({required this.provider, required this.tabController});
 
   @override
   Widget build(BuildContext context) {
@@ -518,9 +695,7 @@ class _ResultsPanel extends StatelessWidget {
     if (provider.hasError) return _ErrorView(message: provider.errorMessage);
     if (!provider.hasResult) return _EmptyView();
     return _ReviewResultView(
-      review: provider.review!,
-      tabController: tabController,
-    );
+        review: provider.review!, tabController: tabController);
   }
 }
 
@@ -544,37 +719,22 @@ class _LoadingView extends StatelessWidget {
                 width: 32,
                 height: 32,
                 child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: scheme.onPrimary,
-                ),
+                    strokeWidth: 2.5, color: scheme.onPrimary),
               ),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Analyzing PR...',
-            style: AppTypography.subtitle.copyWith(
-              color: scheme.title,
-              fontWeight: FontWeight.w700,
-              fontSize: 18,
-            ),
-          ),
+          Text('Analyzing PR…',
+              style: AppTypography.subtitle.copyWith(
+                  color: scheme.title, fontWeight: FontWeight.w700, fontSize: 18)),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Gemini AI is reviewing your code',
-            style: AppTypography.body.copyWith(
-              color: scheme.hint,
-              fontSize: 13,
-            ),
-          ),
+          Text('Gemini AI is reviewing your code',
+              style:
+                  AppTypography.body.copyWith(color: scheme.hint, fontSize: 13)),
           const SizedBox(height: AppSpacing.xs),
-          Text(
-            'This may take 10–20 seconds',
-            style: AppTypography.caption.copyWith(
-              color: scheme.hint,
-              fontSize: 11,
-            ),
-          ),
+          Text('This may take 10–20 seconds',
+              style: AppTypography.caption
+                  .copyWith(color: scheme.hint, fontSize: 11)),
         ],
       ),
     );
@@ -598,27 +758,23 @@ class _ErrorView extends StatelessWidget {
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: scheme.redVariant,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child:
-                  Center(child: Icon(LucideIcons.alertOctagon, size: 32, color: scheme.red)),
+                  color: scheme.redVariant,
+                  borderRadius: BorderRadius.circular(20)),
+              child: Center(
+                  child: Icon(LucideIcons.alertOctagon,
+                      size: 32, color: scheme.red)),
             ),
             const SizedBox(height: AppSpacing.xl),
-            Text(
-              'Review Failed',
-              style: AppTypography.subtitle.copyWith(
-                color: scheme.title,
-                fontWeight: FontWeight.w700,
-                fontSize: 18,
-              ),
-            ),
+            Text('Review Failed',
+                style: AppTypography.subtitle.copyWith(
+                    color: scheme.title,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 18)),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: AppTypography.body.copyWith(color: scheme.hint, fontSize: 13),
-            ),
+            Text(message,
+                textAlign: TextAlign.center,
+                style: AppTypography.body
+                    .copyWith(color: scheme.hint, fontSize: 13)),
           ],
         ),
       ),
@@ -643,28 +799,17 @@ class _EmptyView extends StatelessWidget {
               border: Border.all(color: scheme.stroke),
             ),
             child: Center(
-              child: Icon(
-                LucideIcons.searchCode,
-                size: 40,
-                color: scheme.primary,
-              ),
-            ),
+                child:
+                    Icon(LucideIcons.searchCode, size: 40, color: scheme.primary)),
           ),
           const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Ready for Review',
-            style: AppTypography.subtitle.copyWith(
-              color: scheme.title,
-              fontWeight: FontWeight.w700,
-              fontSize: 20,
-            ),
-          ),
+          Text('Ready for Review',
+              style: AppTypography.subtitle.copyWith(
+                  color: scheme.title, fontWeight: FontWeight.w700, fontSize: 20)),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Enter repo details and PR number,\nthen click "Analyze with AI"',
-            textAlign: TextAlign.center,
-            style: AppTypography.body.copyWith(color: scheme.hint, fontSize: 14),
-          ),
+          Text('Select a repository and PR,\nthen click "Analyze with AI"',
+              textAlign: TextAlign.center,
+              style: AppTypography.body.copyWith(color: scheme.hint, fontSize: 14)),
           const SizedBox(height: AppSpacing.xl),
           _FeatureChip(icon: LucideIcons.bug, label: 'Bugs & Logic Errors'),
           const SizedBox(height: AppSpacing.sm),
@@ -672,7 +817,8 @@ class _EmptyView extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           _FeatureChip(icon: LucideIcons.zap, label: 'Performance Concerns'),
           const SizedBox(height: AppSpacing.sm),
-          _FeatureChip(icon: LucideIcons.checkCircle, label: 'Best Practices'),
+          _FeatureChip(
+              icon: LucideIcons.checkCircle, label: 'Best Practices'),
         ],
       ),
     );
@@ -689,9 +835,7 @@ class _FeatureChip extends StatelessWidget {
     final scheme = context.colors;
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
-        vertical: AppSpacing.sm,
-      ),
+          horizontal: AppSpacing.md, vertical: AppSpacing.sm),
       decoration: BoxDecoration(
         color: scheme.surface,
         borderRadius: BorderRadius.circular(20),
@@ -702,14 +846,9 @@ class _FeatureChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: scheme.primary),
           const SizedBox(width: AppSpacing.sm),
-          Text(
-            label,
-            style: AppTypography.body.copyWith(
-              color: scheme.body,
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(label,
+              style: AppTypography.body.copyWith(
+                  color: scheme.body, fontSize: 12, fontWeight: FontWeight.w500)),
         ],
       ),
     );
@@ -723,11 +862,7 @@ class _FeatureChip extends StatelessWidget {
 class _ReviewResultView extends StatelessWidget {
   final ReviewEntity review;
   final TabController tabController;
-
-  const _ReviewResultView({
-    required this.review,
-    required this.tabController,
-  });
+  const _ReviewResultView({required this.review, required this.tabController});
 
   @override
   Widget build(BuildContext context) {
@@ -735,29 +870,24 @@ class _ReviewResultView extends StatelessWidget {
 
     return Column(
       children: [
-        // ─── PR Summary Header ─────────────────────────────────
         _PrSummaryHeader(review: review),
-
-        // ─── Tabs ──────────────────────────────────────────────
         Container(
           color: scheme.surfaceLow,
           child: TabBar(
             controller: tabController,
             isScrollable: true,
             tabAlignment: TabAlignment.start,
-            labelStyle: AppTypography.body.copyWith(
-              fontWeight: FontWeight.w600,
-              fontSize: 13,
-            ),
-            unselectedLabelStyle: AppTypography.body.copyWith(fontSize: 13),
+            labelStyle: AppTypography.body
+                .copyWith(fontWeight: FontWeight.w600, fontSize: 13),
+            unselectedLabelStyle:
+                AppTypography.body.copyWith(fontSize: 13),
             labelColor: scheme.primary,
             unselectedLabelColor: scheme.hint,
             indicatorColor: scheme.primary,
             indicatorSize: TabBarIndicatorSize.tab,
             dividerColor: scheme.stroke,
             tabs: [
-              _ReviewTab(
-                  'Bugs', review.bugs.length, LucideIcons.bug, scheme.red),
+              _ReviewTab('Bugs', review.bugs.length, LucideIcons.bug, scheme.red),
               _ReviewTab('Best Practices', review.bestPractices.length,
                   LucideIcons.checkCircle, SellioColors.blue),
               _ReviewTab('Security', review.security.length,
@@ -767,8 +897,6 @@ class _ReviewResultView extends StatelessWidget {
             ],
           ),
         ),
-
-        // ─── Tab Content ───────────────────────────────────────
         Expanded(
           child: TabBarView(
             controller: tabController,
@@ -796,7 +924,6 @@ class _ReviewTab extends StatelessWidget {
   final int count;
   final IconData icon;
   final Color color;
-
   const _ReviewTab(this.label, this.count, this.icon, this.color);
 
   @override
@@ -811,19 +938,17 @@ class _ReviewTab extends StatelessWidget {
           if (count > 0) ...[
             const SizedBox(width: 6),
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
                 color: color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: Text(
-                '$count',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  color: color,
-                ),
-              ),
+              child: Text('$count',
+                  style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                      color: color)),
             ),
           ],
         ],
@@ -854,43 +979,33 @@ class _PrSummaryHeader extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // PR title + badge
           Row(
             children: [
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: scheme.primaryVariant,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  '#${pr.number}',
-                  style: AppTypography.caption.copyWith(
-                    color: scheme.primary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 11,
-                  ),
-                ),
+                    color: scheme.primaryVariant,
+                    borderRadius: BorderRadius.circular(8)),
+                child: Text('#${pr.number}',
+                    style: AppTypography.caption.copyWith(
+                        color: scheme.primary,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11)),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
-                child: Text(
-                  pr.title,
-                  style: AppTypography.subtitle.copyWith(
-                    color: scheme.title,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 15,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
+                child: Text(pr.title,
+                    style: AppTypography.subtitle.copyWith(
+                        color: scheme.title,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis),
               ),
-              // Overall health indicator
               _HealthBadge(review: review),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          // Author + stats
           Row(
             children: [
               Icon(LucideIcons.user, size: 12, color: scheme.hint),
@@ -903,13 +1018,17 @@ class _PrSummaryHeader extends StatelessWidget {
               const SizedBox(width: 4),
               Text('+${pr.additions}',
                   style: AppTypography.caption.copyWith(
-                      color: scheme.green, fontWeight: FontWeight.w600, fontSize: 11)),
+                      color: scheme.green,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11)),
               const SizedBox(width: AppSpacing.md),
               Icon(LucideIcons.fileMinus2, size: 12, color: scheme.red),
               const SizedBox(width: 4),
               Text('-${pr.deletions}',
                   style: AppTypography.caption.copyWith(
-                      color: scheme.red, fontWeight: FontWeight.w600, fontSize: 11)),
+                      color: scheme.red,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 11)),
               const SizedBox(width: AppSpacing.md),
               Icon(LucideIcons.files, size: 12, color: scheme.hint),
               const SizedBox(width: 4),
@@ -919,7 +1038,6 @@ class _PrSummaryHeader extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          // AI Summary
           Container(
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
@@ -933,14 +1051,9 @@ class _PrSummaryHeader extends StatelessWidget {
                 Icon(LucideIcons.sparkles, size: 14, color: scheme.secondary),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
-                  child: Text(
-                    review.prSummary,
-                    style: AppTypography.body.copyWith(
-                      color: scheme.body,
-                      fontSize: 13,
-                      height: 1.5,
-                    ),
-                  ),
+                  child: Text(review.prSummary,
+                      style: AppTypography.body
+                          .copyWith(color: scheme.body, fontSize: 13, height: 1.5)),
                 ),
               ],
             ),
@@ -958,9 +1071,9 @@ class _HealthBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    Color color;
-    IconData icon;
-    String label;
+    late Color color;
+    late IconData icon;
+    late String label;
 
     if (review.criticalCount > 0) {
       color = scheme.red;
@@ -988,14 +1101,9 @@ class _HealthBadge extends StatelessWidget {
         children: [
           Icon(icon, size: 13, color: color),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: AppTypography.caption.copyWith(
-              color: color,
-              fontWeight: FontWeight.w700,
-              fontSize: 11,
-            ),
-          ),
+          Text(label,
+              style: AppTypography.caption.copyWith(
+                  color: color, fontWeight: FontWeight.w700, fontSize: 11)),
         ],
       ),
     );
@@ -1003,19 +1111,17 @@ class _HealthBadge extends StatelessWidget {
 }
 
 // ═══════════════════════════════════════════════════════
-// FINDINGS LIST
+// FINDINGS LIST + CARD
 // ═══════════════════════════════════════════════════════
 
 class _FindingsList extends StatelessWidget {
   final List<ReviewFindingEntity> findings;
   final String emptyLabel;
-
   const _FindingsList({required this.findings, required this.emptyLabel});
 
   @override
   Widget build(BuildContext context) {
     if (findings.isEmpty) return _EmptyCategoryView(label: emptyLabel);
-
     return ListView.separated(
       padding: const EdgeInsets.all(AppSpacing.lg),
       itemCount: findings.length,
@@ -1038,23 +1144,14 @@ class _EmptyCategoryView extends StatelessWidget {
         children: [
           Icon(LucideIcons.checkCircle2, size: 40, color: scheme.green),
           const SizedBox(height: AppSpacing.md),
-          Text(
-            label,
-            style: AppTypography.body.copyWith(
-              color: scheme.hint,
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
+          Text(label,
+              style: AppTypography.body
+                  .copyWith(color: scheme.hint, fontSize: 14, fontWeight: FontWeight.w500)),
         ],
       ),
     );
   }
 }
-
-// ═══════════════════════════════════════════════════════
-// FINDING CARD
-// ═══════════════════════════════════════════════════════
 
 class _FindingCard extends StatefulWidget {
   final ReviewFindingEntity finding;
@@ -1078,40 +1175,33 @@ class _FindingCardState extends State<_FindingCard> {
       decoration: BoxDecoration(
         color: scheme.surfaceLow,
         borderRadius: BorderRadius.circular(AppRadius.md),
-        border: Border.all(
-          color: config.color.withValues(alpha: 0.25),
-          width: 1,
-        ),
+        border: Border.all(color: config.color.withValues(alpha: 0.25)),
         boxShadow: [
           BoxShadow(
-            color: scheme.shadowColor,
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
+              color: scheme.shadowColor, blurRadius: 8, offset: const Offset(0, 2))
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ─── Card header ─────────────────────────────
           InkWell(
             borderRadius: BorderRadius.vertical(
                 top: Radius.circular(AppRadius.md),
-                bottom: _expanded ? Radius.zero : Radius.circular(AppRadius.md)),
+                bottom: _expanded
+                    ? Radius.zero
+                    : Radius.circular(AppRadius.md)),
             onTap: () => setState(() => _expanded = !_expanded),
             child: Padding(
               padding: const EdgeInsets.all(AppSpacing.md),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Severity indicator
                   Container(
                     width: 4,
                     height: 40,
                     decoration: BoxDecoration(
-                      color: config.color,
-                      borderRadius: BorderRadius.circular(4),
-                    ),
+                        color: config.color,
+                        borderRadius: BorderRadius.circular(4)),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
@@ -1120,7 +1210,6 @@ class _FindingCardState extends State<_FindingCard> {
                       children: [
                         Row(
                           children: [
-                            // Severity badge
                             Container(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 7, vertical: 2),
@@ -1131,62 +1220,48 @@ class _FindingCardState extends State<_FindingCard> {
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(config.icon,
-                                      size: 10, color: config.color),
+                                  Icon(config.icon, size: 10, color: config.color),
                                   const SizedBox(width: 3),
-                                  Text(
-                                    f.severity.label.toUpperCase(),
-                                    style: AppTypography.overline.copyWith(
-                                      color: config.color,
-                                      fontSize: 9,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: 0.8,
-                                    ),
-                                  ),
+                                  Text(f.severity.label.toUpperCase(),
+                                      style: AppTypography.overline.copyWith(
+                                          color: config.color,
+                                          fontSize: 9,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: 0.8)),
                                 ],
                               ),
                             ),
                             const SizedBox(width: AppSpacing.sm),
-                            // File path
                             Expanded(
                               child: Text(
                                 _shortPath(f.file),
                                 style: AppTypography.caption.copyWith(
-                                  color: scheme.hint,
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                ),
+                                    color: scheme.hint,
+                                    fontSize: 11,
+                                    fontFamily: 'monospace'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (f.line != null)
-                              Text(
-                                ':${f.line}',
-                                style: AppTypography.caption.copyWith(
-                                  color: scheme.hint,
-                                  fontSize: 11,
-                                  fontFamily: 'monospace',
-                                ),
-                              ),
+                              Text(':${f.line}',
+                                  style: AppTypography.caption.copyWith(
+                                      color: scheme.hint,
+                                      fontSize: 11,
+                                      fontFamily: 'monospace')),
                           ],
                         ),
                         const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          f.title,
-                          style: AppTypography.subtitle.copyWith(
-                            color: scheme.title,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 14,
-                          ),
-                        ),
+                        Text(f.title,
+                            style: AppTypography.subtitle.copyWith(
+                                color: scheme.title,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14)),
                       ],
                     ),
                   ),
                   Icon(
-                    _expanded
-                        ? LucideIcons.chevronUp
-                        : LucideIcons.chevronDown,
+                    _expanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,
                     size: 16,
                     color: scheme.hint,
                   ),
@@ -1194,8 +1269,6 @@ class _FindingCardState extends State<_FindingCard> {
               ),
             ),
           ),
-
-          // ─── Expandable body ──────────────────────────
           if (_expanded) ...[
             Divider(height: 1, color: scheme.stroke),
             Padding(
@@ -1203,14 +1276,9 @@ class _FindingCardState extends State<_FindingCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    f.description,
-                    style: AppTypography.body.copyWith(
-                      color: scheme.body,
-                      fontSize: 13,
-                      height: 1.6,
-                    ),
-                  ),
+                  Text(f.description,
+                      style: AppTypography.body
+                          .copyWith(color: scheme.body, fontSize: 13, height: 1.6)),
                   if (f.suggestion != null && f.suggestion!.isNotEmpty) ...[
                     const SizedBox(height: AppSpacing.md),
                     Container(
@@ -1218,37 +1286,29 @@ class _FindingCardState extends State<_FindingCard> {
                       decoration: BoxDecoration(
                         color: scheme.green.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(AppRadius.sm),
-                        border: Border.all(
-                          color: scheme.green.withValues(alpha: 0.2),
-                        ),
+                        border:
+                            Border.all(color: scheme.green.withValues(alpha: 0.2)),
                       ),
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(LucideIcons.lightbulb,
-                              size: 14, color: scheme.green),
+                          Icon(LucideIcons.lightbulb, size: 14, color: scheme.green),
                           const SizedBox(width: AppSpacing.sm),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Suggestion',
-                                  style: AppTypography.caption.copyWith(
-                                    color: scheme.green,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 11,
-                                  ),
-                                ),
+                                Text('Suggestion',
+                                    style: AppTypography.caption.copyWith(
+                                        color: scheme.green,
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 11)),
                                 const SizedBox(height: 4),
-                                Text(
-                                  f.suggestion!,
-                                  style: AppTypography.body.copyWith(
-                                    color: scheme.body,
-                                    fontSize: 13,
-                                    height: 1.5,
-                                  ),
-                                ),
+                                Text(f.suggestion!,
+                                    style: AppTypography.body.copyWith(
+                                        color: scheme.body,
+                                        fontSize: 13,
+                                        height: 1.5)),
                               ],
                             ),
                           ),

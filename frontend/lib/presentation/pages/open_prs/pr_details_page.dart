@@ -7,17 +7,20 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:sellio_metrics/core/constants/app_constants.dart';
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/domain/entities/pr_entity.dart';
 import 'package:sellio_metrics/domain/enums/pr_size_category.dart';
 import 'package:sellio_metrics/domain/services/pr_analysis_service.dart';
+import 'package:sellio_metrics/core/di/injection.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/pr_data_provider.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_details_header.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_code_insights_section.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_media_section.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_ticket_link_section.dart';
 import 'package:sellio_metrics/presentation/pages/open_prs/widgets/pr_expanded_details.dart';
+import 'package:sellio_metrics/presentation/pages/review/providers/review_provider.dart';
 
 class PrDetailsPage extends StatelessWidget {
   final int prNumber;
@@ -70,6 +73,8 @@ class PrDetailsPage extends StatelessWidget {
                     ],
                   ),
                   const Spacer(),
+                  _AiReviewButton(pr: pr),
+                  const SizedBox(width: AppSpacing.sm),
                   _OpenOnGitHubButton(url: pr.url),
                 ],
               ),
@@ -182,6 +187,50 @@ class _OpenOnGitHubButton extends StatelessWidget {
           Icon(LucideIcons.externalLink, size: 14),
           const SizedBox(width: 6),
           const Text('Open on GitHub'),
+        ],
+      ),
+    );
+  }
+}
+
+class _AiReviewButton extends StatelessWidget {
+  final PrEntity pr;
+
+  const _AiReviewButton({required this.pr});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    return SButton(
+      variant: SButtonVariant.outline,
+      onPressed: () {
+        // Parse owner and repo from the PR URL: github.com/owner/repo/pull/N
+        String owner = ApiConfig.defaultOrg;
+        String repo = ApiConfig.defaultRepo;
+        try {
+          final uri = Uri.parse(pr.url);
+          final parts = uri.pathSegments;
+          if (parts.length >= 2) {
+            owner = parts[0];
+            repo = parts[1];
+          }
+        } catch (_) {}
+
+        // Pre-fill the ReviewProvider with this PR's info
+        final reviewProvider = getIt<ReviewProvider>();
+        reviewProvider.prefill(owner: owner, repo: repo, prNumber: pr.prNumber);
+
+        context.go('/review');
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(LucideIcons.sparkles, size: 14, color: scheme.primary),
+          const SizedBox(width: 6),
+          Text(
+            'AI Review',
+            style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w600),
+          ),
         ],
       ),
     );
