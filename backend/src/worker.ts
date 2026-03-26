@@ -41,6 +41,7 @@ import developersRoutes from "./modules/developers/developers.routes";
 import { meetingsRoutes, type CFDurableObjectNamespace } from "./modules/meetings/meetings.routes";
 import debugRoutes      from "./modules/debug/debug.routes";
 import logsRoutes       from "./modules/logs/logs.routes";
+import reviewRoutes     from "./modules/review/review.routes";
 
 // ─── Durable Object export (required by Cloudflare runtime) ────────────────
 export { MeetingRoom } from "./modules/meetings/meeting-room.do";
@@ -64,6 +65,7 @@ interface WorkerEnv {
     DB:             D1Database;
     WEBHOOK_QUEUE?: any;
     MEETING_ROOMS:  CFDurableObjectNamespace;
+    GEMINI_API_KEY?: string;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -79,6 +81,7 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.GOOGLE_CLIENT_SECRET)  process.env.GOOGLE_CLIENT_SECRET = workerEnv.GOOGLE_CLIENT_SECRET;
     if (workerEnv.GOOGLE_REDIRECT_URI)   process.env.GOOGLE_REDIRECT_URI  = workerEnv.GOOGLE_REDIRECT_URI;
     if (workerEnv.GOOGLE_PUBSUB_TOPIC)   process.env.GOOGLE_PUBSUB_TOPIC  = workerEnv.GOOGLE_PUBSUB_TOPIC;
+    if (workerEnv.GEMINI_API_KEY)        process.env.GEMINI_API_KEY       = workerEnv.GEMINI_API_KEY;
 }
 
 function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
@@ -114,6 +117,7 @@ function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
     ));
     app.route("/api/debug",       debugRoutes);
     app.route("/api/logs",        logsRoutes);
+    app.route("/api/review",      reviewRoutes);
 
     app.notFound((c) => c.json({ error: "Not Found" }, 404));
 

@@ -305,4 +305,16 @@ export class CachedGitHubClient {
             { owner, repo, per_page: 100 },
         );
     }
+
+    /**
+     * List files changed in a PR — includes patch diffs, status, additions/deletions per file.
+     * No caching — result is used in one-shot reviews.
+     */
+    async listPrFiles(owner: string, repo: string, pullNumber: number): Promise<any[]> {
+        await this.guard.checkAndWait();
+        return this.github.paginate(
+            this.github.rest.pulls.listFiles,
+            { owner, repo, pull_number: pullNumber, per_page: 100 },
+        );
+    }
 }

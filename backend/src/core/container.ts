@@ -27,6 +27,8 @@ import type { PointsRulesService } from "../modules/points/points-rules.service"
 import type { ScoreAggregationService } from "../modules/scores/score-aggregation.service";
 import type { WebhookService } from "../modules/webhook/webhook.service";
 import type { env } from "../config/env";
+import type { GeminiClient } from "../infra/ai/gemini.client";
+import type { ReviewService } from "../modules/review/review.service";
 import type { Logger } from "./logger";
 
 // ─── Container Shape ────────────────────────────────────────
@@ -89,4 +91,10 @@ export interface Cradle {
     // Webhook
     webhookService: WebhookService;
     webhookQueue: any | null;
+
+    // AI
+    geminiClient: GeminiClient;
+
+    // Review
+    reviewService: ReviewService;
 }
