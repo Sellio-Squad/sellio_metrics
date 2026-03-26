@@ -95,9 +95,19 @@ function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
     }));
 
     // 2. Cradle injection — must come BEFORE routes so c.get('cradle') is available
-    app.use("*", (c, next) => {
+    app.use("*", async (c, next) => {
         c.set("cradle", cradle);
-        return next();
+        const start = Date.now();
+        await next();
+        const ms = Date.now() - start;
+        cradle.logger.info({
+            module: "system",
+            category: "system",
+            method: c.req.method,
+            path: new URL(c.req.url).pathname,
+            status: c.res.status,
+            duration: ms
+        }, `${c.req.method} ${new URL(c.req.url).pathname} - ${c.res.status} (${ms}ms)`);
     });
 
     // 3. Route modules
