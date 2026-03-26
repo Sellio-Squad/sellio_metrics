@@ -177,8 +177,8 @@ async function buildContainer(
         ).singleton(),
 
         // AI
-        geminiClient: asFunction(({ env, logger }: Cradle) =>
-            new GeminiClient({ geminiApiKey: env.geminiApiKey, logger }),
+        geminiClient: asFunction(({ env, logger, cacheService }: Cradle) =>
+            new GeminiClient({ geminiApiKey: env.geminiApiKey, logger, cacheService }),
         ).singleton(),
 
         // Review

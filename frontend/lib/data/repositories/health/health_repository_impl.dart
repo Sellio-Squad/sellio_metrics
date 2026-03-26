@@ -1,4 +1,5 @@
 import 'package:injectable/injectable.dart';
+import 'package:sellio_metrics/domain/entities/gemini_usage_entity.dart';
 import 'package:sellio_metrics/domain/entities/github_rate_limit_status.dart';
 import 'package:sellio_metrics/domain/entities/kv_cache_quota_status.dart';
 import 'package:sellio_metrics/domain/repositories/health_repository.dart';
@@ -26,5 +27,10 @@ class HealthRepositoryImpl implements HealthRepository {
     final body = await _dataSource.fetchCacheQuota();
     if (body == null) return null;
     return body.toEntity();
+  }
+
+  @override
+  Future<GeminiUsageEntity?> getGeminiUsage() async {
+    return _dataSource.fetchGeminiUsage();
   }
 }

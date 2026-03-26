@@ -21,4 +21,10 @@ review.post("/pr", zValidator("json", reviewBodySchema), safe(async (c) => {
     return c.json(result);
 }));
 
+review.get("/usage", safe(async (c) => {
+    const { geminiClient } = useCradle(c);
+    const stats = await geminiClient.getUsageStats();
+    return c.json(stats);
+}));
+
 export default review;
