@@ -51,4 +51,7 @@ class ApiEndpoints {
   // ─── Sync ───
   static const syncGithub = '/api/sync/github';
   static const syncGithubReset = '/api/sync/github/reset';
+
+  // ─── Review ───
+  static const reviewPr = '/api/review/pr';
 }

@@ -4,7 +4,7 @@
 # Uses nodejs_compat for Octokit, Awilix, and Pino support.
 #
 # Secrets (set via dashboard or `wrangler secret put`):
-#   APP_ID, INSTALLATION_ID, APP_PRIVATE_KEY
+#   APP_ID, INSTALLATION_ID, APP_PRIVATE_KEY, GEMINI_API_KEY
 
 name = "sellio-metrics"
 main = "src/worker.ts"

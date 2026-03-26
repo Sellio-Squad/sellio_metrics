@@ -23,6 +23,8 @@ import 'package:sellio_metrics/presentation/pages/observability/providers/health
 import 'package:sellio_metrics/presentation/pages/logs/providers/logs_provider.dart';
 import 'package:sellio_metrics/presentation/pages/sync/sync_page.dart';
 import 'package:sellio_metrics/presentation/pages/sync/providers/sync_provider.dart';
+import 'package:sellio_metrics/presentation/pages/review/code_review_page.dart';
+import 'package:sellio_metrics/presentation/pages/review/providers/review_provider.dart';
 
 // ─── Route Groups ────────────────────────────────────────────
 enum NavGroup { team, product, system }
@@ -131,6 +133,18 @@ class AppNavigation {
       primaryNav: false,
       labelBuilder: (l10n) => l10n.navAbout,
       pageBuilder: (_) => const AboutPage(),
+    ),
+    AppRoute(
+      id: 'code_review',
+      path: '/review',
+      icon: LucideIcons.searchCode,
+      group: NavGroup.product,
+      primaryNav: false,
+      labelBuilder: (_) => 'Code Review',
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: getIt<ReviewProvider>(),
+        child: const CodeReviewPage(),
+      ),
     ),
 
     // ── System (all secondary) ──────────────────────────────
