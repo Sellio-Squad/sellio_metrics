@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
-import 'package:sellio_metrics/core/constants/app_constants.dart';
+
 import 'package:sellio_metrics/core/logging/app_logger.dart';
 import 'package:sellio_metrics/domain/entities/repo_info.dart';
 import 'package:sellio_metrics/domain/entities/review_entity.dart';
@@ -66,24 +66,22 @@ class ReviewProvider extends ChangeNotifier {
       _repos = rawRepos
           .whereType<Map<String, dynamic>>()
           .map((r) => RepoInfo(
-                name: r['name'] as String? ?? '',
-                fullName: r['fullName'] as String? ?? '',
-              ))
+        name: r['name'] as String? ?? '',
+        fullName: r['fullName'] as String? ?? '',
+      ))
           .toList();
 
       final rawPrs = meta['prs'] as List<dynamic>? ?? [];
       _openPrs = rawPrs.whereType<Map<String, dynamic>>().map((p) {
-        final url = p['url'] as String? ?? '';
-        final urlParts = url.split('/');
-        final repo = urlParts.length >= 5 ? urlParts[4] : '';
         return SlimPrEntry(
-          prNumber: p['prNumber'] as int? ?? 0,
-          title: p['title'] as String? ?? '',
-          author: p['author'] as String? ?? '',
-          repo: repo,
-          additions: p['additions'] as int? ?? 0,
-          deletions: p['deletions'] as int? ?? 0,
-          url: url,
+          prNumber:  p['prNumber']  as int?    ?? 0,
+          title:     p['title']     as String? ?? '',
+          author:    p['author']    as String? ?? '',
+          owner:     p['owner']     as String? ?? '',
+          repo:      p['repoName']  as String? ?? '',
+          additions: p['additions'] as int?    ?? 0,
+          deletions: p['deletions'] as int?    ?? 0,
+          url:       p['url']       as String? ?? '',
         );
       }).toList();
 
@@ -113,19 +111,20 @@ class ReviewProvider extends ChangeNotifier {
   // ─── External pre-fill (from PR details page) ────────────────
   void prefill({required String owner, required String repo, required int prNumber}) {
     _selectedRepo = _repos.firstWhere(
-      (r) => r.name.toLowerCase() == repo.toLowerCase(),
+          (r) => r.name.toLowerCase() == repo.toLowerCase(),
       orElse: () => RepoInfo(name: repo, fullName: '$owner/$repo'),
     );
     _selectedPr = _openPrs.firstWhere(
-      (pr) => pr.prNumber == prNumber,
+          (pr) => pr.prNumber == prNumber,
       orElse: () => SlimPrEntry(
-        prNumber: prNumber,
-        title: 'PR #$prNumber',
-        author: '',
-        repo: repo,
+        prNumber:  prNumber,
+        title:     'PR #$prNumber',
+        author:    '',
+        owner:     owner,
+        repo:      repo,
         additions: 0,
         deletions: 0,
-        url: 'https://github.com/$owner/$repo/pull/$prNumber',
+        url:       'https://github.com/$owner/$repo/pull/$prNumber',
       ),
     );
     notifyListeners();
@@ -146,9 +145,13 @@ class ReviewProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final parts = _selectedRepo!.fullName.split('/');
-      final owner = parts.isNotEmpty ? parts[0] : ApiConfig.defaultOrg;
-      final repo  = parts.length > 1 ? parts[1] : _selectedRepo!.name;
+      // owner + repo come directly from the PR entry (set by backend)
+      final owner = _selectedPr!.owner.isNotEmpty
+          ? _selectedPr!.owner
+          : _selectedRepo!.fullName.split('/').first;
+      final repo  = _selectedPr!.repo.isNotEmpty
+          ? _selectedPr!.repo
+          : _selectedRepo!.name;
 
       _review = await _repository.reviewPr(
         owner: owner,
@@ -178,6 +181,7 @@ class SlimPrEntry {
   final int prNumber;
   final String title;
   final String author;
+  final String owner;
   final String repo;
   final int additions;
   final int deletions;
@@ -187,6 +191,7 @@ class SlimPrEntry {
     required this.prNumber,
     required this.title,
     required this.author,
+    required this.owner,
     required this.repo,
     required this.additions,
     required this.deletions,
