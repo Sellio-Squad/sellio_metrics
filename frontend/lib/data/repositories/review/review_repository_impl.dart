@@ -51,6 +51,10 @@ class ReviewRepositoryImpl implements ReviewRepository {
       hasIssues: reviewMap['hasIssues'] as bool? ?? false,
       reviewedAt:
           DateTime.tryParse(data['reviewedAt'] as String? ?? '') ?? DateTime.now(),
+      fromCache: data['fromCache'] as bool? ?? false,
+      reviewMeta: data['reviewMeta'] != null
+          ? ReviewMetaEntity.fromJson(data['reviewMeta'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -67,5 +71,10 @@ class ReviewRepositoryImpl implements ReviewRepository {
               suggestion: f['suggestion'] as String?,
             ))
         .toList();
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchMeta() async {
+    return _dataSource.fetchMeta();
   }
 }

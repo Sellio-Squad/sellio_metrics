@@ -62,6 +62,7 @@ async function buildContainer(
     const { WebhookHandlerService } = await import("../modules/meetings/webhook-handler.service");
     const { WebhookService } = await import("../modules/webhook/webhook.service");
     const { GeminiClient } = await import("../infra/ai/gemini.client");
+    const { PrContextFetcher } = await import("../modules/review/pr-context-fetcher");
     const { ReviewService } = await import("../modules/review/review.service");
 
     let isLogging = false;
@@ -182,8 +183,12 @@ async function buildContainer(
         ).singleton(),
 
         // Review
-        reviewService: asFunction(({ cachedGithubClient, geminiClient, logger }: Cradle) =>
-            new ReviewService({ cachedGithubClient, geminiClient, logger }),
+        prContextFetcher: asFunction(({ cachedGithubClient, logger }: Cradle) =>
+            new PrContextFetcher({ cachedGithubClient, logger }),
+        ).singleton(),
+
+        reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, logger }: Cradle) =>
+            new ReviewService({ prContextFetcher, geminiClient, cacheService, logger }),
         ).singleton(),
     });
 

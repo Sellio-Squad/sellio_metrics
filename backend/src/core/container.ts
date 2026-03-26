@@ -28,6 +28,7 @@ import type { ScoreAggregationService } from "../modules/scores/score-aggregatio
 import type { WebhookService } from "../modules/webhook/webhook.service";
 import type { env } from "../config/env";
 import type { GeminiClient } from "../infra/ai/gemini.client";
+import type { PrContextFetcher } from "../modules/review/pr-context-fetcher";
 import type { ReviewService } from "../modules/review/review.service";
 import type { Logger } from "./logger";
 
@@ -96,5 +97,6 @@ export interface Cradle {
     geminiClient: GeminiClient;
 
     // Review
+    prContextFetcher: PrContextFetcher;
     reviewService: ReviewService;
 }
