@@ -14,6 +14,31 @@ type ReviewBody = z.infer<typeof reviewBodySchema>;
 
 const review = new Hono<HonoEnv>();
 
+// ─── Single-request meta for dropdowns (repos + open PRs) ────
+review.get("/meta", safe(async (c) => {
+    const { reposService, openPrsService, env } = useCradle(c);
+    const org = env.org;
+
+    // Both are cached — this is effectively a cache read, not two network hits
+    const [repos, openPrs] = await Promise.all([
+        reposService.listByOrg(org),
+        openPrsService.fetchOpenPrs(org),
+    ]);
+
+    // Return slim PR shape (only what the dropdown needs)
+    const prs = openPrs.map((pr: any) => ({
+        prNumber: pr.pr_number,
+        title:    pr.title,
+        url:      pr.url,
+        author:   pr.creator?.login ?? "",
+        additions: pr.diff_stats?.additions ?? 0,
+        deletions: pr.diff_stats?.deletions ?? 0,
+    }));
+
+    return c.json({ repos, prs });
+}));
+
+// ─── Run AI review ───────────────────────────────────────────
 review.post("/pr", zValidator("json", reviewBodySchema), safe(async (c) => {
     const { reviewService } = useCradle(c);
     const { owner, repo, prNumber } = c.req.valid("json") as ReviewBody;
@@ -21,6 +46,7 @@ review.post("/pr", zValidator("json", reviewBodySchema), safe(async (c) => {
     return c.json(result);
 }));
 
+// ─── Gemini usage stats ──────────────────────────────────────
 review.get("/usage", safe(async (c) => {
     const { geminiClient } = useCradle(c);
     const stats = await geminiClient.getUsageStats();

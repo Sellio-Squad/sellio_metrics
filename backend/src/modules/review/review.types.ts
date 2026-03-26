@@ -36,6 +36,7 @@ export interface ReviewResponse {
     files: PrFileChange[];
     review: import("../../infra/ai/gemini.client").GeminiReviewResult;
     reviewedAt: string;
+    fromCache?: boolean;
     reviewMeta: {
         totalFiles: number;
         filesReviewed: number;

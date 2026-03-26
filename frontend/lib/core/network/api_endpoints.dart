@@ -55,4 +55,5 @@ class ApiEndpoints {
   // ─── Review ───
   static const reviewPr    = '/api/review/pr';
   static const reviewUsage = '/api/review/usage';
+  static const reviewMeta  = '/api/review/meta';
 }

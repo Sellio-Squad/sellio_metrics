@@ -70,6 +70,30 @@ class ReviewPrInfoEntity {
   });
 }
 
+class ReviewMetaEntity {
+  final int totalFiles;
+  final int filesReviewed;
+  final int filesSkipped;
+  final int totalCharsReviewed;
+  final int charBudget;
+
+  const ReviewMetaEntity({
+    required this.totalFiles,
+    required this.filesReviewed,
+    required this.filesSkipped,
+    required this.totalCharsReviewed,
+    required this.charBudget,
+  });
+
+  factory ReviewMetaEntity.fromJson(Map<String, dynamic> json) => ReviewMetaEntity(
+        totalFiles:         json['totalFiles']         as int? ?? 0,
+        filesReviewed:      json['filesReviewed']      as int? ?? 0,
+        filesSkipped:       json['filesSkipped']       as int? ?? 0,
+        totalCharsReviewed: json['totalCharsReviewed'] as int? ?? 0,
+        charBudget:         json['charBudget']         as int? ?? 30000,
+      );
+}
+
 class ReviewEntity {
   final ReviewPrInfoEntity pr;
   final String prSummary;
@@ -79,6 +103,8 @@ class ReviewEntity {
   final List<ReviewFindingEntity> performance;
   final bool hasIssues;
   final DateTime reviewedAt;
+  final bool fromCache;
+  final ReviewMetaEntity? reviewMeta;
 
   const ReviewEntity({
     required this.pr,
@@ -89,6 +115,8 @@ class ReviewEntity {
     required this.performance,
     required this.hasIssues,
     required this.reviewedAt,
+    this.fromCache = false,
+    this.reviewMeta,
   });
 
   int get totalIssues =>

@@ -4,4 +4,7 @@ abstract class ReviewDataSource {
     required String repo,
     required int prNumber,
   });
+
+  /// One request returning { repos: [...], prs: [...] } for the review dropdowns
+  Future<Map<String, dynamic>> fetchMeta();
 }
