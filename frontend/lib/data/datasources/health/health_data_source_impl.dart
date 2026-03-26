@@ -3,6 +3,7 @@ import 'package:injectable/injectable.dart';
 import 'package:sellio_metrics/core/network/api_client.dart';
 import 'package:sellio_metrics/data/models/health/kv_cache_quota_model.dart';
 import 'package:sellio_metrics/data/datasources/health/health_data_source.dart';
+import 'package:sellio_metrics/domain/entities/gemini_usage_entity.dart';
 
 @Injectable(as: HealthDataSource, env: [Environment.prod])
 class HealthDataSourceImpl implements HealthDataSource {
@@ -25,6 +26,18 @@ class HealthDataSourceImpl implements HealthDataSource {
       return await _apiClient.get<KvCacheQuotaModel>(
         ApiEndpoints.cacheQuota,
         parser: (data) => KvCacheQuotaModel.fromJson(data as Map<String, dynamic>),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<GeminiUsageEntity?> fetchGeminiUsage() async {
+    try {
+      return await _apiClient.get<GeminiUsageEntity>(
+        ApiEndpoints.reviewUsage,
+        parser: (data) => GeminiUsageEntity.fromJson(data as Map<String, dynamic>),
       );
     } catch (_) {
       return null;
