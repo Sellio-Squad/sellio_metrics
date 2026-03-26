@@ -61,6 +61,8 @@ async function buildContainer(
     const { MeetingsRepository } = await import("../modules/meetings/meetings.repository");
     const { WebhookHandlerService } = await import("../modules/meetings/webhook-handler.service");
     const { WebhookService } = await import("../modules/webhook/webhook.service");
+    const { GeminiClient } = await import("../infra/ai/gemini.client");
+    const { ReviewService } = await import("../modules/review/review.service");
 
     const logger = createConsoleLogger();
     const container = createContainer<Cradle>({ injectionMode: InjectionMode.PROXY });
@@ -148,6 +150,16 @@ async function buildContainer(
         webhookQueue: asFunction(() => webhookQueue).singleton(),
         webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) =>
             new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, cachedGithubClient, env }),
+        ).singleton(),
+
+        // AI
+        geminiClient: asFunction(({ env, logger }: Cradle) =>
+            new GeminiClient({ geminiApiKey: env.geminiApiKey, logger }),
+        ).singleton(),
+
+        // Review
+        reviewService: asFunction(({ cachedGithubClient, geminiClient, logger }: Cradle) =>
+            new ReviewService({ cachedGithubClient, geminiClient, logger }),
         ).singleton(),
     });
 
