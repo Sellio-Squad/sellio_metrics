@@ -26,4 +26,12 @@ class ReviewDataSourceImpl implements ReviewDataSource {
       parser: (data) => data as Map<String, dynamic>,
     );
   }
+
+  @override
+  Future<Map<String, dynamic>> fetchMeta() async {
+    return await _apiClient.get<Map<String, dynamic>>(
+      ApiEndpoints.reviewMeta,
+      parser: (data) => data as Map<String, dynamic>,
+    );
+  }
 }

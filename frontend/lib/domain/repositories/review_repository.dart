@@ -6,4 +6,7 @@ abstract class ReviewRepository {
     required String repo,
     required int prNumber,
   });
+
+  /// Single request → { repos: [...], prs: [...] }
+  Future<Map<String, dynamic>> fetchMeta();
 }
