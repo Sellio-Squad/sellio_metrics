@@ -103,6 +103,8 @@ class _LogsPageState extends State<LogsPage> {
         children: [
           _buildFilterChip('All Events', null),
           const SizedBox(width: AppSpacing.sm),
+          _buildFilterChip('Frontend', LogCategory.frontend),
+          const SizedBox(width: AppSpacing.sm),
           _buildFilterChip('GitHub & PRs', LogCategory.github),
           const SizedBox(width: AppSpacing.sm),
           _buildFilterChip('Google Meet', LogCategory.googleMeet),
