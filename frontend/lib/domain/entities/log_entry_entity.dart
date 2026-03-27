@@ -15,7 +15,8 @@ enum LogSeverity {
 enum LogCategory {
   github,
   googleMeet,
-  system;
+  system,
+  frontend;
 
   static LogCategory fromString(String? value) =>
       _lookup[value?.toLowerCase()] ?? LogCategory.system;

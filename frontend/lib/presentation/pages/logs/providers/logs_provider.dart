@@ -1,8 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
-
 import 'package:sellio_metrics/domain/entities/log_entry_entity.dart';
 import 'package:sellio_metrics/domain/repositories/logs_repository.dart';
+import 'package:sellio_metrics/core/logging/app_logger.dart';
 
 @injectable
 class LogsProvider extends ChangeNotifier {
@@ -24,7 +24,11 @@ class LogsProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _logs = await _repository.getLogs(limit: limit);
+      final backendLogs = await _repository.getLogs(limit: limit);
+      final frontendLogs = appLogger.logs;
+      
+      _logs = [...backendLogs, ...frontendLogs];
+      _logs.sort((a, b) => b.timestamp.compareTo(a.timestamp));
     } catch (e) {
       _error = e.toString();
     } finally {
