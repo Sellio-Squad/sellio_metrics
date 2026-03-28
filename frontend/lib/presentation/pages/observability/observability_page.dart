@@ -1,13 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/presentation/pages/observability/providers/health_status_provider.dart';
 import 'package:sellio_metrics/presentation/pages/setting/widgets/gemini_usage_banner.dart';
 import 'package:sellio_metrics/presentation/pages/setting/widgets/github_rate_limit_banner.dart';
 import 'package:sellio_metrics/presentation/pages/setting/widgets/kv_cache_quota_banner.dart';
 
-class ObservabilityPage extends StatelessWidget {
+/// Displays system health metrics: GitHub rate limits, KV cache quota,
+/// and Gemini AI usage.
+///
+/// Manages its own data lifecycle:
+/// - [initState]: fetches data and starts the auto-refresh timer
+/// - [dispose]: stops the timer to prevent memory leaks
+class ObservabilityPage extends StatefulWidget {
   const ObservabilityPage({super.key});
+
+  @override
+  State<ObservabilityPage> createState() => _ObservabilityPageState();
+}
+
+class _ObservabilityPageState extends State<ObservabilityPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final provider = context.read<HealthStatusProvider>();
+      provider.fetchAll();
+      provider.startAutoRefresh();
+    });
+  }
+
+  @override
+  void dispose() {
+    // Stop the timer when the page is removed from the tree.
+    context.read<HealthStatusProvider>().stopAutoRefresh();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -28,14 +59,16 @@ class ObservabilityPage extends StatelessWidget {
           children: [
             Text(
               l10n.obsSubtitle,
-              style: context.textTheme.bodyMedium?.copyWith(color: scheme.hint),
+              style:
+                  context.textTheme.bodyMedium?.copyWith(color: scheme.hint),
             ),
             const SizedBox(height: AppSpacing.xl),
 
-            // ─── GitHub & KV Rate Limits ───────────────
+            // ─── GitHub & KV Rate Limits ────────────────────────
             Text(
               l10n.obsRateLimits,
-              style: context.textTheme.titleMedium?.copyWith(color: scheme.title),
+              style: context.textTheme.titleMedium
+                  ?.copyWith(color: scheme.title),
             ),
             const SizedBox(height: AppSpacing.md),
             const SCard(
@@ -54,14 +87,16 @@ class ObservabilityPage extends StatelessWidget {
 
             const SizedBox(height: AppSpacing.xl),
 
-            // ─── Gemini AI Quota ───────────────────────
+            // ─── Gemini AI Quota ────────────────────────────────
             Row(
               children: [
-                Icon(LucideIcons.sparkles, size: 16, color: scheme.primary),
+                Icon(LucideIcons.sparkles,
+                    size: 16, color: scheme.primary),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   'Gemini AI Quota',
-                  style: context.textTheme.titleMedium?.copyWith(color: scheme.title),
+                  style: context.textTheme.titleMedium
+                      ?.copyWith(color: scheme.title),
                 ),
               ],
             ),

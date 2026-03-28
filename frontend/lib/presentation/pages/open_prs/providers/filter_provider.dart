@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
-
 import 'package:sellio_metrics/core/constants/app_constants.dart';
 
 @injectable

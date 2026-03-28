@@ -17,6 +17,15 @@ class LogsPage extends StatefulWidget {
 class _LogsPageState extends State<LogsPage> {
   LogCategory? _selectedCategory;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      context.read<LogsProvider>().fetchLogs();
+    });
+  }
+
   List<LogEntry> _getFilteredLogs(List<LogEntry> logs) {
     if (_selectedCategory == null) return logs;
     return logs.where((log) => log.category == _selectedCategory).toList();
