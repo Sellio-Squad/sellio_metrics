@@ -3,7 +3,7 @@ import 'package:sellio_metrics/data/datasources/review/review_data_source.dart';
 import 'package:sellio_metrics/domain/entities/review_entity.dart';
 import 'package:sellio_metrics/domain/repositories/review_repository.dart';
 
-@Injectable(as: ReviewRepository, env: [Environment.prod])
+@Injectable(as: ReviewRepository)
 class ReviewRepositoryImpl implements ReviewRepository {
   final ReviewDataSource _dataSource;
 

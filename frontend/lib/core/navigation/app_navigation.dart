@@ -33,11 +33,11 @@ extension NavGroupX on NavGroup {
   String label(AppLocalizations l10n) {
     switch (this) {
       case NavGroup.team:
-        return 'TEAM'; // TODO: Add l10n.navGroupTeam
+        return 'TEAM';
       case NavGroup.product:
-        return 'PRODUCT'; // TODO: Add l10n.navGroupProduct
+        return 'PRODUCT';
       case NavGroup.system:
-        return 'SYSTEM'; // TODO: Add l10n.navGroupSystem
+        return 'SYSTEM';
     }
   }
 }
@@ -140,7 +140,7 @@ class AppNavigation {
       icon: LucideIcons.searchCode,
       group: NavGroup.product,
       primaryNav: false,
-      labelBuilder: (_) => 'Code Review',
+      labelBuilder: (l10n) => 'Code Review', // TODO: Add l10n.navCodeReview
       pageBuilder: (_) => ChangeNotifierProvider.value(
         value: getIt<ReviewProvider>(),
         child: const CodeReviewPage(),
@@ -156,9 +156,7 @@ class AppNavigation {
       primaryNav: false,
       labelBuilder: (l10n) => l10n.navSettings,
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: getIt<HealthStatusProvider>()
-          ..fetchAll()
-          ..startAutoRefresh(),
+        value: getIt<HealthStatusProvider>(),
         child: const SettingsPage(),
       ),
     ),
@@ -170,7 +168,7 @@ class AppNavigation {
       primaryNav: false,
       labelBuilder: (l10n) => l10n.navLogs,
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: getIt<LogsProvider>()..fetchLogs(),
+        value: getIt<LogsProvider>(),
         child: const LogsPage(),
       ),
     ),
@@ -182,9 +180,7 @@ class AppNavigation {
       primaryNav: false,
       labelBuilder: (l10n) => l10n.navObservability,
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: getIt<HealthStatusProvider>()
-          ..fetchAll()
-          ..startAutoRefresh(),
+        value: getIt<HealthStatusProvider>(),
         child: const ObservabilityPage(),
       ),
     ),
@@ -194,7 +190,7 @@ class AppNavigation {
       icon: LucideIcons.gitCommit,
       group: NavGroup.system,
       primaryNav: false,
-      labelBuilder: (l10n) => 'Sync',
+      labelBuilder: (l10n) => 'Sync', // TODO: Add l10n.navSync
       pageBuilder: (_) => ChangeNotifierProvider.value(
         value: getIt<SyncProvider>(),
         child: const SyncPage(),

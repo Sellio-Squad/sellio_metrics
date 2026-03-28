@@ -22,7 +22,11 @@ class AppSettingsProvider extends ChangeNotifier {
   bool _isLoadingRepos = false;
   String? _errorRepoLoad;
 
-  AppSettingsProvider(this._repository);
+  AppSettingsProvider(this._repository) {
+    // Self-initialize: each page reacts to selectedRepos changes via
+    // addListener, so no external caller needs to trigger this.
+    Future.microtask(loadRepositories);
+  }
 
   ThemeMode get themeMode => _themeMode;
   Locale get locale => _locale;
