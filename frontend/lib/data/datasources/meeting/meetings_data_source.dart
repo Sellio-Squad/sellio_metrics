@@ -4,7 +4,6 @@
 // Added: watchMeeting / unwatchMeeting via WebSocket.
 
 import 'package:sellio_metrics/data/models/meeting/meeting_model.dart';
-import 'package:sellio_metrics/data/models/meeting/participant_model.dart';
 import 'package:sellio_metrics/domain/repositories/meetings_repository.dart';
 
 abstract class MeetingsDataSource {

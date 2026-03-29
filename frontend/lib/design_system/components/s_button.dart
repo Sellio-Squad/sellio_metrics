@@ -1,34 +1,27 @@
-/// Sellio Design System — SButton
-///
-/// Wrapper around HuxButton that isolates the presentation layer
-/// from direct Hux dependency.
-
 import 'package:hux/hux.dart';
 
-/// Button variant mirroring HuxButtonVariant.
 enum SButtonVariant { primary, ghost, outline }
 
-/// Button size mirroring HuxButtonSize.
 enum SButtonSize { small, medium, large }
 
 HuxButtonVariant _toHuxVariant(SButtonVariant v) => switch (v) {
   SButtonVariant.primary => HuxButtonVariant.primary,
-  SButtonVariant.ghost => HuxButtonVariant.ghost,
+  SButtonVariant.ghost   => HuxButtonVariant.ghost,
   SButtonVariant.outline => HuxButtonVariant.outline,
 };
 
 HuxButtonSize _toHuxSize(SButtonSize s) => switch (s) {
-  SButtonSize.small => HuxButtonSize.small,
+  SButtonSize.small  => HuxButtonSize.small,
   SButtonSize.medium => HuxButtonSize.medium,
-  SButtonSize.large => HuxButtonSize.large,
+  SButtonSize.large  => HuxButtonSize.large,
 };
 
-/// Sellio button component.
 class SButton extends HuxButton {
   SButton({
     super.key,
     required super.child,
     super.onPressed,
+    super.primaryColor,  // pass-through for custom colour (e.g. SellioColors.red)
     SButtonVariant variant = SButtonVariant.primary,
     SButtonSize size = SButtonSize.medium,
   }) : super(variant: _toHuxVariant(variant), size: _toHuxSize(size));

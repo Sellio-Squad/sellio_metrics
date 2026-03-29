@@ -1,4 +1,3 @@
-
 import 'package:hux/hux.dart';
 
 enum SAvatarSize { small, medium, large }
