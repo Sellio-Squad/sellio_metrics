@@ -1,7 +1,7 @@
-/// Meetings Provider
-///
-/// Single responsibility: manages meeting list + CRUD state.
-/// Real-time participant updates are handled by a separate MeetingWatchProvider.
+// Meetings Provider
+//
+// Single responsibility: manages meeting list + CRUD state.
+// Real-time participant updates are handled by a separate MeetingWatchProvider.
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -9,6 +9,7 @@ import 'package:injectable/injectable.dart';
 
 import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
 import 'package:sellio_metrics/domain/entities/participant_entity.dart';
+import 'package:sellio_metrics/domain/entities/regular_meeting_schedule.dart';
 import 'package:sellio_metrics/domain/repositories/meetings_repository.dart';
 
 @injectable
@@ -27,6 +28,9 @@ class MeetingsProvider extends ChangeNotifier {
 
   List<ParticipantEntity> _participants = [];
   List<ParticipantEntity> get participants => _participants;
+
+  List<RegularMeetingSchedule> _regularMeetings = [];
+  List<RegularMeetingSchedule> get regularMeetings => _regularMeetings;
 
   bool _isLoading  = false;
   bool get isLoading => _isLoading;
@@ -98,6 +102,8 @@ class MeetingsProvider extends ChangeNotifier {
       if (_isAuthenticated) {
         _meetings = await _repository.getMeetings();
       }
+      // Load schedule data from data layer
+      _regularMeetings = await _repository.getRegularMeetings();
     } catch (e) {
       _error = 'Failed to load meetings: $e';
     } finally {
@@ -131,6 +137,43 @@ class MeetingsProvider extends ChangeNotifier {
       _isCreating = false;
       notifyListeners();
       return false;
+    }
+  }
+
+  // ─── Regular Meeting Schedule CRUD ──────────────────────────────────────────
+
+  bool _isScheduleLoading = false;
+  bool get isScheduleLoading => _isScheduleLoading;
+
+  Future<bool> createRegularMeeting(RegularMeetingSchedule schedule) async {
+    _isScheduleLoading = true;
+    notifyListeners();
+    try {
+      final created = await _repository.createRegularMeeting(schedule);
+      _regularMeetings = [..._regularMeetings, created];
+      return true;
+    } catch (e) {
+      _error = 'Failed to create schedule: $e';
+      return false;
+    } finally {
+      _isScheduleLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteRegularMeeting(String id) async {
+    _isScheduleLoading = true;
+    notifyListeners();
+    try {
+      await _repository.deleteRegularMeeting(id);
+      _regularMeetings = _regularMeetings.where((s) => s.id != id).toList();
+      return true;
+    } catch (e) {
+      _error = 'Failed to delete schedule: $e';
+      return false;
+    } finally {
+      _isScheduleLoading = false;
+      notifyListeners();
     }
   }
 
