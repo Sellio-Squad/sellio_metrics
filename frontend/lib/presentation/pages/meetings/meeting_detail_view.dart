@@ -1,8 +1,16 @@
-import 'dart:async';
+// ─── Meeting Detail View ──────────────────────────────────────────────────────
+//
+// Thin orchestrator that composes:
+//   • MeetingHeroCard
+//   • KpiRow
+//   • HuxTabs → Live / History / Reports
+//
+// All heavy UI logic lives in the widgets/ sub-directory.
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
-import 'package:sellio_metrics/l10n/app_localizations.dart';
+import 'package:hux/hux.dart' hide DateFormat;
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/domain/entities/participant_entity.dart';
@@ -10,13 +18,22 @@ import 'package:sellio_metrics/domain/repositories/meetings_repository.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_provider.dart';
 import 'package:sellio_metrics/presentation/pages/meetings/providers/meeting_watch_provider.dart';
 import 'package:sellio_metrics/presentation/widgets/common/loading_screen.dart';
-
 import 'package:sellio_metrics/core/di/injection.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/widgets/meeting_hero_card.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/widgets/kpi_row.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/widgets/participants_live_tab.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/widgets/participants_history_tab.dart';
+import 'package:sellio_metrics/presentation/pages/meetings/widgets/attendance_report_tab.dart';
 
 class MeetingDetailView extends StatefulWidget {
   final String meetingId;
+  final VoidCallback onBack;
 
-  const MeetingDetailView({super.key, required this.meetingId});
+  const MeetingDetailView({
+    super.key,
+    required this.meetingId,
+    required this.onBack,
+  });
 
   @override
   State<MeetingDetailView> createState() => _MeetingDetailViewState();
@@ -30,7 +47,7 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
     super.initState();
     _watch = MeetingWatchProvider(
       repository: getIt<MeetingsRepository>(),
-      meetingId:  widget.meetingId,
+      meetingId: widget.meetingId,
     );
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -45,342 +62,276 @@ class _MeetingDetailViewState extends State<MeetingDetailView> {
     super.dispose();
   }
 
+  int _calculateAverageDuration(List<ParticipantEntity> history) {
+    if (history.isEmpty) return 0;
+    int total = 0;
+    for (final p in history) {
+      final end = p.endTime ?? DateTime.now();
+      total += end.difference(p.startTime).inMinutes.clamp(0, 9999);
+    }
+    return (total / history.length).round();
+  }
+
   @override
   Widget build(BuildContext context) {
-    final scheme = context.colors;
+    return Consumer<MeetingsProvider>(
+      builder: (context, meetingsProvider, _) {
+        final meeting = meetingsProvider.selectedMeeting;
 
-    return Dialog(
-      backgroundColor: scheme.surface,
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
-      insetPadding: const EdgeInsets.symmetric(horizontal: 40, vertical: 24),
-      child: Container(
-        width: 800,
-        height: 600,
-        padding: const EdgeInsets.all(AppSpacing.xxl),
-        child: Consumer<MeetingsProvider>(
-          builder: (context, meetingsProvider, _) {
-            final meeting = meetingsProvider.selectedMeeting;
-            if (meetingsProvider.isLoading && meeting == null) {
-              return const LoadingScreen();
-            }
-            if (meeting == null) {
-              return Center(child: Text(meetingsProvider.error ?? 'Unknown error'));
-            }
+        if (meetingsProvider.isLoading && meeting == null) {
+          return const LoadingScreen();
+        }
+        if (meeting == null) {
+          return _ErrorState(
+            error: meetingsProvider.error ?? 'Unknown error',
+            onBack: widget.onBack,
+          );
+        }
 
-            return AnimatedBuilder(
-              animation: _watch,
-              builder: (context, _) {
-                // Instantly absorb existing snapshot
-                _watch.initializeWithRestData(meetingsProvider.participants);
+        return AnimatedBuilder(
+          animation: _watch,
+          builder: (context, _) {
+            _watch.initializeWithRestData(meetingsProvider.participants);
 
-                final active  = _watch.active;
-                final history = _watch.history;
-                final formatter = DateFormat('MMM d, h:mm a');
+            final active = _watch.active;
+            final history = _watch.history;
+            final formatter = DateFormat('MMM d, yyyy · h:mm a');
 
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ─── Header ──────────────────────────────────────────
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                meeting.title,
-                                style: AppTypography.title.copyWith(
-                                  fontSize: 24, color: scheme.title,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Row(
-                                children: [
-                                  Text(
-                                    '${formatter.format(meeting.createdAt)} • ${meeting.meetingCode}',
-                                    style: AppTypography.body.copyWith(color: scheme.hint),
-                                  ),
-                                  if (_watch.isConnected) ...[
-                                    const SizedBox(width: AppSpacing.sm),
-                                    Container(
-                                      width: 8, height: 8,
-                                      decoration: const BoxDecoration(
-                                        color: SellioColors.green,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      'Live',
-                                      style: AppTypography.caption.copyWith(
-                                        color: SellioColors.green,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            SButton(
-                              variant: SButtonVariant.ghost,
-                              onPressed: () async {
-                                final ok = await meetingsProvider.endMeeting(widget.meetingId);
-                                if (ok && context.mounted) Navigator.of(context).pop();
-                              },
-                              child: meetingsProvider.isLoading
-                                  ? const SizedBox(
-                                      width: 16, height: 16,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : const Text('End Meeting'),
-                            ),
-                            const SizedBox(width: AppSpacing.md),
-                            IconButton(
-                              icon: Icon(LucideIcons.x, color: scheme.hint),
-                              onPressed: () {
-                                meetingsProvider.clearSelection();
-                                Navigator.of(context).pop();
-                              },
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xxl),
-
-                    Row(
-                      children: [
-                        _KpiCard(
-                          label: 'Live Now',
-                          value: active.length.toString(),
-                          icon: LucideIcons.radio,
-                          iconColor: active.isNotEmpty ? SellioColors.green : null,
-                        ),
-                        const SizedBox(width: AppSpacing.lg),
-                        _KpiCard(
-                          label: 'Total Attended',
-                          value: history.length.toString(),
-                          icon: LucideIcons.users,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-
-                    // ─── Meeting ended banner ─────────────────────────────
-                    if (_watch.meetingEnded)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                        child: SBadge(label: 'Meeting Ended', variant: SBadgeVariant.error),
+            return Align(
+              alignment: Alignment.topLeft,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 1200),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // ── Hero Card
+                      MeetingHeroCard(
+                        title: meeting.title,
+                        meetingCode: meeting.meetingCode,
+                        createdAt: formatter.format(meeting.createdAt),
+                        meetingUri: meeting.meetingUri,
+                        isConnected: _watch.isConnected,
+                        meetingEnded: _watch.meetingEnded,
+                        isLoading: meetingsProvider.isLoading,
+                        onEndMeeting: () async {
+                          final ok = await meetingsProvider
+                              .endMeeting(widget.meetingId);
+                          if (ok && context.mounted) widget.onBack();
+                        },
                       ),
+                      const SizedBox(height: AppSpacing.xl),
 
-                    // ─── Participants list ────────────────────────────────
-                    Text(
-                      'Attendance History',
-                      style: AppTypography.title.copyWith(fontSize: 18, color: scheme.title),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
+                      // ── KPI Row
+                      KpiRow(
+                        activeCount: active.length,
+                        totalCount: history.length,
+                        averageDuration: _calculateAverageDuration(history),
+                      ),
+                      const SizedBox(height: AppSpacing.xl),
 
-                    Expanded(
-                      child: Builder(builder: (ctx) {
-                        final list = List.of(history)..sort((a, b) {
-                            if (a.isCurrentlyPresent && !b.isCurrentlyPresent) return -1;
-                            if (!a.isCurrentlyPresent && b.isCurrentlyPresent) return 1;
-                            return b.startTime.compareTo(a.startTime);
-                        });
-                        
-                        if (list.isEmpty) {
-                          return Center(
-                            child: Text(
-                              'No participants yet.',
-                              style: AppTypography.body.copyWith(color: scheme.hint),
-                            ),
-                          );
-                        }
-                        return ListView.separated(
-                          itemCount: list.length,
-                          separatorBuilder: (_, __) => Divider(color: scheme.stroke),
-                          itemBuilder: (_, i) => _ParticipantRow(participant: list[i]),
-                        );
-                      }),
-                    ),
-                  ],
-                );
-              },
+                      // ── Meeting ended banner
+                      if (_watch.meetingEnded) _MeetingEndedBanner(),
+
+                      // ── Participants with tabs
+                      _ParticipantsTabbedSection(
+                        active: active,
+                        history: history,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             );
           },
-        ),
-      ),
+        );
+      },
     );
   }
 }
 
-class _KpiCard extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-  final Color? iconColor;
+// ─── Participants Tabbed Section ──────────────────────────────────────────────
 
-  const _KpiCard({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.iconColor,
+class _ParticipantsTabbedSection extends StatelessWidget {
+  final List<ParticipantEntity> active;
+  final List<ParticipantEntity> history;
+
+  const _ParticipantsTabbedSection({
+    required this.active,
+    required this.history,
   });
 
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final color  = iconColor ?? scheme.primary;
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.lg),
-        decoration: BoxDecoration(
-          color: scheme.surface,
-          borderRadius: AppRadius.mdAll,
-          border: Border.all(color: scheme.stroke),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(AppSpacing.md),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.1),
-                borderRadius: AppRadius.smAll,
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(width: AppSpacing.lg),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(label, style: AppTypography.caption.copyWith(color: scheme.hint)),
-                const SizedBox(height: 4),
-                Text(value, style: AppTypography.title.copyWith(fontSize: 24, color: scheme.title)),
-              ],
-            ),
-          ],
-        ),
+
+    return Container(
+      decoration: BoxDecoration(
+        color: scheme.surface,
+        borderRadius: AppRadius.lgAll,
+        border: Border.all(color: scheme.stroke),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      // Use Hux tabs directly since design_system barrel only exports LucideIcons from hux
+      child: HuxTabs(
+        variant: HuxTabVariant.default_,
+        size: HuxTabSize.medium,
+        tabs: [
+          HuxTabItem(
+            label: 'Live Now',
+            icon: LucideIcons.radio,
+            badge: active.isNotEmpty
+                ? HuxBadge(
+                    label: '${active.length}',
+                    variant: HuxBadgeVariant.success,
+                    size: HuxBadgeSize.small,
+                  )
+                : null,
+            content: ParticipantsLiveTab(active: active),
+          ),
+          HuxTabItem(
+            label: 'History',
+            icon: LucideIcons.history,
+            badge: history.isNotEmpty
+                ? HuxBadge(
+                    label: '${history.length}',
+                    variant: HuxBadgeVariant.secondary,
+                    size: HuxBadgeSize.small,
+                  )
+                : null,
+            content: ParticipantsHistoryTab(history: history),
+          ),
+          HuxTabItem(
+            label: 'Reports',
+            icon: LucideIcons.barChart2,
+            content: AttendanceReportTab(history: history),
+          ),
+        ],
       ),
     );
   }
 }
 
-// ─── Participant Row ───────────────────────────────────────────────────────────
+// ─── Meeting Ended Banner ─────────────────────────────────────────────────────
 
-class _ParticipantRow extends StatefulWidget {
-  final ParticipantEntity participant;
-
-  const _ParticipantRow({required this.participant});
-
-  @override
-  State<_ParticipantRow> createState() => _ParticipantRowState();
-}
-
-class _ParticipantRowState extends State<_ParticipantRow> {
-  Timer? _timer;
-
-  @override
-  void initState() {
-    super.initState();
-    _startTimerIfNeeded();
-  }
-
-  @override
-  void didUpdateWidget(covariant _ParticipantRow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!widget.participant.isCurrentlyPresent) {
-      _timer?.cancel();
-    } else if (_timer == null || !_timer!.isActive) {
-      _startTimerIfNeeded();
-    }
-  }
-
-  void _startTimerIfNeeded() {
-    if (widget.participant.isCurrentlyPresent) {
-      _timer = Timer.periodic(const Duration(seconds: 30), (_) {
-        if (mounted) setState(() {});
-      });
-    }
-  }
-
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
+class _MeetingEndedBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
-    final scheme    = context.colors;
-    final l10n      = AppLocalizations.of(context);
-    final isLive    = widget.participant.isCurrentlyPresent;
-    final formatter = DateFormat('h:mm a');
-    
-    final start = widget.participant.startTime;
-    final end   = widget.participant.endTime ?? DateTime.now();
-    int currentDuration = end.difference(start).inMinutes.clamp(0, 9999);
-    
-    // Fallback to the saved duration if it's already recorded strictly (for history logic)
-    if (!isLive && widget.participant.totalDurationMinutes > 0) {
-      currentDuration = widget.participant.totalDurationMinutes;
-    }
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.xl),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: SellioColors.red.withValues(alpha: 0.06),
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: SellioColors.red.withValues(alpha: 0.2)),
+      ),
       child: Row(
         children: [
-          SAvatar(name: widget.participant.displayName, size: SAvatarSize.medium),
-          const SizedBox(width: AppSpacing.lg),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: SellioColors.red.withValues(alpha: 0.1),
+              borderRadius: AppRadius.smAll,
+            ),
+            child: const Icon(
+              LucideIcons.videoOff,
+              size: 16,
+              color: SellioColors.red,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.participant.displayName,
+                  'Meeting Ended',
                   style: AppTypography.body.copyWith(
+                    color: SellioColors.red,
                     fontWeight: FontWeight.w600,
-                    color: scheme.title,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  widget.participant.participantKey,
-                  style: AppTypography.caption.copyWith(color: scheme.hint),
-                  overflow: TextOverflow.ellipsis,
+                  'This meeting has ended. The attendance data below is the final record.',
+                  style: AppTypography.caption.copyWith(
+                    color: SellioColors.red.withValues(alpha: 0.8),
+                  ),
                 ),
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                currentDuration < 1 ? '< 1 min' : '$currentDuration min',
-                style: AppTypography.body.copyWith(color: scheme.title),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                isLive
-                    ? 'In since ${formatter.format(widget.participant.startTime)}'
-                    : '${formatter.format(widget.participant.startTime)} — ${formatter.format(widget.participant.endTime!)}',
-                style: AppTypography.caption.copyWith(color: scheme.hint),
-              ),
-            ],
-          ),
-          const SizedBox(width: AppSpacing.xl),
-          SizedBox(
-            width: 72,
-            child: isLive
-                ? SBadge(label: l10n.live, variant: SBadgeVariant.success)
-                : SBadge(label: 'Left', variant: SBadgeVariant.secondary),
-          ),
         ],
+      ),
+    );
+  }
+}
+
+// ─── Error State ──────────────────────────────────────────────────────────────
+
+class _ErrorState extends StatelessWidget {
+  final String error;
+  final VoidCallback onBack;
+
+  const _ErrorState({required this.error, required this.onBack});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xxl),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              decoration: BoxDecoration(
+                color: SellioColors.red.withValues(alpha: 0.06),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                LucideIcons.alertCircle,
+                size: 40,
+                color: SellioColors.red,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            Text(
+              'Something went wrong',
+              style: AppTypography.title.copyWith(
+                color: scheme.title,
+                fontSize: 20,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              error,
+              style: AppTypography.body.copyWith(color: scheme.hint),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: AppSpacing.xl),
+            SButton(
+              variant: SButtonVariant.outline,
+              onPressed: onBack,
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(LucideIcons.arrowLeft, size: 16),
+                  SizedBox(width: AppSpacing.sm),
+                  Text('Back to Meetings'),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -2,18 +2,24 @@
 
 import 'package:injectable/injectable.dart';
 import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
-import 'package:sellio_metrics/domain/entities/participant_entity.dart';
+import 'package:sellio_metrics/domain/entities/regular_meeting_schedule.dart';
 import 'package:sellio_metrics/domain/repositories/meetings_repository.dart';
 import 'package:sellio_metrics/data/datasources/meeting/meet_auth_data_source.dart';
 import 'package:sellio_metrics/data/datasources/meeting/meetings_data_source.dart';
+import 'package:sellio_metrics/data/datasources/meeting/regular_meetings_data_source.dart';
 import 'package:sellio_metrics/data/models/meeting/participant_model.dart';
 
 @LazySingleton(as: MeetingsRepository)
 class MeetingsRepositoryImpl implements MeetingsRepository {
   final MeetingsDataSource _dataSource;
   final MeetAuthDataSource _authDataSource;
+  final RegularMeetingsDataSource _regularDataSource;
 
-  MeetingsRepositoryImpl(this._dataSource, this._authDataSource);
+  MeetingsRepositoryImpl(
+    this._dataSource,
+    this._authDataSource,
+    this._regularDataSource,
+  );
 
   // ─── Auth ────────────────────────────────────────────────────────────────
 
@@ -74,4 +80,18 @@ class MeetingsRepositoryImpl implements MeetingsRepository {
 
   @override
   void unwatchMeeting(String meetingId) => _dataSource.unwatchMeeting(meetingId);
+
+  // ─── Regular Meeting Schedules ────────────────────────────────────────────
+
+  @override
+  Future<List<RegularMeetingSchedule>> getRegularMeetings() =>
+      _regularDataSource.fetchAll();
+
+  @override
+  Future<RegularMeetingSchedule> createRegularMeeting(
+          RegularMeetingSchedule schedule) =>
+      _regularDataSource.create(schedule);
+
+  @override
+  Future<void> deleteRegularMeeting(String id) => _regularDataSource.delete(id);
 }

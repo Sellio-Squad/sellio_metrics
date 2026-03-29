@@ -1,10 +1,4 @@
-/// SBreadcrumbs — Design System Component
-///
-/// A breadcrumb navigation bar that renders items separated by chevrons.
-/// The last item is displayed as the current (non-clickable) page.
-
 import 'package:flutter/material.dart';
-
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/core/theme/app_spacing.dart';
 import 'package:sellio_metrics/core/theme/app_typography.dart';

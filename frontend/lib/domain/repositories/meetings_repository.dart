@@ -5,6 +5,7 @@
 
 import 'package:sellio_metrics/domain/entities/meeting_entity.dart';
 import 'package:sellio_metrics/domain/entities/participant_entity.dart';
+import 'package:sellio_metrics/domain/entities/regular_meeting_schedule.dart';
 
 abstract class MeetingsRepository {
   // ─── Auth ────────────────────────────────────────────────────────────────
@@ -19,6 +20,17 @@ abstract class MeetingsRepository {
   Future<List<MeetingEntity>> getMeetings();
   Future<MeetingDetailResult> getMeetingDetail(String id);
   Future<void> endMeeting(String id);
+
+  // ─── Regular Meeting Schedules ───────────────────────────────────────────────
+
+  /// Returns all configured recurring team meeting schedules.
+  Future<List<RegularMeetingSchedule>> getRegularMeetings();
+
+  /// Creates a new recurring meeting schedule and persists it.
+  Future<RegularMeetingSchedule> createRegularMeeting(RegularMeetingSchedule schedule);
+
+  /// Deletes a recurring meeting schedule by [id].
+  Future<void> deleteRegularMeeting(String id);
 
   // ─── Real-time (WebSocket) ────────────────────────────────────────────────
 
