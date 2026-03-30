@@ -17,13 +17,18 @@ class LogModel {
   });
 
   factory LogModel.fromJson(Map<String, dynamic> json) {
+    Map<String, dynamic>? parsedMetadata;
+    if (json['metadata'] != null && json['metadata'] is Map) {
+      parsedMetadata = Map<String, dynamic>.from(json['metadata'] as Map);
+    }
+
     return LogModel(
-      id: json['id'] as String? ?? '',
-      timestamp: DateTime.tryParse(json['timestamp'] as String? ?? '') ?? DateTime.now(),
-      message: json['message'] as String? ?? '',
-      severity: json['severity'] as String? ?? 'info',
-      category: json['category'] as String? ?? 'system',
-      metadata: json['metadata'] as Map<String, dynamic>?,
+      id: json['id']?.toString() ?? '',
+      timestamp: DateTime.tryParse(json['timestamp']?.toString() ?? '') ?? DateTime.now(),
+      message: json['message']?.toString() ?? '',
+      severity: json['severity']?.toString() ?? 'info',
+      category: json['category']?.toString() ?? 'system',
+      metadata: parsedMetadata,
     );
   }
 

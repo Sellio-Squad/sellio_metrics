@@ -17,7 +17,10 @@ class LogsDataSourceImpl implements LogsDataSource {
       queryParameters: {'limit': limit},
       parser: (data) {
         if (data is List) {
-          return data.map((json) => LogModel.fromJson(json as Map<String, dynamic>)).toList();
+          return data.map((json) {
+            if (json is Map) return LogModel.fromJson(Map<String, dynamic>.from(json));
+            return LogModel.fromJson({});
+          }).toList();
         }
         return [];
       },
