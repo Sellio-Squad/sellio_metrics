@@ -39,6 +39,7 @@ import scoresRoutes     from "./modules/scores/scores.routes";
 import membersRoutes    from "./modules/members/members.routes";
 import developersRoutes from "./modules/developers/developers.routes";
 import { meetingsRoutes, type CFDurableObjectNamespace } from "./modules/meetings/meetings.routes";
+import { regularSchedulesRoutes } from "./modules/meetings/regular-schedules.routes";
 import debugRoutes      from "./modules/debug/debug.routes";
 import logsRoutes       from "./modules/logs/logs.routes";
 import reviewRoutes     from "./modules/review/review.routes";
@@ -125,6 +126,7 @@ function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
         cradle.webhookHandlerService,
         meetingRooms,
     ));
+    app.route("/api/meetings/schedules", regularSchedulesRoutes(cradle.regularSchedulesRepo));
     app.route("/api/debug",       debugRoutes);
     app.route("/api/logs",        logsRoutes);
     app.route("/api/review",      reviewRoutes);

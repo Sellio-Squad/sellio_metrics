@@ -48,6 +48,10 @@ class ApiEndpoints {
   static const meetAuthUrl    = '/api/meetings/auth-url';
   static const meetAuthLogout = '/api/meetings/auth-logout';
 
+  // ─── Regular Meeting Schedules ───
+  static const meetingSchedules           = '/api/meetings/schedules';
+  static String meetingScheduleById(String id) => '/api/meetings/schedules/$id';
+
   // ─── Sync ───
   static const syncGithub = '/api/sync/github';
   static const syncGithubReset = '/api/sync/github/reset';
