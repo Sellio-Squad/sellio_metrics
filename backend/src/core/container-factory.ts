@@ -59,6 +59,7 @@ async function buildContainer(
     const { ScoresRepository } = await import("../modules/scores/scores.repository");
     const { DeveloperRepository } = await import("../modules/developers/developer.repository");
     const { MeetingsRepository } = await import("../modules/meetings/meetings.repository");
+    const { RegularSchedulesRepository } = await import("../modules/meetings/regular-schedules.repository");
     const { WebhookHandlerService } = await import("../modules/meetings/webhook-handler.service");
     const { WebhookService } = await import("../modules/webhook/webhook.service");
     const { GeminiClient } = await import("../infra/ai/gemini.client");
@@ -130,6 +131,7 @@ async function buildContainer(
         commentsRepo: asFunction(({ logger, developerRepo }: Cradle) => new CommentsRepository(d1Database, logger, developerRepo)).singleton(),
         scoresRepo: asFunction(({ logger }: Cradle) => new ScoresRepository(d1Database, logger)).singleton(),
         meetingsRepo: asFunction(({ logger }: Cradle) => new MeetingsRepository(d1Database, logger)).singleton(),
+        regularSchedulesRepo: asFunction(({ logger }: Cradle) => new RegularSchedulesRepository(d1Database, logger)).singleton(),
 
         rateLimitGuard: asFunction(({ logger, env }: Cradle) =>
             new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold }),

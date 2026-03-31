@@ -14,6 +14,7 @@ import type { CommentsRepository } from "../modules/prs/comments.repository";
 import type { ScoresRepository } from "../modules/scores/scores.repository";
 import type { DeveloperRepository } from "../modules/developers/developer.repository";
 import type { MeetingsRepository } from "../modules/meetings/meetings.repository";
+import type { RegularSchedulesRepository } from "../modules/meetings/regular-schedules.repository";
 import type { RateLimitGuard } from "../infra/github/rate-limit-guard";
 import type { CachedGitHubClient } from "../infra/github/cached-github.client";
 import type { ReposService } from "../modules/repos/repos.service";
@@ -67,6 +68,7 @@ export interface Cradle {
     commentsRepo: CommentsRepository;
     scoresRepo: ScoresRepository;
     meetingsRepo: MeetingsRepository;
+    regularSchedulesRepo: RegularSchedulesRepository;
 
     // Repos
     reposService: ReposService;
