@@ -57,12 +57,35 @@ class RegularMeetingsDataSourceImpl implements RegularMeetingsDataSource {
       dayTime:          json['dayTime']          as String,
       durationLabel:    json['durationLabel']    as String,
       recurrenceLabel:  json['recurrenceLabel']  as String,
-      icon:             IconData(iconCode, fontFamily: 'MaterialIcons'),
+      icon:             _getIconFromCode(iconCode),
       accentColor:      Color(accentColorInt),
       startTime:        DateTime.tryParse(json['startTime'] as String? ?? '') ?? DateTime.now(),
       duration:         Duration(minutes: durationMinutes),
       recurrenceRule:   json['recurrenceRule']   as String,
     );
+  }
+
+  IconData _getIconFromCode(int codePoint) {
+    const availableIcons = [
+      Icons.groups_rounded,
+      Icons.refresh_rounded,
+      Icons.calendar_month_rounded,
+      Icons.code_rounded,
+      Icons.forum_rounded,
+      Icons.rocket_launch_rounded,
+      Icons.lightbulb_rounded,
+      Icons.analytics_rounded,
+      Icons.bug_report_rounded,
+      Icons.school_rounded,
+      Icons.calendar_today,
+    ];
+    
+    for (final icon in availableIcons) {
+      if (icon.codePoint == codePoint) {
+        return icon;
+      }
+    }
+    return Icons.calendar_today;
   }
 
   Map<String, dynamic> _toJson(RegularMeetingSchedule s) => {
