@@ -15,4 +15,9 @@ class LogsRepositoryImpl implements LogsRepository {
     final models = await _dataSource.fetchLogs(limit: limit);
     return models.map((m) => m.toEntity()).toList();
   }
+
+  @override
+  Future<void> clearLogs() async {
+    await _dataSource.clearLogs();
+  }
 }

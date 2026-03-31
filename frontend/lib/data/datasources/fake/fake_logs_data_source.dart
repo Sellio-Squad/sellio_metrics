@@ -28,4 +28,10 @@ class FakeLogsDataSource implements LogsDataSource {
     ];
     return logs.map((json) => LogModel.fromJson(json)).toList();
   }
+
+  @override
+  Future<void> clearLogs() async {
+    // Fake implementation
+    await Future.delayed(const Duration(milliseconds: 200));
+  }
 }

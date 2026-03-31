@@ -37,6 +37,24 @@ class LogsProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> clearLogs() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _repository.clearLogs();
+      appLogger.clearLogs();
+      
+      _logs = [];
+    } catch (e) {
+      _error = e.toString();
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
   void clearError() {
     _error = null;
     notifyListeners();

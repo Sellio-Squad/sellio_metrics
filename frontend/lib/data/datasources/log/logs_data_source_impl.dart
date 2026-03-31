@@ -26,4 +26,9 @@ class LogsDataSourceImpl implements LogsDataSource {
       },
     );
   }
+
+  @override
+  Future<void> clearLogs() async {
+    await _apiClient.delete(ApiEndpoints.logs);
+  }
 }
