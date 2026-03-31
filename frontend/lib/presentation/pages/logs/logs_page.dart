@@ -44,6 +44,15 @@ class _LogsPageState extends State<LogsPage> {
         title: Text(l10n.navLogs, style: context.textTheme.headlineSmall),
         backgroundColor: context.colors.surface,
         elevation: 0,
+        actions: [
+          if (provider.logs.isNotEmpty)
+            IconButton(
+              icon: Icon(LucideIcons.trash2, color: context.colors.semanticError),
+              onPressed: () => provider.clearLogs(),
+              tooltip: 'Clear Logs',
+            ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
       ),
       body: Column(
         children: [

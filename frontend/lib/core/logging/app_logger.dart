@@ -14,6 +14,10 @@ class AppLogger {
 
   List<LogEntry> get logs => List.unmodifiable(_logs);
 
+  void clearLogs() {
+    _logs.clear();
+  }
+
   void _addLog(LogEntry entry) {
     _logs.add(entry);
     if (_logs.length > 500) {

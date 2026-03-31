@@ -14,4 +14,9 @@ logs.get("/", safe(async (c) => {
     return c.json(await useCradle(c).logsService.getLogs(limit));
 }));
 
+logs.delete("/", safe(async (c) => {
+    await useCradle(c).logsService.clearLogs();
+    return c.json({ success: true, message: "Logs cleared successfully" });
+}));
+
 export default logs;

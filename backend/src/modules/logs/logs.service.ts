@@ -63,4 +63,12 @@ export class LogsService {
         const logs = cached?.data || [];
         return logs.slice(0, limit);
     }
+
+    /**
+     * Clear all logs feed
+     */
+    async clearLogs(): Promise<void> {
+        await this.cacheService.del(LOGS_CACHE_KEY);
+        this.logger.info("Logs feed cleared explicitly");
+    }
 }
