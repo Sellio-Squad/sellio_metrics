@@ -128,6 +128,9 @@ class _LogsPageState extends State<LogsPage> {
           _buildFilterChip('Google Meet', LogCategory.googleMeet),
           const SizedBox(width: AppSpacing.sm),
           _buildFilterChip('System & API', LogCategory.system),
+          const SizedBox(width: AppSpacing.sm),
+          _buildFilterChip('Webhooks', LogCategory.webhook),
+
         ],
       ),
     );

@@ -16,6 +16,7 @@ enum LogCategory {
   github,
   googleMeet,
   system,
+  webhook,
   frontend;
 
   static LogCategory fromString(String? value) =>

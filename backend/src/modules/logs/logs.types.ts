@@ -1,5 +1,5 @@
 export type LogSeverity = "info" | "warning" | "error" | "success";
-export type LogCategory = "github" | "googleMeet" | "system";
+export type LogCategory = "github" | "googleMeet" | "system" | "webhook";
 
 export interface LogEntry {
     id: string;
