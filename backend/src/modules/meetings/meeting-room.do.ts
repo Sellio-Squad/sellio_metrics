@@ -1,13 +1,16 @@
 /**
- * Meeting Room — Cloudflare Durable Object
+ * Meeting Room — Cloudflare Durable Object (Thin Shell)
  *
  * One instance per meeting (keyed by meetingId).
- * Responsibilities:
- *   1. Accept WebSocket connections from Flutter clients
- *   2. Receive webhook events forwarded by WebhookHandlerService
- *   3. Persist participant join/leave/end to D1 via MeetingsRepository
- *   4. Broadcast MeetingWSEvent to all connected WebSocket clients
- *   5. On meeting_ended: close all WS connections with code 1000
+ *
+ * This class is the ONLY file with Cloudflare-specific code.
+ * All business logic is delegated to MeetingEventHandler,
+ * and all connection management to CloudflareConnectionManager.
+ *
+ * To migrate to Node.js / `ws` / Socket.IO:
+ *   1. Swap CloudflareConnectionManager for a WsConnectionManager
+ *   2. Replace this DO shell with a standard WebSocket server
+ *   3. MeetingEventHandler stays unchanged
  *
  * Uses the WebSocket Hibernation API so the DO unloads from memory
  * during idle periods while keeping connections alive.
@@ -17,36 +20,42 @@ import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { D1Database } from "../../infra/database/d1.service";
 import type { Logger } from "../../core/logger";
 import { MeetingsRepository } from "./meetings.repository";
-import type { MeetingWSEvent, ParticipantSessionRow } from "./meetings.types";
 import { createConsoleLogger } from "../../core/console-logger";
 import { LogsService } from "../logs/logs.service";
 import { CacheService } from "../../infra/cache/cache.service";
-
-interface IncomingEvent {
-    sessionId: string;
-    event: {
-        type: string;
-        spaceName: string;
-        participantKey: string | null;
-        displayName: string;
-        timestamp: string;
-    };
-}
+import { CloudflareConnectionManager } from "./websocket/cloudflare-connection-manager";
+import { MeetingEventHandler, type IncomingMeetEvent } from "./websocket/meeting-event-handler";
 
 export class MeetingRoom {
     private readonly state:  DurableObjectState;
-    private readonly db:     D1Database | null;
     private readonly logger: Logger;
-    private readonly logsService: LogsService | null = null;
+    private readonly connectionManager: CloudflareConnectionManager;
+    private readonly eventHandler: MeetingEventHandler;
 
     constructor(state: DurableObjectState, env: any) {
         this.state  = state;
-        this.db     = env.DB ?? null;
         this.logger = createConsoleLogger().child({ module: "meeting-room-do" });
+
+        // ── Build dependencies ──────────────────────────────────────────────
+        const db: D1Database | null = env.DB ?? null;
+
+        let logsService: LogsService | null = null;
         if (env.CACHE) {
             const cache = new CacheService({ kvNamespace: env.CACHE, logger: this.logger });
-            this.logsService = new LogsService({ cacheService: cache, logger: this.logger });
+            logsService = new LogsService({ cacheService: cache, logger: this.logger });
         }
+
+        // ── Platform-specific: connection manager ───────────────────────────
+        this.connectionManager = new CloudflareConnectionManager(state, this.logger);
+
+        // ── Platform-agnostic: business logic ───────────────────────────────
+        const repo = new MeetingsRepository(db, this.logger);
+        this.eventHandler = new MeetingEventHandler(
+            this.connectionManager,
+            repo,
+            this.logger,
+            logsService,
+        );
     }
 
     // ─── Durable Object Fetch Handler ────────────────────────────────────────
@@ -56,7 +65,7 @@ export class MeetingRoom {
 
         // Path: /ws  — Flutter WebSocket upgrade
         if (url.pathname === "/ws" || request.headers.get("Upgrade") === "websocket") {
-            return this.handleWebSocketUpgrade(request);
+            return this.connectionManager.acceptUpgrade(request);
         }
 
         // Path: /event  — Forwarded from WebhookHandlerService
@@ -67,178 +76,50 @@ export class MeetingRoom {
         return new Response("Not Found", { status: 404 });
     }
 
-    // ─── WebSocket Upgrade ────────────────────────────────────────────────────
-
-    private handleWebSocketUpgrade(_request: Request): Response {
-        // Cloudflare Workers WebSocket Pair
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pair = new (globalThis as any).WebSocketPair() as { 0: WebSocket; 1: WebSocket };
-        const [client, server] = [pair[0], pair[1]];
-
-        // Hibernation API — DO can unload between messages
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        this.state.acceptWebSocket(server as any);
-
-        this.logger.info("WebSocket client connected");
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return new Response(null, { status: 101, webSocket: client } as any);
-    }
-
     // ─── WebSocket Event Handlers (Hibernation API) ───────────────────────────
 
     async webSocketMessage(ws: WebSocket, message: string | ArrayBuffer): Promise<void> {
-        // Heartbeat / ping from client — no action needed
+        // With setWebSocketAutoResponse, ping/pong is handled automatically.
+        // This handler only fires for non-auto-response messages.
         try {
             const msg = JSON.parse(typeof message === "string" ? message : "{}");
+            // Manual ping fallback (for clients that send plain "ping" text)
             if (msg.type === "ping") ws.send(JSON.stringify({ type: "pong" }));
-        } catch { /* ignore malformed messages */ }
+        } catch (err: any) {
+            this.logger.debug({ err: err?.message }, "Malformed WebSocket message received");
+        }
     }
 
     async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
         this.logger.info({ code, reason }, "WebSocket client disconnected");
-        ws.close(code, "Closing");
+        try {
+            ws.close(code, "Closing");
+        } catch (err: any) {
+            this.logger.debug({ err: err?.message }, "Error during WebSocket close handshake");
+        }
     }
 
     async webSocketError(ws: WebSocket, error: unknown): Promise<void> {
         this.logger.warn({ error }, "WebSocket error");
-        ws.close(1011, "Internal error");
+        try {
+            ws.close(1011, "Internal error");
+        } catch (err: any) {
+            this.logger.debug({ err: err?.message }, "Error closing errored WebSocket");
+        }
     }
 
     // ─── Incoming Event from WebhookHandlerService ───────────────────────────
 
     private async handleIncomingEvent(request: Request): Promise<Response> {
-        let body: IncomingEvent;
+        let body: IncomingMeetEvent;
         try {
-            body = await request.json() as IncomingEvent;
+            body = await request.json() as IncomingMeetEvent;
         } catch {
             return new Response("Bad Request", { status: 400 });
         }
 
-        const { sessionId, event } = body;
-        const repo = new MeetingsRepository(this.db, this.logger);
-        const now  = event.timestamp;
-
-        try {
-            switch (event.type) {
-                case "google.workspace.meet.participant.v2.joined":
-                    await this.onParticipantJoined(repo, sessionId, event, now);
-                    break;
-
-                case "google.workspace.meet.participant.v2.left":
-                    await this.onParticipantLeft(repo, sessionId, event, now);
-                    break;
-
-                case "google.workspace.meet.conference.v2.ended":
-                    await this.onMeetingEnded(repo, sessionId, now);
-                    return new Response("OK", { status: 200 }); // WS already closed
-            }
-        } catch (err: any) {
-            this.logger.error({ err: err?.message, sessionId, type: event.type }, "Error processing event");
-            if (this.logsService) await this.logsService.log(`DO error: ${err?.message}`, "error", "googleMeet", { type: event.type, trace: err?.stack });
-        }
+        await this.eventHandler.handleEvent(body);
 
         return new Response("OK", { status: 200 });
-    }
-
-    // ─── Participant Join ─────────────────────────────────────────────────────
-
-    private async onParticipantJoined(
-        repo: MeetingsRepository,
-        sessionId: string,
-        event: IncomingEvent["event"],
-        now: string,
-    ): Promise<void> {
-        const participantKey = event.participantKey ?? event.displayName;
-
-        const row: ParticipantSessionRow = {
-            id:             `${sessionId}:${participantKey}:${Date.parse(now)}`,
-            sessionId,
-            participantKey,
-            displayName:    event.displayName,
-            startTime:      now,
-            endTime:        null,
-        };
-
-        if (!this.db) {
-            if (this.logsService) await this.logsService.log("DO env.DB is null! D1 binding missing in DO env.", "error", "googleMeet");
-        }
-
-        try {
-            await repo.insertParticipantJoin(row);
-            if (this.logsService) await this.logsService.log(`DB inserted joined: ${participantKey}`, "success", "googleMeet");
-        } catch (err: any) {
-            if (this.logsService) await this.logsService.log(`DB insert error: ${err.message}`, "error", "googleMeet", { stack: err.stack });
-            throw err;
-        }
-
-        this.broadcast({
-            type:        "participant_joined",
-            meetingId:   sessionId,
-            participant: { participantKey, displayName: event.displayName },
-            timestamp:   now,
-        });
-
-        this.logger.info({ sessionId, participantKey }, "Participant joined");
-    }
-
-    // ─── Participant Left ─────────────────────────────────────────────────────
-
-    private async onParticipantLeft(
-        repo: MeetingsRepository,
-        sessionId: string,
-        event: IncomingEvent["event"],
-        now: string,
-    ): Promise<void> {
-        const participantKey = event.participantKey ?? event.displayName;
-
-        await repo.markParticipantLeft(sessionId, participantKey, now);
-
-        this.broadcast({
-            type:        "participant_left",
-            meetingId:   sessionId,
-            participant: { participantKey, displayName: event.displayName },
-            timestamp:   now,
-        });
-
-        this.logger.info({ sessionId, participantKey }, "Participant left");
-    }
-
-    // ─── Meeting Ended ────────────────────────────────────────────────────────
-
-    private async onMeetingEnded(
-        repo: MeetingsRepository,
-        sessionId: string,
-        now: string,
-    ): Promise<void> {
-        // 1. Close all open participant sessions
-        await repo.closeAllParticipantSessions(sessionId, now);
-
-        // 2. Broadcast meeting_ended to all connected Flutter clients
-        this.broadcast({ type: "meeting_ended", meetingId: sessionId, timestamp: now });
-
-        // 3. Close all WebSocket connections with code 1000 (Normal Closure)
-        const connections = this.state.getWebSockets();
-        for (const ws of connections) {
-            try {
-                ws.close(1000, "Meeting ended");
-            } catch { /* already closed */ }
-        }
-
-        this.logger.info({ sessionId }, "Meeting ended — all WebSocket connections closed");
-    }
-
-    // ─── Broadcast ───────────────────────────────────────────────────────────
-
-    private broadcast(event: MeetingWSEvent): void {
-        const payload = JSON.stringify(event);
-        const connections = this.state.getWebSockets();
-
-        for (const ws of connections) {
-            try {
-                ws.send(payload);
-            } catch { /* stale connection, ignore */ }
-        }
-
-        this.logger.info({ type: event.type, connectionCount: connections.length }, "Broadcast sent");
     }
 }
