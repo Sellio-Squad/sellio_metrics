@@ -46,9 +46,9 @@ class _AppPreviewPageState extends State<AppPreviewPage>
   String? _error;
   List<_AppInfo> _apps = [];
 
-  // GitHub redirects this to objects.githubusercontent.com which supports CORS.
-  static const _keysUrl =
-      'https://github.com/Sellio-Squad/sellio_mobile/releases/download/preview-keys/preview-keys.json';
+  // GitHub REST API — always returns Access-Control-Allow-Origin: * (no CORS issue).
+  static const _releaseApiUrl =
+      'https://api.github.com/repos/Sellio-Squad/sellio_mobile/releases/tags/preview-keys';
 
   static const _appOrder = ['customer', 'seller', 'admin'];
   static const _appMeta = {
@@ -76,18 +76,43 @@ class _AppPreviewPageState extends State<AppPreviewPage>
       _error = null;
     });
     try {
-      final res = await http.get(
-        Uri.parse(_keysUrl),
-        headers: {'Accept': 'application/octet-stream'},
+      // ── Step 1: fetch release metadata (api.github.com has CORS: *) ──
+      final releaseRes = await http.get(
+        Uri.parse(_releaseApiUrl),
+        headers: {
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
       );
-      if (res.statusCode != 200) {
+      if (releaseRes.statusCode != 200) {
         throw Exception(
-          'HTTP ${res.statusCode} — preview-keys.json not found.\n\n'
-          'The CD pipeline must run at least once (merge a PR to develop)\n'
-          'to generate the Appetize keys.',
+          'HTTP ${releaseRes.statusCode} — release not found.\n\n'
+          'Merge a PR to develop to trigger the CD pipeline\n'
+          'and generate the Appetize keys.',
         );
       }
-      final data = jsonDecode(res.body) as Map<String, dynamic>;
+
+      final releaseData = jsonDecode(releaseRes.body) as Map<String, dynamic>;
+      final assets = releaseData['assets'] as List<dynamic>;
+      final asset = assets.firstWhere(
+        (a) => (a as Map<String, dynamic>)['name'] == 'preview-keys.json',
+        orElse: () => throw Exception('preview-keys.json not found in release assets'),
+      ) as Map<String, dynamic>;
+
+      // ── Step 2: download asset content via API URL ────────────────────
+      // The asset API URL redirects to objects.githubusercontent.com (CORS: *)
+      final contentRes = await http.get(
+        Uri.parse(asset['url'] as String),
+        headers: {
+          'Accept': 'application/octet-stream',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      );
+      if (contentRes.statusCode != 200) {
+        throw Exception('HTTP ${contentRes.statusCode} — failed to download preview-keys.json');
+      }
+
+      final data = jsonDecode(contentRes.body) as Map<String, dynamic>;
       final appsData = data['apps'] as Map<String, dynamic>;
 
       final apps = <_AppInfo>[];
