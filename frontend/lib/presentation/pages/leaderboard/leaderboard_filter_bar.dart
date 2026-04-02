@@ -111,7 +111,7 @@ class _RepoMultiSelectState extends State<_RepoMultiSelect> {
     final renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
     final provider = context.read<LeaderboardProvider>();
-    
+
     _overlay = OverlayEntry(
       builder: (_) => ChangeNotifierProvider<LeaderboardProvider>.value(
         value: provider,
