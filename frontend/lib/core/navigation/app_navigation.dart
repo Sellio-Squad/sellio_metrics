@@ -25,6 +25,7 @@ import 'package:sellio_metrics/presentation/pages/sync/sync_page.dart';
 import 'package:sellio_metrics/presentation/pages/sync/providers/sync_provider.dart';
 import 'package:sellio_metrics/presentation/pages/review/code_review_page.dart';
 import 'package:sellio_metrics/presentation/pages/review/providers/review_provider.dart';
+import 'package:sellio_metrics/presentation/pages/app_preview/app_preview_page.dart';
 
 // ─── Route Groups ────────────────────────────────────────────
 enum NavGroup { team, product, system }
@@ -145,6 +146,15 @@ class AppNavigation {
         value: getIt<ReviewProvider>(),
         child: const CodeReviewPage(),
       ),
+    ),
+    AppRoute(
+      id: 'app_preview',
+      path: '/preview',
+      icon: LucideIcons.smartphone,
+      group: NavGroup.product,
+      primaryNav: false,
+      labelBuilder: (l10n) => 'App Preview',
+      pageBuilder: (_) => const AppPreviewPage(),
     ),
 
     // ── System (all secondary) ──────────────────────────────
