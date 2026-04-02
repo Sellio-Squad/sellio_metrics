@@ -11,17 +11,29 @@ class LeaderboardDataSourceImpl implements LeaderboardDataSource {
   LeaderboardDataSourceImpl(this._apiClient);
 
   @override
-  Future<List<LeaderboardModel>> fetchLeaderboard() async {
+  Future<List<LeaderboardModel>> fetchLeaderboard({
+    String? since,
+    String? until,
+    List<int>? repoIds,
+  }) async {
+    final queryParams = <String, dynamic>{};
+    if (since != null) queryParams['since'] = since;
+    if (until != null) queryParams['until'] = until;
+    if (repoIds != null && repoIds.isNotEmpty) {
+      queryParams['repos'] = repoIds.join(',');
+    }
+
     return await _apiClient.get<List<LeaderboardModel>>(
       ApiEndpoints.leaderboard,
       tag: 'LeaderboardDataSource',
+      queryParameters: queryParams.isEmpty ? null : queryParams,
       parser: (data) {
         List<dynamic> rawList = [];
         if (data is List) {
           rawList = data;
         } else if (data is Map) {
-          rawList = data['data'] as List<dynamic>? ?? 
-                    data['entries'] as List<dynamic>? ?? [];
+          rawList = data['entries'] as List<dynamic>? ??
+                    data['data'] as List<dynamic>? ?? [];
         }
         return rawList.map((e) => LeaderboardModel.fromJson(e as Map<String, dynamic>)).toList();
       },

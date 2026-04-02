@@ -11,9 +11,16 @@ class FakeReposDataSource implements ReposDataSource {
     await Future.delayed(const Duration(milliseconds: 200));
     return [
       RepoModel(
+        id: 1,
         name: ApiConfig.defaultRepo,
         fullName: '${ApiConfig.defaultOrg}/${ApiConfig.defaultRepo}',
         description: 'Fake repo for local metrics preview',
+      ),
+      RepoModel(
+        id: 2,
+        name: 'sellio_backend',
+        fullName: '${ApiConfig.defaultOrg}/sellio_backend',
+        description: 'Fake backend repo',
       ),
     ];
   }

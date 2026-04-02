@@ -19,16 +19,23 @@ export class ScoresRepository {
         this.logger = logger.child({ module: "scores-repository" });
     }
 
-    async getLeaderboard(since?: string, until?: string, limit = 50): Promise<RelationalLeaderboardEntry[]> {
+    async getLeaderboard(since?: string, until?: string, limit = 50, repoIds: number[] = []): Promise<RelationalLeaderboardEntry[]> {
         if (!this.db) return [];
 
         const prFilter     = since ? `AND mp.merged_at >= '${since}'` : "";
         const cmtFilter    = since ? `AND pc.commented_at >= '${since}'` : "";
         const attendFilter = since ? `AND ps.start_time >= '${since}'` : "";
-        
+
         const prUntil      = until ? `AND mp.merged_at <= '${until}'` : "";
         const cmtUntil     = until ? `AND pc.commented_at <= '${until}'` : "";
         const attendUntil  = until ? `AND ps.start_time <= '${until}'` : "";
+
+        // Repo filter — filter directly by integer repo_id (no JOIN needed)
+        const hasRepoFilter = repoIds.length > 0;
+        const repoIdList    = repoIds.join(",");
+        const prRepoFilter  = hasRepoFilter ? `AND mp.repo_id IN (${repoIdList})` : "";
+        const cmtRepoFilter = hasRepoFilter ? `AND pc.repo_id IN (${repoIdList})` : "";
+        // Note: attendance (participant_sessions) is not linked to repos — no filter applied
 
         const query = `
             WITH pr_scores AS (
@@ -48,7 +55,7 @@ export class ScoresRepository {
                 WHERE 1=1
                   AND mp.author NOT LIKE '%[bot]'
                   AND mp.author NOT IN ('Sellio-Bot','sellio-bot','selliobot','SellioBot','github-copilot','dependabot','dependabot-preview','renovate','renovate-bot')
-                  ${prFilter} ${prUntil}
+                  ${prFilter} ${prUntil} ${prRepoFilter}
                 GROUP BY mp.author
             ),
             comment_scores AS (
@@ -64,7 +71,7 @@ export class ScoresRepository {
                 WHERE 1=1
                   AND pc.author NOT LIKE '%[bot]'
                   AND pc.author NOT IN ('Sellio-Bot','sellio-bot','selliobot','SellioBot','github-copilot','dependabot','dependabot-preview','renovate','renovate-bot')
-                  ${cmtFilter} ${cmtUntil}
+                  ${cmtFilter} ${cmtUntil} ${cmtRepoFilter}
                 GROUP BY pc.author
             ),
             attendance_scores AS (
@@ -108,6 +115,7 @@ export class ScoresRepository {
         const all = await this.getLeaderboard(since, until, 1000);
         return all.find((e) => e.developer_login === login) ?? null;
     }
+
 
     async deleteDeveloperData(login: string): Promise<{ prs: number; comments: number; attendance: number }> {
         if (!this.db) return { prs: 0, comments: 0, attendance: 0 };

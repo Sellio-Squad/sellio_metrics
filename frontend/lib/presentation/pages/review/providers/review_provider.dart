@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
-
 import 'package:sellio_metrics/core/logging/app_logger.dart';
 import 'package:sellio_metrics/domain/entities/repo_info.dart';
 import 'package:sellio_metrics/domain/entities/review_entity.dart';
@@ -66,6 +65,7 @@ class ReviewProvider extends ChangeNotifier {
       _repos = rawRepos
           .whereType<Map<String, dynamic>>()
           .map((r) => RepoInfo(
+        id: r['id'] as int? ?? 0,
         name: r['name'] as String? ?? '',
         fullName: r['fullName'] as String? ?? '',
       ))
@@ -112,7 +112,7 @@ class ReviewProvider extends ChangeNotifier {
   void prefill({required String owner, required String repo, required int prNumber}) {
     _selectedRepo = _repos.firstWhere(
           (r) => r.name.toLowerCase() == repo.toLowerCase(),
-      orElse: () => RepoInfo(name: repo, fullName: '$owner/$repo'),
+      orElse: () => RepoInfo(id: 0, name: repo, fullName: '$owner/$repo'),
     );
     _selectedPr = _openPrs.firstWhere(
           (pr) => pr.prNumber == prNumber,

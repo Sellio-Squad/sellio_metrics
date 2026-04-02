@@ -17,6 +17,7 @@ class ApiEndpoints {
 
   // ─── Repos ───
   static const repos = '/api/repos';
+  static const reposSynced = '/api/repos/synced';
 
   // ─── Logs ───
   static const logs = '/api/logs';
