@@ -85,7 +85,7 @@ class _AppPreviewPageState extends State<AppPreviewPage>
           'X-GitHub-Api-Version': '2022-11-28',
         },
       );
-      if (res.statusCode != 200) {
+      if (releaseRes.statusCode != 200) {
         throw Exception(
           'HTTP ${res.statusCode} — release not found.\n\n'
           'Merge a PR to develop to trigger the CD pipeline\n'
