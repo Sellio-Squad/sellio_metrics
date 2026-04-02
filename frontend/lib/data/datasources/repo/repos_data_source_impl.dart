@@ -13,7 +13,7 @@ class ReposDataSourceImpl implements ReposDataSource {
   @override
   Future<List<RepoModel>> fetchRepositories() async {
     return await _apiClient.get<List<RepoModel>>(
-      ApiEndpoints.repos,
+      ApiEndpoints.reposSynced,          // D1-backed — carries integer IDs
       tag: 'ReposDataSource',
       parser: (data) {
         final body = data as Map<String, dynamic>;

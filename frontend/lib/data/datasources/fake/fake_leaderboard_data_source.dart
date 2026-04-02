@@ -5,7 +5,11 @@ import 'package:sellio_metrics/data/datasources/leaderboard/leaderboard_data_sou
 @Injectable(as: LeaderboardDataSource, env: [Environment.dev])
 class FakeLeaderboardDataSource implements LeaderboardDataSource {
   @override
-  Future<List<LeaderboardModel>> fetchLeaderboard() async {
+  Future<List<LeaderboardModel>> fetchLeaderboard({
+    String? since,
+    String? until,
+    List<int>? repoIds,
+  }) async {
     await Future.delayed(const Duration(milliseconds: 300));
     final json = [
       {

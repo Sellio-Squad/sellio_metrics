@@ -76,7 +76,7 @@ class AppNavigation {
     AppRoute(
       id: 'leaderboard',
       path: '/leaderboard',
-      icon: LucideIcons.trophy, // ← Fixed: was same as Members
+      icon: LucideIcons.trophy,
       group: NavGroup.team,
       primaryNav: true,
       labelBuilder: (l10n) => l10n.navLeaderboard,
