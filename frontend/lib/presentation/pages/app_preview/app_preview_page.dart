@@ -46,11 +46,9 @@ class _AppPreviewPageState extends State<AppPreviewPage>
   String? _error;
   List<_AppInfo> _apps = [];
 
-  /// Raw download URL for the preview-keys.json GitHub release asset.
-  /// GitHub redirects this to objects.githubusercontent.com (CORS: *).
-  /// We wrap it in a CORS proxy to prevent browser fetch failures from strict GitHub headers.
-  static final _keysUrl =
-      'https://api.allorigins.win/raw?url=${Uri.encodeComponent("https://github.com/Sellio-Squad/sellio_mobile/releases/download/preview-keys/preview-keys.json")}';
+  // GitHub redirects this to objects.githubusercontent.com which supports CORS.
+  static const _keysUrl =
+      'https://github.com/Sellio-Squad/sellio_mobile/releases/download/preview-keys/preview-keys.json';
 
   static const _appOrder = ['customer', 'seller', 'admin'];
   static const _appMeta = {
