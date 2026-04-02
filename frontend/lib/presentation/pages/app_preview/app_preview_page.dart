@@ -46,7 +46,7 @@ class _AppPreviewPageState extends State<AppPreviewPage>
   String? _error;
   List<_AppInfo> _apps = [];
 
-  // GitHub REST API — always returns Access-Control-Allow-Origin: * (no CORS issue).
+  // Single API call to api.github.com (CORS: *). JSON is embedded in release body.
   static const _releaseApiUrl =
       'https://api.github.com/repos/Sellio-Squad/sellio_mobile/releases/tags/preview-keys';
 
@@ -76,43 +76,30 @@ class _AppPreviewPageState extends State<AppPreviewPage>
       _error = null;
     });
     try {
-      // ── Step 1: fetch release metadata (api.github.com has CORS: *) ──
-      final releaseRes = await http.get(
+      // Single CORS-safe call — api.github.com always returns CORS: *.
+      // The JSON payload is stored directly in the release body.
+      final res = await http.get(
         Uri.parse(_releaseApiUrl),
         headers: {
           'Accept': 'application/vnd.github+json',
           'X-GitHub-Api-Version': '2022-11-28',
         },
       );
-      if (releaseRes.statusCode != 200) {
+      if (res.statusCode != 200) {
         throw Exception(
-          'HTTP ${releaseRes.statusCode} — release not found.\n\n'
+          'HTTP ${res.statusCode} — release not found.\n\n'
           'Merge a PR to develop to trigger the CD pipeline\n'
           'and generate the Appetize keys.',
         );
       }
 
-      final releaseData = jsonDecode(releaseRes.body) as Map<String, dynamic>;
-      final assets = releaseData['assets'] as List<dynamic>;
-      final asset = assets.firstWhere(
-        (a) => (a as Map<String, dynamic>)['name'] == 'preview-keys.json',
-        orElse: () => throw Exception('preview-keys.json not found in release assets'),
-      ) as Map<String, dynamic>;
-
-      // ── Step 2: download asset content via API URL ────────────────────
-      // The asset API URL redirects to objects.githubusercontent.com (CORS: *)
-      final contentRes = await http.get(
-        Uri.parse(asset['url'] as String),
-        headers: {
-          'Accept': 'application/octet-stream',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-      );
-      if (contentRes.statusCode != 200) {
-        throw Exception('HTTP ${contentRes.statusCode} — failed to download preview-keys.json');
+      final releaseData = jsonDecode(res.body) as Map<String, dynamic>;
+      // The CI embeds the full preview-keys JSON in the release body field.
+      final body = releaseData['body'] as String? ?? '';
+      if (body.isEmpty) {
+        throw Exception('Release body is empty — re-run the CD workflow.');
       }
-
-      final data = jsonDecode(contentRes.body) as Map<String, dynamic>;
+      final data = jsonDecode(body) as Map<String, dynamic>;
       final appsData = data['apps'] as Map<String, dynamic>;
 
       final apps = <_AppInfo>[];
