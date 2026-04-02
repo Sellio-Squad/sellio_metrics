@@ -50,7 +50,7 @@ class _AppPreviewPageState extends State<AppPreviewPage>
   /// GitHub redirects this to objects.githubusercontent.com (CORS: *).
   /// We wrap it in a CORS proxy to prevent browser fetch failures from strict GitHub headers.
   static final _keysUrl =
-      'https://corsproxy.io/?${Uri.encodeComponent("https://github.com/Sellio-Squad/sellio_mobile/releases/download/preview-keys/preview-keys.json")}';
+      'https://api.allorigins.win/raw?url=${Uri.encodeComponent("https://github.com/Sellio-Squad/sellio_mobile/releases/download/preview-keys/preview-keys.json")}';
 
   static const _appOrder = ['customer', 'seller', 'admin'];
   static const _appMeta = {
