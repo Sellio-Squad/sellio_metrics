@@ -110,11 +110,16 @@ class _RepoMultiSelectState extends State<_RepoMultiSelect> {
     }
     final renderBox = context.findRenderObject() as RenderBox;
     final size = renderBox.size;
+    final provider = context.read<LeaderboardProvider>();
+
     _overlay = OverlayEntry(
-      builder: (_) => _RepoDropdownOverlay(
-        layerLink: _layerLink,
-        anchorSize: size,
-        onClose: _close,
+      builder: (_) => ChangeNotifierProvider<LeaderboardProvider>.value(
+        value: provider,
+        child: _RepoDropdownOverlay(
+          layerLink: _layerLink,
+          anchorSize: size,
+          onClose: _close,
+        ),
       ),
     );
     Overlay.of(context).insert(_overlay!);
