@@ -7,14 +7,15 @@ import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
 import { isBot } from "../../lib/bot-filter";
-import type { LeaderboardPeriod } from "./score-aggregation.service";
 
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
 
 const leaderboardQuerySchema = z.object({
-    period: z.enum(["all", "month", "week"]).optional().default("all"),
-    limit: z.coerce.number().int().min(1).default(50),
+    limit:  z.coerce.number().int().min(1).default(50),
+    since:  z.string().optional(),   // ISO-8601 date string, e.g. "2024-01-01T00:00:00.000Z"
+    until:  z.string().optional(),   // ISO-8601 date string
+    repos:  z.string().optional(),   // comma-separated repo names, e.g. "sellio_mobile,sellio_backend"
 });
 type LeaderboardQuery = z.infer<typeof leaderboardQuerySchema>;
 
@@ -23,9 +24,12 @@ const scores = new Hono<HonoEnv>();
 scores.get("/leaderboard", zValidator("query", leaderboardQuerySchema), safe(async (c) => {
     const { scoreAggregationService, cachedGithubClient, developerRepo, env } = useCradle(c);
 
-    const { period, limit } = c.req.valid("query") as LeaderboardQuery;
+    const { limit, since, until, repos: reposParam } = c.req.valid("query") as LeaderboardQuery;
+    const repoIds = reposParam
+        ? reposParam.split(",").map((r) => parseInt(r.trim(), 10)).filter((n) => !isNaN(n))
+        : [];
 
-    const result = await scoreAggregationService.getLeaderboard(period, limit);
+    const result = await scoreAggregationService.getLeaderboard(limit, since, until, repoIds);
 
     // Enrich with avatar_url and display_name — best-effort (doesn't block response on failure)
     const [orgMembers, dbMembers] = await Promise.all([

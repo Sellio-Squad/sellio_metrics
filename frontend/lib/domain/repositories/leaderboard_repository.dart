@@ -6,6 +6,10 @@
 import 'package:sellio_metrics/domain/entities/leaderboard_entry.dart';
 
 abstract class LeaderboardRepository {
-  /// Fetch server-computed leaderboard.
-  Future<List<LeaderboardEntry>> getLeaderboard();
+  /// Fetch server-computed leaderboard, optionally filtered.
+  Future<List<LeaderboardEntry>> getLeaderboard({
+    String? since,
+    String? until,
+    List<int>? repoIds,
+  });
 }

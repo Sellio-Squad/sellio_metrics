@@ -11,8 +11,16 @@ class LeaderboardRepositoryImpl implements LeaderboardRepository {
   LeaderboardRepositoryImpl(this._dataSource);
 
   @override
-  Future<List<LeaderboardEntry>> getLeaderboard() async {
-    final models = await _dataSource.fetchLeaderboard();
+  Future<List<LeaderboardEntry>> getLeaderboard({
+    String? since,
+    String? until,
+    List<int>? repoIds,
+  }) async {
+    final models = await _dataSource.fetchLeaderboard(
+      since: since,
+      until: until,
+      repoIds: repoIds,
+    );
     return models.map((m) => m.toEntity()).toList();
   }
 }

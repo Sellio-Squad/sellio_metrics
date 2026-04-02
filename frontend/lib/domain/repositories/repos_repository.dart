@@ -1,7 +1,7 @@
 import 'package:sellio_metrics/domain/entities/repo_info.dart';
 
 abstract class ReposRepository {
-  /// Fetch available repos for the configured organisation.
+  /// Fetch synced repos from D1 — includes integer IDs, name and description.
   Future<List<RepoInfo>> getRepositories();
 
   /// Sync GitHub repo data to D1
