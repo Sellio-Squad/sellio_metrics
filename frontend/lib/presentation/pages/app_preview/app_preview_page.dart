@@ -125,7 +125,7 @@ class _AppPreviewPageState extends State<AppPreviewPage>
         children: [
           _AppPreviewHeader(onRefresh: _loadKeys),
           if (_isLoading)
-            const Expanded(child: Center(child: SLoading()))
+            Expanded(child: Center(child: SLoading()))
           else if (_error != null)
             Expanded(child: _StateView.error(message: _error!, onRetry: _loadKeys))
           else if (_apps.isEmpty)
@@ -310,7 +310,7 @@ class _EmulatorViewState extends State<_EmulatorView>
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const SLoading(),
+                                SLoading(),
                                 const SizedBox(height: 14),
                                 Text(
                                   'Starting ${widget.app.label}…',
