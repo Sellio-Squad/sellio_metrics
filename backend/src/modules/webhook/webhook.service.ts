@@ -17,6 +17,7 @@ import type { ReposRepository } from "../repos/repos.repository";
 import type { DeveloperRepository } from "../developers/developer.repository";
 import type { PrsRepository } from "../prs/prs.repository";
 import type { CommentsRepository } from "../prs/comments.repository";
+import type { CommitsRepository } from "../commits/commits.repository";
 import type { OpenPrsService } from "../prs/open-prs.service";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { CacheRegistry } from "../../infra/cache/cache-registry";
@@ -28,6 +29,7 @@ import type {
     IssueCommentPayload,
     ReviewCommentPayload,
     OrgMembershipPayload,
+    PushPayload,
 } from "./webhook.schemas";
 
 export interface WebhookHandlerResult {
@@ -40,6 +42,7 @@ interface WebhookServiceDeps {
     developerRepo: DeveloperRepository;
     prsRepo: PrsRepository;
     commentsRepo: CommentsRepository;
+    commitsRepo: CommitsRepository;
     openPrsService: OpenPrsService;
     cache: CacheRegistry;
     cachedGithubClient?: CachedGitHubClient;
@@ -52,6 +55,7 @@ export class WebhookService {
     private readonly developerRepo: DeveloperRepository;
     private readonly prsRepo: PrsRepository;
     private readonly commentsRepo: CommentsRepository;
+    private readonly commitsRepo: CommitsRepository;
     private readonly openPrsService: OpenPrsService;
     private readonly cache: CacheRegistry;
     private readonly cachedGithubClient?: CachedGitHubClient;
@@ -63,6 +67,7 @@ export class WebhookService {
         this.developerRepo = deps.developerRepo;
         this.prsRepo       = deps.prsRepo;
         this.commentsRepo  = deps.commentsRepo;
+        this.commitsRepo   = deps.commitsRepo;
         this.openPrsService = deps.openPrsService;
         this.cache         = deps.cache;
         this.cachedGithubClient = deps.cachedGithubClient;
@@ -244,6 +249,80 @@ export class WebhookService {
         const org = payload.organization?.login ?? this.org;
         await this.cache.members.del(`github:org-members:${org}`);
         return { affectedDevelopers: [] };
+    }
+
+    // ─── Push (direct commits) ──────────────────────────────
+
+    async handlePush(payload: PushPayload): Promise<WebhookHandlerResult> {
+        const affectedDevelopers: string[] = [];
+        const repo   = payload.repository;
+        const org    = payload.organization?.login ?? repo.owner?.login ?? this.org;
+        const sender = payload.sender;
+
+        // Extract branch name from ref (e.g. "refs/heads/development" → "development")
+        const branch = payload.ref.replace(/^refs\/heads\//, "");
+
+        // Skip tag pushes
+        if (payload.ref.startsWith("refs/tags/")) {
+            return { affectedDevelopers };
+        }
+
+        // Skip empty pushes (e.g. branch creation with no commits)
+        if (!payload.commits || payload.commits.length === 0) {
+            return { affectedDevelopers };
+        }
+
+        const repoOwner = repo.owner?.login ?? org;
+
+        // Upsert the repo
+        const repoId = await this.reposRepo.upsertRepo(repo.id, repoOwner, repo.name, { htmlUrl: repo.html_url });
+
+        // Process each commit
+        const commitRows: Array<{
+            sha: string; repoId: number; author: string;
+            message: string; branch: string; committedAt: string;
+            htmlUrl: string; additions: number; deletions: number;
+        }> = [];
+
+        for (const commit of payload.commits) {
+            // Resolve author: prefer commit.author.username (GitHub login), fall back to sender
+            const author = commit.author?.username ?? sender?.login;
+            if (!author || isBot(author, sender?.type)) continue;
+
+            // Ensure developer exists
+            await this.developerRepo.upsertDeveloper(author, sender?.avatar_url);
+
+            // Count file changes (rough line proxy for display; not scored)
+            const filesAdded    = commit.added?.length ?? 0;
+            const filesRemoved  = commit.removed?.length ?? 0;
+            const filesModified = commit.modified?.length ?? 0;
+
+            commitRows.push({
+                sha:         commit.id,
+                repoId,
+                author,
+                message:     commit.message.split("\n")[0].slice(0, 255),
+                branch,
+                committedAt: commit.timestamp,
+                htmlUrl:     commit.url,
+                additions:   filesAdded + filesModified,  // approximate
+                deletions:   filesRemoved,                // approximate
+            });
+
+            if (!affectedDevelopers.includes(author)) {
+                affectedDevelopers.push(author);
+            }
+        }
+
+        if (commitRows.length > 0) {
+            const inserted = await this.commitsRepo.insertCommitBatch(commitRows);
+            this.logger.info(
+                { repo: `${repoOwner}/${repo.name}`, branch, total: commitRows.length, inserted },
+                "Push webhook: commits processed",
+            );
+        }
+
+        return { affectedDevelopers };
     }
 
     // ─── Helpers ─────────────────────────────────────────────

@@ -95,13 +95,14 @@ export class D1Service {
         this.logger.info({ eventType, points }, "Point rule updated");
     }
 
-    /** Wipe all sync data (merged PRs + comments). Used by the reset endpoint. */
-    async truncateSyncData(): Promise<{ prsDeleted: number; commentsDeleted: number; devsDeleted: number; reposDeleted: number }> {
-        if (!this.db) return { prsDeleted: 0, commentsDeleted: 0, devsDeleted: 0, reposDeleted: 0 };
+    /** Wipe all sync data (merged PRs + comments + commits). Used by the reset endpoint. */
+    async truncateSyncData(): Promise<{ prsDeleted: number; commentsDeleted: number; commitsDeleted: number; devsDeleted: number; reposDeleted: number }> {
+        if (!this.db) return { prsDeleted: 0, commentsDeleted: 0, commitsDeleted: 0, devsDeleted: 0, reposDeleted: 0 };
 
-        const [r1, r2, r3, r4] = await this.db.batch([
+        const [r1, r2, r3, r4, r5] = await this.db.batch([
             this.db.prepare("DELETE FROM pr_comments"),
             this.db.prepare("DELETE FROM merged_prs"),
+            this.db.prepare("DELETE FROM commits"),
             this.db.prepare("DELETE FROM repos"),
             // Delete members who have no attendance records to avoid wiping historical Google Meet data (Foreign Key constraint limit)
             this.db.prepare("DELETE FROM members WHERE login NOT IN (SELECT display_name FROM participant_sessions)"),
@@ -110,8 +111,9 @@ export class D1Service {
         return {
             commentsDeleted: (r1.meta as any)?.changes ?? 0,
             prsDeleted:      (r2.meta as any)?.changes ?? 0,
-            reposDeleted:    (r3.meta as any)?.changes ?? 0,
-            devsDeleted:     (r4.meta as any)?.changes ?? 0,
+            commitsDeleted:  (r3.meta as any)?.changes ?? 0,
+            reposDeleted:    (r4.meta as any)?.changes ?? 0,
+            devsDeleted:     (r5.meta as any)?.changes ?? 0,
         };
     }
 

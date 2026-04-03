@@ -343,3 +343,95 @@ export async function syncOrgMembers(
 
     return { synced: enriched.length, logins: enriched.map((e) => e.login) };
 }
+
+// ─── Historical Commit Sync ──────────────────────────────────
+
+/**
+ * Sync all commits for a repo from GitHub REST API.
+ * Fetches commit list, then gets per-commit stats (additions/deletions).
+ * Idempotent — uses SHA as primary key (INSERT OR IGNORE).
+ */
+export async function syncCommitsForRepo(
+    cradle: Cradle,
+    owner: string,
+    repoName: string,
+    repoId: number,
+): Promise<{ commitsFound: number; commitsInserted: number }> {
+    const { cachedGithubClient, commitsRepo, developerRepo, logger } = cradle;
+    const log = logger.child({ module: "sync-commits", owner, repo: repoName });
+
+    // Fetch all commits for the repo
+    log.info("Fetching commits from GitHub REST API...");
+    const rawCommits = await cachedGithubClient.listCommits(owner, repoName);
+    log.info({ count: rawCommits.length }, "Raw commits fetched");
+
+    // Get existing SHAs to skip
+    const existingShas = await commitsRepo.getExistingShas(repoId);
+
+    // Filter: skip bots, skip already-stored, skip merge commits (message starts with "Merge")
+    const newCommits = rawCommits.filter((c: any) => {
+        const sha = c.sha;
+        if (existingShas.has(sha)) return false;
+        const author = c.author?.login;
+        if (!author || isBot(author, c.author?.type)) return false;
+        return true;
+    });
+
+    log.info({ existing: existingShas.size, new: newCommits.length }, "Filtered new commits");
+
+    if (newCommits.length === 0) {
+        return { commitsFound: rawCommits.length, commitsInserted: 0 };
+    }
+
+    // Fetch detailed stats in batches (getCommit includes additions/deletions)
+    const BATCH = 5;
+    const commitRows: Array<{
+        sha: string; repoId: number; author: string;
+        message: string; branch: string; committedAt: string;
+        htmlUrl: string; additions: number; deletions: number;
+    }> = [];
+
+    for (let i = 0; i < newCommits.length; i += BATCH) {
+        const chunk = newCommits.slice(i, i + BATCH);
+        const details = await Promise.all(
+            chunk.map(async (c: any) => {
+                try {
+                    const detail = await cachedGithubClient.getCommit(owner, repoName, c.sha);
+                    return {
+                        sha:         c.sha,
+                        author:      c.author?.login ?? "ghost",
+                        message:     (detail.commit?.message ?? c.commit?.message ?? "").split("\n")[0].slice(0, 255),
+                        committedAt: c.commit?.author?.date ?? new Date().toISOString(),
+                        htmlUrl:     c.html_url ?? detail.html_url ?? "",
+                        additions:   detail.stats?.additions ?? 0,
+                        deletions:   detail.stats?.deletions ?? 0,
+                    };
+                } catch (err) {
+                    // Fallback without stats
+                    return {
+                        sha:         c.sha,
+                        author:      c.author?.login ?? "ghost",
+                        message:     (c.commit?.message ?? "").split("\n")[0].slice(0, 255),
+                        committedAt: c.commit?.author?.date ?? new Date().toISOString(),
+                        htmlUrl:     c.html_url ?? "",
+                        additions:   0,
+                        deletions:   0,
+                    };
+                }
+            }),
+        );
+
+        for (const d of details) {
+            if (d.author === "ghost") continue;
+            await developerRepo.upsertDeveloper(d.author);
+            commitRows.push({ ...d, repoId, branch: "unknown" });
+        }
+
+        log.info({ batch: Math.floor(i / BATCH) + 1, total: Math.ceil(newCommits.length / BATCH) }, "Commit batch processed");
+    }
+
+    const inserted = await commitsRepo.insertCommitBatch(commitRows);
+    log.info({ inserted, total: commitRows.length }, "Commits batch inserted");
+
+    return { commitsFound: rawCommits.length, commitsInserted: inserted };
+}

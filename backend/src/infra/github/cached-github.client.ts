@@ -317,4 +317,45 @@ export class CachedGitHubClient {
             { owner, repo, pull_number: pullNumber, per_page: 100 },
         );
     }
+
+    /**
+     * List ALL commits for a repo — used for historical commit sync.
+     * Paginates automatically. Optional `since` ISO date to limit scope.
+     */
+    async listCommits(owner: string, repo: string, opts: { since?: string } = {}): Promise<any[]> {
+        await this.guard.checkAndWait();
+        return this.github.paginate(
+            this.github.rest.repos.listCommits,
+            { owner, repo, per_page: 100, ...(opts.since ? { since: opts.since } : {}) },
+        );
+    }
+
+    /**
+     * Get a single commit with full stats (additions/deletions per file).
+     * Cached for 24h since commit data is immutable.
+     */
+    async getCommit(owner: string, repo: string, ref: string): Promise<any> {
+        const cacheKey = `github:commit:${owner}/${repo}/${ref}`;
+        const cached = await this.cache.get<any>(cacheKey);
+        if (cached) return cached.data;
+
+        await this.guard.checkAndWait();
+        await new Promise((r) => setTimeout(r, 300)); // throttle
+
+        const response = await this.github.rest.repos.getCommit({ owner, repo, ref });
+        if (response?.headers) this.guard.updateFromHeaders(response.headers as Record<string, string | undefined>);
+
+        const slim = {
+            sha: response.data.sha,
+            stats: response.data.stats,
+            commit: {
+                message: response.data.commit.message,
+                author: response.data.commit.author,
+            },
+            author: response.data.author,
+            html_url: response.data.html_url,
+        };
+        await this.cache.set(cacheKey, slim, 24 * 60 * 60);
+        return slim;
+    }
 }
