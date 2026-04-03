@@ -18,11 +18,13 @@ extension GitHubRateLimitModelMapper on GitHubRateLimitModel {
 extension KvCacheQuotaModelMapper on KvCacheQuotaModel {
   KvCacheQuotaStatus toEntity() {
     return KvCacheQuotaStatus(
-      kvFreeWriteLimit: kvFreeWriteLimit,
-      kvResetAtUtc: kvResetAtUtc,
-      kvSecondsToReset: kvSecondsToReset,
-      cachedKeys: cachedKeys,
+      kvFreeWriteLimit:    kvFreeWriteLimit,
+      kvResetAtUtc:         kvResetAtUtc,
+      kvSecondsToReset:    kvSecondsToReset,
+      cachedKeys:           cachedKeys,
       maxWritesPerRequest: maxWritesPerRequest,
+      writesTotal:         writesTotal,
+      writesThisIsolate:   writesThisIsolate,
     );
   }
 }

@@ -56,9 +56,9 @@ export class CommitsRepository {
     async insertCommitBatch(commits: Commit[]): Promise<number> {
         if (!this.db || commits.length === 0) return 0;
 
-        // Ensure all authors exist in members table
+        // Batch upsert all unique authors — single D1 .batch() round-trip
         const logins = [...new Set(commits.map((c) => c.author))];
-        for (const login of logins) await this.developerRepo.upsertDeveloper(login);
+        await this.developerRepo.upsertDeveloperBatch(logins.map((login) => ({ login })));
 
         let totalInserted = 0;
 
@@ -135,5 +135,19 @@ export class CommitsRepository {
             "SELECT sha FROM commits WHERE repo_id = ?1"
         ).bind(repoId).all<{ sha: string }>();
         return new Set(rows.results.map((r) => r.sha));
+    }
+
+    /**
+     * Get the most recent commit timestamp for a repo.
+     * Used to drive incremental sync — only fetch commits newer than this date.
+     * Returns undefined if no commits are stored yet (triggers full historical fetch).
+     */
+    async getLatestCommittedAt(repoId: number): Promise<string | undefined> {
+        if (!this.db) return undefined;
+        const row = await this.db
+            .prepare("SELECT MAX(committed_at) AS latest FROM commits WHERE repo_id = ?1")
+            .bind(repoId)
+            .first<{ latest: string | null }>();
+        return row?.latest ?? undefined;
     }
 }

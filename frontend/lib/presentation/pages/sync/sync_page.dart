@@ -95,6 +95,10 @@ class _SyncSectionBodyState extends State<_SyncSectionBody> {
         if (sync.status == SyncStatus.done || sync.status == SyncStatus.error)
           _RepoList(sync: sync),
 
+        // ── KV Quota indicator ───────────────────────────────
+        const SizedBox(height: AppSpacing.md),
+        const _KvQuotaBar(),
+
         // ── Action buttons ───────────────────────────────────
         _ActionRow(sync: sync),
       ],
@@ -237,20 +241,22 @@ class _SyncSummaryRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
-    final totalPrs   = results.fold(0, (s, r) => s + (r.prsUpserted ?? 0));
-    final totalCmt   = results.fold(0, (s, r) => s + (r.commentsInserted ?? 0));
-    final totalAdd   = results.fold(0, (s, r) => s + (r.linesAdded ?? 0));
-    final totalDel   = results.fold(0, (s, r) => s + (r.linesDeleted ?? 0));
-    final totalWarn  = results.fold<int>(0, (s, r) => s + r.fetchFailures.length);
+    final totalPrs     = results.fold(0, (s, r) => s + (r.prsUpserted ?? 0));
+    final totalCmt     = results.fold(0, (s, r) => s + (r.commentsInserted ?? 0));
+    final totalCommits = results.fold(0, (s, r) => s + (r.commitsInserted ?? 0));
+    final totalAdd     = results.fold(0, (s, r) => s + (r.linesAdded ?? 0));
+    final totalDel     = results.fold(0, (s, r) => s + (r.linesDeleted ?? 0));
+    final totalWarn    = results.fold<int>(0, (s, r) => s + r.fetchFailures.length);
 
     return Wrap(
       spacing: AppSpacing.sm,
       runSpacing: AppSpacing.xs,
       children: [
-        _Chip(icon: Icons.merge_type, label: '$totalPrs PRs', color: scheme.primary),
-        _Chip(icon: Icons.add_circle_outline, label: '+$totalAdd lines', color: scheme.green),
-        _Chip(icon: Icons.remove_circle_outline, label: '-$totalDel lines', color: scheme.red),
-        _Chip(icon: Icons.comment_outlined, label: '$totalCmt comments', color: scheme.secondary),
+        _Chip(icon: Icons.merge_type,          label: '$totalPrs PRs',         color: scheme.primary),
+        _Chip(icon: Icons.commit,              label: '$totalCommits commits',  color: scheme.secondary),
+        _Chip(icon: Icons.add_circle_outline,  label: '+$totalAdd lines',       color: scheme.green),
+        _Chip(icon: Icons.remove_circle_outline, label: '-$totalDel lines',     color: scheme.red),
+        _Chip(icon: Icons.comment_outlined,    label: '$totalCmt comments',     color: scheme.hint),
         if (totalWarn > 0)
           _Chip(
             icon: Icons.warning_amber_rounded,
@@ -478,10 +484,11 @@ class _RepoStats extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = context.colors;
     final items = <(IconData, String, Color)>[
-      (Icons.merge_type, '${result.prsUpserted ?? 0} PRs', scheme.primary),
-      (Icons.add, '+${result.linesAdded ?? 0}', scheme.green),
-      (Icons.remove, '-${result.linesDeleted ?? 0}', scheme.red),
-      (Icons.comment_outlined, '${result.commentsInserted ?? 0} comments', scheme.hint),
+      (Icons.merge_type,            '${result.prsUpserted ?? 0} PRs',              scheme.primary),
+      (Icons.commit,                '${result.commitsInserted ?? 0} commits',       scheme.secondary),
+      (Icons.add,                   '+${result.linesAdded ?? 0}',                   scheme.green),
+      (Icons.remove,                '-${result.linesDeleted ?? 0}',                 scheme.red),
+      (Icons.comment_outlined,      '${result.commentsInserted ?? 0} comments',     scheme.hint),
     ];
 
     final fetchFailures = result.fetchFailures;
@@ -741,5 +748,121 @@ class _ActionRow extends StatelessWidget {
     if (confirmed == true && context.mounted) {
       await context.read<SyncProvider>().resetDatabase();
     }
+  }
+}
+
+// ── KV Quota Bar ─────────────────────────────────────────────────────
+
+class _KvQuotaBar extends StatefulWidget {
+  const _KvQuotaBar();
+
+  @override
+  State<_KvQuotaBar> createState() => _KvQuotaBarState();
+}
+
+class _KvQuotaBarState extends State<_KvQuotaBar> {
+  late Future<Map<String, dynamic>> _quotaFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _quotaFuture = _fetchQuota();
+  }
+
+  Future<Map<String, dynamic>> _fetchQuota() async {
+    try {
+      final sync = context.read<SyncProvider>();
+      return await sync.fetchKvQuota();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _quotaFuture,
+      builder: (context, snap) {
+        final data        = snap.data ?? {};
+        final writes      = (data['writesTotal']    as num?)?.toInt() ?? 0;
+        final limit       = (data['freeLimit']      as num?)?.toInt() ?? 1000;
+        final remaining   = (data['remainingWrites'] as num?)?.toInt() ?? (limit - writes);
+        final pct         = writes / limit;
+
+        final barColor = pct < 0.5
+            ? Colors.green
+            : pct < 0.8
+                ? Colors.orange
+                : scheme.red;
+
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color:        scheme.surfaceLow,
+            borderRadius: BorderRadius.circular(8),
+            border:       Border.all(color: scheme.stroke),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.storage_rounded, size: 14, color: scheme.hint),
+                  const SizedBox(width: 6),
+                  Text(
+                    'KV Write Quota  (free tier: $limit/day)',
+                    style: AppTypography.caption.copyWith(color: scheme.hint),
+                  ),
+                  const Spacer(),
+                  if (snap.connectionState == ConnectionState.waiting)
+                    SizedBox(
+                      width: 12, height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 1.5, color: scheme.hint),
+                    )
+                  else
+                    GestureDetector(
+                      onTap: () => setState(() { _quotaFuture = _fetchQuota(); }),
+                      child: Icon(Icons.refresh, size: 14, color: scheme.hint),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value:            snap.hasData ? pct.clamp(0.0, 1.0) : null,
+                  minHeight:        6,
+                  backgroundColor:  scheme.stroke,
+                  valueColor:       AlwaysStoppedAnimation(barColor),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Text(
+                    snap.hasData
+                        ? '$writes used  ·  $remaining remaining'
+                        : snap.hasError ? 'Quota unavailable' : 'Loading…',
+                    style: AppTypography.caption.copyWith(
+                      color: snap.hasData ? barColor : scheme.hint,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (snap.hasData) ...[
+                    const Spacer(),
+                    Text(
+                      '${(pct * 100).toStringAsFixed(0)}%',
+                      style: AppTypography.caption.copyWith(color: barColor, fontWeight: FontWeight.w700),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

@@ -28,15 +28,17 @@ class KvCacheQuotaBanner extends StatelessWidget {
       );
     }
 
-    final timeColor = _getTimeColor(scheme, status);
-    final keysColor = _getKeysColor(scheme, status);
+    final timeColor  = _getTimeColor(scheme, status);
+    final keysColor  = _getKeysColor(scheme, status);
+    final writeColor = _getWriteColor(scheme, status.writeFraction);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // ── Header ──────────────────────────────────────────
         Row(
           children: [
-            Icon(LucideIcons.database, size: 18, color: timeColor),
+            Icon(LucideIcons.database, size: 18, color: writeColor),
             const SizedBox(width: AppSpacing.xs),
             Text(
               l10n.kvCacheQuotaTitle,
@@ -51,7 +53,70 @@ class KvCacheQuotaBanner extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
 
-        // Daily write limit info
+        // ── Daily Write Consumption (key metric) ─────────────
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: scheme.surfaceHigh,
+            borderRadius: AppRadius.smAll,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(LucideIcons.send, size: 12, color: writeColor),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Daily KV Writes',
+                    style: AppTypography.caption.copyWith(color: scheme.hint),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${status.writesTotal} / ${status.kvFreeWriteLimit}',
+                    style: AppTypography.caption.copyWith(
+                      color: writeColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: AppRadius.smAll,
+                child: LinearProgressIndicator(
+                  value:           status.writeFraction.clamp(0.0, 1.0),
+                  minHeight:       6,
+                  backgroundColor: scheme.surfaceLow,
+                  valueColor:      AlwaysStoppedAnimation<Color>(writeColor),
+                ),
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Text(
+                    '${status.remainingWrites} writes remaining today',
+                    style: AppTypography.caption.copyWith(
+                      color:      writeColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${(status.writeFraction * 100).toStringAsFixed(0)}%',
+                    style: AppTypography.caption.copyWith(
+                      color:      writeColor,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+
+        // ── Static limits info ───────────────────────────────
         Container(
           padding: const EdgeInsets.all(AppSpacing.sm),
           decoration: BoxDecoration(
@@ -86,10 +151,7 @@ class KvCacheQuotaBanner extends StatelessWidget {
                     style: AppTypography.caption.copyWith(color: scheme.hint),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 6,
-                      vertical: 2,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
                       color: scheme.greenSurface,
                       borderRadius: AppRadius.smAll,
@@ -109,7 +171,7 @@ class KvCacheQuotaBanner extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.sm),
 
-        // Quota reset countdown bar
+        // ── Quota reset countdown bar ───────────────────────
         Row(
           children: [
             Icon(LucideIcons.timer, size: 14, color: timeColor),
@@ -129,15 +191,15 @@ class KvCacheQuotaBanner extends StatelessWidget {
         ClipRRect(
           borderRadius: AppRadius.smAll,
           child: LinearProgressIndicator(
-            value: status.dayFraction.clamp(0.0, 1.0),
-            minHeight: 5,
+            value:           status.dayFraction.clamp(0.0, 1.0),
+            minHeight:       5,
             backgroundColor: scheme.surfaceHigh,
-            valueColor: AlwaysStoppedAnimation<Color>(timeColor),
+            valueColor:      AlwaysStoppedAnimation<Color>(timeColor),
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
 
-        // Cache hit status
+        // ── Cache hit status ────────────────────────────────
         Row(
           children: [
             Icon(LucideIcons.zap, size: 14, color: keysColor),
@@ -153,13 +215,19 @@ class KvCacheQuotaBanner extends StatelessWidget {
           spacing: AppSpacing.xs,
           runSpacing: AppSpacing.xs,
           children: status.cachedKeys.entries.map((e) {
-            final hit = (e.value as Map?)?['hit'] == true;
+            final hit   = (e.value as Map?)?['hit'] == true;
             final label = e.key.split(':').last;
             return _CacheTag(label: label, hit: hit);
           }).toList(),
         ),
       ],
     );
+  }
+
+  Color _getWriteColor(SellioColorScheme scheme, double fraction) {
+    if (fraction < 0.5) return scheme.green;
+    if (fraction < 0.8) return scheme.secondary;
+    return scheme.red;
   }
 
   Color _getTimeColor(SellioColorScheme scheme, KvCacheQuotaStatus status) {

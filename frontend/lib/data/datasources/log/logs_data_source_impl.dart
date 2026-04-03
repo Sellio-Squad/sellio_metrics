@@ -31,4 +31,12 @@ class LogsDataSourceImpl implements LogsDataSource {
   Future<void> clearLogs() async {
     await _apiClient.delete(ApiEndpoints.logs);
   }
+
+  @override
+  Future<Map<String, dynamic>> fetchKvQuota() async {
+    return await _apiClient.get<Map<String, dynamic>>(
+      ApiEndpoints.logsQuota,
+      parser: (data) => data is Map ? Map<String, dynamic>.from(data) : {},
+    );
+  }
 }
