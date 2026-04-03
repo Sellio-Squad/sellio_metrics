@@ -23,10 +23,22 @@ class HealthDataSourceImpl implements HealthDataSource {
   @override
   Future<KvCacheQuotaModel?> fetchCacheQuota() async {
     try {
-      return await _apiClient.get<KvCacheQuotaModel>(
-        ApiEndpoints.cacheQuota,
-        parser: (data) => KvCacheQuotaModel.fromJson(data as Map<String, dynamic>),
-      );
+      // Fetch both in parallel for speed
+      final results = await Future.wait<Map<String, dynamic>?>([
+        _apiClient.get<Map<String, dynamic>>(ApiEndpoints.cacheQuota),
+        fetchLogQuota(),
+      ]);
+      final cacheJson = results[0];
+      final quotaJson = results[1];
+      if (cacheJson == null) return null;
+
+      // Merge write count from /api/logs/quota into the cache quota model
+      final merged = {
+        ...cacheJson,
+        'writesTotal':       quotaJson?['writesTotal']       ?? 0,
+        'writesThisIsolate': quotaJson?['writesThisIsolate'] ?? 0,
+      };
+      return KvCacheQuotaModel.fromJson(merged);
     } catch (_) {
       return null;
     }
@@ -38,6 +50,18 @@ class HealthDataSourceImpl implements HealthDataSource {
       return await _apiClient.get<GeminiUsageEntity>(
         ApiEndpoints.reviewUsage,
         parser: (data) => GeminiUsageEntity.fromJson(data as Map<String, dynamic>),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Future<Map<String, dynamic>?> fetchLogQuota() async {
+    try {
+      return await _apiClient.get<Map<String, dynamic>>(
+        ApiEndpoints.logsQuota,
+        parser: (data) => data is Map ? Map<String, dynamic>.from(data) : <String, dynamic>{},
       );
     } catch (_) {
       return null;

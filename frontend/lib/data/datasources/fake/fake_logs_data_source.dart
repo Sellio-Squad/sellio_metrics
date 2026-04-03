@@ -31,7 +31,11 @@ class FakeLogsDataSource implements LogsDataSource {
 
   @override
   Future<void> clearLogs() async {
-    // Fake implementation
     await Future.delayed(const Duration(milliseconds: 200));
+  }
+
+  @override
+  Future<Map<String, dynamic>> fetchKvQuota() async {
+    return {'day': DateTime.now().toIso8601String().substring(0, 10), 'writesTotal': 0, 'freeLimit': 1000, 'percentUsed': 0, 'remainingWrites': 1000};
   }
 }

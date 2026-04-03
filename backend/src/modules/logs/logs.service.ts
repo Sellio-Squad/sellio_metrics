@@ -2,9 +2,42 @@ import type { CacheService } from "../../infra/cache/cache.service";
 import type { Logger } from "../../core/logger";
 import type { LogEntry, LogCategory, LogSeverity } from "./logs.types";
 
-const LOGS_CACHE_KEY = "system_events_log";
-const MAX_LOGS = 100;
-const LOGS_TTL = 7 * 24 * 60 * 60; // 7 days
+const LOGS_CACHE_KEY  = "system_events_log";
+const QUOTA_CACHE_KEY = "kv_write_counter";
+const MAX_LOGS        = 200;
+const LOGS_TTL        = 7 * 24 * 60 * 60; // 7 days
+
+/**
+ * Module-level state — persists across requests in the SAME isolate.
+ *
+ * Cloudflare Workers reuse V8 isolates, so these values survive between
+ * requests on the same instance. This allows us to:
+ *  (a) Buffer log entries in memory and flush to KV at most every 60s
+ *      instead of on every single log() call.
+ *  (b) Track how many KV writes we've made so the UI can show quota usage.
+ *
+ * Result: ~80 KV writes per sync → 1-2 KV writes per sync.
+ */
+let _memBuffer:       LogEntry[]  = [];
+let _lastFlushMs:     number      = 0;
+let _kvWriteCount:    number      = 0;
+let _kvWriteResetDay: string      = "";   // "YYYY-MM-DD"
+
+/** Flush to KV at most once per this many ms (60 seconds). */
+const FLUSH_INTERVAL_MS = 60_000;
+
+function todayKey(): string {
+    return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
+}
+
+function trackWrite() {
+    const today = todayKey();
+    if (_kvWriteResetDay !== today) {
+        _kvWriteCount    = 0;
+        _kvWriteResetDay = today;
+    }
+    _kvWriteCount++;
+}
 
 export class LogsService {
     private readonly cacheService: CacheService;
@@ -16,17 +49,18 @@ export class LogsService {
     }
 
     /**
-     * Add a new log entry to the feed.
-     * Silently handles cache failures to prevent interrupting core paths.
+     * Add a new log entry to the in-memory buffer.
+     * Only flushes to KV when the buffer hasn't been flushed in 60 seconds,
+     * preventing quota exhaustion caused by per-entry KV writes.
      */
     async log(
-        message: string,
-        severity: LogSeverity,
-        category: LogCategory,
-        metadata?: Record<string, any>
+        message:   string,
+        severity:  LogSeverity,
+        category:  LogCategory,
+        metadata?: Record<string, any>,
     ): Promise<LogEntry> {
         const entry: LogEntry = {
-            id: `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
+            id:        `log_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
             timestamp: new Date().toISOString(),
             message,
             severity,
@@ -34,40 +68,83 @@ export class LogsService {
             ...(metadata && { metadata }),
         };
 
-        try {
-            const cached = await this.cacheService.get<LogEntry[]>(LOGS_CACHE_KEY);
-            const logs = cached?.data || [];
-            
-            logs.unshift(entry);
-            
-            if (logs.length > MAX_LOGS) {
-                logs.length = MAX_LOGS;
-            }
+        // Always add to in-memory buffer
+        _memBuffer.unshift(entry);
+        if (_memBuffer.length > MAX_LOGS) _memBuffer.length = MAX_LOGS;
 
-            // Await to ensure Cloudflare does not drop the background promise!
-            await this.cacheService.set(LOGS_CACHE_KEY, logs, LOGS_TTL).catch(err => {
-                this.logger.warn({ err: err.message }, "Failed to persist log to KV");
-            });
-        } catch (err: any) {
-            this.logger.warn({ err: err.message }, "Failed to read logs from KV for append");
+        // Only flush to KV if the cooldown has elapsed
+        const now = Date.now();
+        if (now - _lastFlushMs >= FLUSH_INTERVAL_MS) {
+            await this._flush();
         }
 
         return entry;
     }
 
     /**
-     * Retrieve the recent logs feed
+     * Force-flush the in-memory buffer to KV immediately.
+     * Called by getLogs() to ensure fresh data is returned even if
+     * the cooldown hasn't elapsed since the last flush.
      */
-    async getLogs(limit: number = 50): Promise<LogEntry[]> {
-        const cached = await this.cacheService.get<LogEntry[]>(LOGS_CACHE_KEY);
-        const logs = cached?.data || [];
-        return logs.slice(0, limit);
+    private async _flush(): Promise<void> {
+        try {
+            // Merge in-memory buffer with any entries already in KV
+            const cached = await this.cacheService.get<LogEntry[]>(LOGS_CACHE_KEY);
+            const kvLogs = cached?.data ?? [];
+
+            // Merge: in-memory entries are newest, then append older KV entries
+            const existingIds = new Set(_memBuffer.map((e) => e.id));
+            const merged = [..._memBuffer, ...kvLogs.filter((e) => !existingIds.has(e.id))];
+            if (merged.length > MAX_LOGS) merged.length = MAX_LOGS;
+
+            await this.cacheService.set(LOGS_CACHE_KEY, merged, LOGS_TTL);
+            trackWrite();
+
+            // Also persist write count for quota display
+            await this._persistWriteCount();
+
+            _lastFlushMs = Date.now();
+        } catch (err: any) {
+            // Non-fatal — logs are still in _memBuffer for this isolate's lifetime
+            this.logger.warn({ err: err.message }, "Log flush to KV failed (non-critical)");
+        }
+    }
+
+    private async _persistWriteCount(): Promise<void> {
+        try {
+            await this.cacheService.set(QUOTA_CACHE_KEY, {
+                day:    todayKey(),
+                writes: _kvWriteCount,
+            }, 25 * 60 * 60); // TTL slightly > 24h
+        } catch { /* non-critical */ }
     }
 
     /**
-     * Clear all logs feed
+     * Retrieve recent logs — flushes in-memory buffer first to merge with KV state.
      */
+    async getLogs(limit = 50): Promise<LogEntry[]> {
+        // Flush first so the response always reflects the latest in-memory entries
+        await this._flush();
+        const cached = await this.cacheService.get<LogEntry[]>(LOGS_CACHE_KEY);
+        return (cached?.data ?? []).slice(0, limit);
+    }
+
+    /**
+     * Return KV write quota usage for today (estimated from this isolate's counter).
+     */
+    async getQuotaStats(): Promise<{ day: string; writesThisIsolate: number; writesTotal: number }> {
+        const cached = await this.cacheService.get<{ day: string; writes: number }>(QUOTA_CACHE_KEY);
+        const today  = todayKey();
+        return {
+            day:                today,
+            writesThisIsolate:  _kvWriteResetDay === today ? _kvWriteCount : 0,
+            writesTotal:        cached?.data?.day === today ? cached.data.writes : 0,
+        };
+    }
+
     async clearLogs(): Promise<void> {
+        _memBuffer   = [];
+        _lastFlushMs = 0;
         await this.cacheService.del(LOGS_CACHE_KEY);
         this.logger.info("Logs feed cleared explicitly");
     }

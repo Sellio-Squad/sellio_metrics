@@ -55,8 +55,9 @@ export class PrsRepository {
     async upsertMergedPrBatch(prs: MergedPr[]): Promise<{ inserted: number; updated: number }> {
         if (!this.db || prs.length === 0) return { inserted: 0, updated: 0 };
 
+        // Batch upsert all unique authors — single D1 .batch() round-trip
         const logins = [...new Set(prs.map((p) => p.author))];
-        for (const login of logins) await this.developerRepo.upsertDeveloper(login);
+        await this.developerRepo.upsertDeveloperBatch(logins.map((login) => ({ login })));
 
         // Step 1: INSERT OR IGNORE — meta.changes counts ONLY truly new rows
         const insertStmt = this.db.prepare(

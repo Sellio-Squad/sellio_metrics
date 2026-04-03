@@ -11,7 +11,7 @@ import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
 import { syncOneRepo, syncOrgMembers, syncCommitsForRepo } from "./sync.service";
-import type { SyncRepoJob, SyncJobState } from "./sync-job.types";
+import type { SyncRepoJob, CommitSyncJob, SyncJobState } from "./sync-job.types";
 
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -107,7 +107,7 @@ sync.post("/github", zValidator("json", syncSchema), safe(async (c) => {
         } else {
             // Fallback: if queue not bound (local dev), run inline
             cradle.logger.warn({ repoName }, "SYNC_QUEUE not bound — running sync inline (may timeout)");
-            await runSyncJob(cradle, job, orgRepos);
+            await runSyncJob(cradle, job, {}, orgRepos);
         }
 
         jobs.push({ jobId, repo: `${owner}/${repoName}` });
@@ -129,15 +129,22 @@ sync.get("/status/:jobId", safe(async (c) => {
 
 // ─── Queue Consumer Logic (called from worker.ts) ─────────────
 
+/**
+ * Phase 1: PR Sync
+ * Syncs PRs + comments for one repo via GraphQL.
+ * On success enqueues a CommitSyncJob for the same repo.
+ * precomputeSnapshots() is NOT called here — it runs after commit sync.
+ */
 export async function runSyncJob(
-    cradle: any,
-    job:     SyncRepoJob,
+    cradle:   any,
+    job:      SyncRepoJob,
+    env:      { SYNC_QUEUE?: any; WEBHOOK_QUEUE?: any } = {},
     orgRepos?: any[],
 ): Promise<void> {
     const { cacheService, logger } = cradle;
-    const log = logger.child({ module: "sync-queue", jobId: job.jobId, repo: job.repoName });
+    const log = logger.child({ module: "sync-queue:pr", jobId: job.jobId, repo: job.repoName });
 
-    const updateState = (patch: Partial<SyncJobState>) =>
+    const setStatus = (patch: Partial<SyncJobState>) =>
         writeJobState(cacheService, {
             jobId:    job.jobId,
             owner:    job.owner,
@@ -147,46 +154,52 @@ export async function runSyncJob(
         } as SyncJobState);
 
     try {
-        await updateState({ status: "running", startedAt: new Date().toISOString() });
-        log.info("Starting sync job from queue");
+        await setStatus({ status: "running", startedAt: new Date().toISOString() });
+        log.info("Starting PR sync job from queue");
 
         if (!orgRepos) {
             orgRepos = await cradle.cachedGithubClient.listOrgRepos(job.owner) as any[];
         }
-
         const resolvedRepos = orgRepos!;
 
+        // ── Phase 1: Sync PRs + comments ──────────────────────
         const prResult = await syncOneRepo(
             cradle, job.owner, job.repoName, resolvedRepos, undefined, job.force,
         );
 
-        // Sync commits
+        // Mark PR phase done — commits still pending
+        await setStatus({
+            status: "running",
+            result: { phase: "prs_done", ...(prResult as object) },
+        });
+        log.info({ prResult }, "PR sync complete — enqueuing commit sync");
+
+        // ── Phase 2: Enqueue separate commit sync job ──────────
+        // This gives commit sync its own 30s CPU budget
         const repoMeta = resolvedRepos.find((r: any) => r.name === job.repoName);
         const repoId   = repoMeta?.id ?? job.repoId;
-        let commitResult = { commitsFound: 0, commitsInserted: 0 };
-        if (repoId) {
-            try {
-                commitResult = await syncCommitsForRepo(cradle, job.owner, job.repoName, repoId);
-            } catch (ce: any) {
-                log.warn({ err: ce.message }, "Commit sync failed (non-fatal)");
-            }
+
+        const commitJob: CommitSyncJob = {
+            type:      "commit_sync",
+            jobId:     job.jobId,
+            owner:     job.owner,
+            repoName:  job.repoName,
+            repoId,
+            force:     job.force,
+            // No `since` here — syncCommitsForRepo reads it from DB automatically
+        };
+
+        if (env.SYNC_QUEUE) {
+            await env.SYNC_QUEUE.send(commitJob);
+            log.info("Commit sync job enqueued");
+        } else {
+            // Local dev fallback — run inline
+            log.warn("SYNC_QUEUE not bound — running commit sync inline");
+            await runCommitSyncJob(cradle, commitJob, env);
         }
 
-        await cradle.scoreAggregationService.precomputeSnapshots();
-
-        await writeJobState(cacheService, {
-            jobId:      job.jobId,
-            owner:      job.owner,
-            repoName:   job.repoName,
-            status:     "done",
-            startedAt:  new Date().toISOString(),
-            finishedAt: new Date().toISOString(),
-            result:     { ...prResult as object, ...commitResult },
-        });
-
-        log.info("Sync job completed successfully");
     } catch (e: any) {
-        log.error({ err: e.message }, "Sync job failed");
+        log.error({ err: e.message }, "PR sync job failed");
         await writeJobState(cacheService, {
             jobId:      job.jobId,
             owner:      job.owner,
@@ -195,10 +208,72 @@ export async function runSyncJob(
             finishedAt: new Date().toISOString(),
             error:      e.message,
         });
-        throw e; // rethrow so queue retries
+        throw e; // rethrow so queue can retry
     }
 }
 
+/**
+ * Phase 2: Commit Sync
+ * Runs as a separate queue invocation → gets its own 30s CPU budget.
+ * Uses incremental `since` from DB so only new commits are fetched.
+ * After inserting commits, fires precomputeSnapshots() once.
+ */
+export async function runCommitSyncJob(
+    cradle: any,
+    job:    CommitSyncJob,
+    env:    { WEBHOOK_QUEUE?: any } = {},
+): Promise<void> {
+    const { cacheService, logger } = cradle;
+    const log = logger.child({ module: "sync-queue:commits", jobId: job.jobId, repo: job.repoName });
+
+    try {
+        log.info({ force: job.force }, "Starting commit sync job from queue");
+
+        const commitResult = await syncCommitsForRepo(
+            cradle, job.owner, job.repoName, job.repoId,
+            { since: job.since, force: job.force },
+        );
+
+        log.info({ commitResult }, "Commit sync complete");
+
+        // ── Recompute leaderboard once after commits are stored ──
+        // Offload to WEBHOOK_QUEUE so it runs async (doesn't count against this invocation)
+        if (env.WEBHOOK_QUEUE) {
+            await env.WEBHOOK_QUEUE.send({ type: "recompute_scores" });
+            log.info("Score recompute enqueued via webhook queue");
+        } else {
+            // Fallback: run inline (local dev or unbound)
+            try {
+                await cradle.scoreAggregationService.precomputeSnapshots();
+            } catch (se: any) {
+                log.warn({ err: se.message }, "Score recompute failed (non-fatal)");
+            }
+        }
+
+        // Mark the overall job as done
+        await writeJobState(cacheService, {
+            jobId:      job.jobId,
+            owner:      job.owner,
+            repoName:   job.repoName,
+            status:     "done",
+            finishedAt: new Date().toISOString(),
+            result:     { ...commitResult },
+        });
+
+        log.info("Sync job fully complete (PR + commits)");
+    } catch (e: any) {
+        log.error({ err: e.message }, "Commit sync job failed");
+        await writeJobState(cacheService, {
+            jobId:      job.jobId,
+            owner:      job.owner,
+            repoName:   job.repoName,
+            status:     "error",
+            finishedAt: new Date().toISOString(),
+            error:      `Commit sync failed: ${e.message}`,
+        });
+        throw e;
+    }
+}
 
 
 // ─── Sync Org Members ─────────────────────────────────────────

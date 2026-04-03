@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';
 
 import 'package:sellio_metrics/core/logging/app_logger.dart';
+import 'package:sellio_metrics/data/datasources/log/logs_data_source.dart';
 import 'package:sellio_metrics/domain/entities/repo_info.dart';
 import 'package:sellio_metrics/domain/repositories/repos_repository.dart';
 
@@ -13,6 +14,7 @@ class RepoSyncResult {
   final String? error;
   final int? prsUpserted;
   final int? commentsInserted;
+  final int? commitsInserted;
   final int? linesAdded;
   final int? linesDeleted;
   final List<Map<String, dynamic>> fetchFailures;
@@ -23,6 +25,7 @@ class RepoSyncResult {
     this.error,
     this.prsUpserted,
     this.commentsInserted,
+    this.commitsInserted,
     this.linesAdded,
     this.linesDeleted,
     this.fetchFailures = const [],
@@ -34,6 +37,7 @@ class RepoSyncResult {
 @injectable
 class SyncProvider extends ChangeNotifier {
   final ReposRepository _reposRepository;
+  final LogsDataSource  _logsDataSource;
 
   SyncStatus _status = SyncStatus.idle;
   List<RepoInfo> _repos = [];
@@ -42,7 +46,7 @@ class SyncProvider extends ChangeNotifier {
   final List<RepoSyncResult> _results = [];
   String? _globalError;
 
-  SyncProvider(this._reposRepository);
+  SyncProvider(this._reposRepository, this._logsDataSource);
 
   SyncStatus get status => _status;
   List<RepoInfo> get repos => _repos;
@@ -51,6 +55,9 @@ class SyncProvider extends ChangeNotifier {
   List<RepoSyncResult> get results => _results;
   String? get globalError => _globalError;
   bool get isRunning => _status == SyncStatus.running;
+
+  /// Fetch KV write quota for today — used by _KvQuotaBar on the sync page.
+  Future<Map<String, dynamic>> fetchKvQuota() => _logsDataSource.fetchKvQuota();
 
   List<RepoInfo> get availableRepos => _repos;
 
@@ -196,10 +203,11 @@ class SyncProvider extends ChangeNotifier {
           _results.add(RepoSyncResult(
             repo: repo,
             success: true,
-            prsUpserted: result['prsUpserted'] as int?,
+            prsUpserted:      result['prsUpserted'] as int?,
             commentsInserted: result['commentsInserted'] as int?,
-            linesAdded: result['linesAdded'] as int?,
-            linesDeleted: result['linesDeleted'] as int?,
+            commitsInserted:  result['commitsInserted'] as int?,
+            linesAdded:       result['linesAdded'] as int?,
+            linesDeleted:     result['linesDeleted'] as int?,
           ));
           return;
         }
@@ -283,11 +291,12 @@ class SyncProvider extends ChangeNotifier {
       _results.add(RepoSyncResult(
         repo: repo,
         success: true,
-        prsUpserted: body['prsUpserted'] as int?,
+        prsUpserted:      body['prsUpserted'] as int?,
         commentsInserted: body['commentsInserted'] as int?,
-        linesAdded: body['linesAdded'] as int?,
-        linesDeleted: body['linesDeleted'] as int?,
-        fetchFailures: fetchFailures,
+        commitsInserted:  body['commitsInserted'] as int?,
+        linesAdded:       body['linesAdded'] as int?,
+        linesDeleted:     body['linesDeleted'] as int?,
+        fetchFailures:    fetchFailures,
       ));
     } catch (e) {
       appLogger.error('SyncProvider', 'Failed to sync ${repo.name}', null);

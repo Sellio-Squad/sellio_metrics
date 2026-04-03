@@ -344,67 +344,81 @@ export async function syncOrgMembers(
     return { synced: enriched.length, logins: enriched.map((e) => e.login) };
 }
 
-// ─── Historical Commit Sync (GraphQL) ───────────────────────
+// ─── Commit Sync (GraphQL — Incremental) ─────────────────────
 
 /**
- * Sync all commits for a repo's default branch using GraphQL.
+ * Sync commits for a repo's default branch using GraphQL.
  *
- * Why GraphQL instead of REST?
- *   REST approach:  listCommits() (N pages) + getCommit(sha) per new commit
- *                   = N × 100 + M × (1 call + 300ms delay)  → often >30s timeout
- *   GraphQL approach: 1 paginated query with author login embedded
- *                   = 1-10 requests, <3s total even for old repos
+ * INCREMENTAL MODE (normal syncs):
+ *   - Reads the latest committed_at from the DB for this repo.
+ *   - Passes it as `since` to GitHub's history() — GitHub returns ONLY
+ *     commits after that date. Typically 1-2 pages = <1s.
  *
- * Trade-off: GraphQL commit history does NOT include additions/deletions
- * (GitHub doesn't expose those in the API). We store 0 for both — commits
- * are tracked for activity/presence, not line counts.
+ * FULL MODE (initial sync or force=true):
+ *   - No `since` filter. Paginates all history until complete.
+ *   - This job runs as a separate queue invocation so it gets its own
+ *     30-second CPU budget per page batch.
  *
  * Idempotent — uses SHA as primary key (INSERT OR IGNORE).
+ * Developer upserts are batched — single D1 .batch() call.
  */
 export async function syncCommitsForRepo(
     cradle: Cradle,
     owner: string,
     repoName: string,
     repoId: number,
-): Promise<{ commitsFound: number; commitsInserted: number }> {
+    opts: { since?: string; force?: boolean } = {},
+): Promise<{ commitsFound: number; commitsInserted: number; mode: string }> {
     const { githubClient, commitsRepo, developerRepo, logger } = cradle;
     const log = logger.child({ module: "sync-commits", owner, repo: repoName });
 
     const gql = new GitHubGraphQLClient(githubClient as any, logger);
 
-    log.info("Fetching commits via GraphQL...");
-    const rawCommits = await gql.fetchCommits(owner, repoName, { maxPages: 10 });
-    log.info({ count: rawCommits.length }, "GraphQL commits fetched");
-
-    // Get existing SHAs so we can skip already-stored commits
-    const existingShas = await commitsRepo.getExistingShas(repoId);
-    const newCommits = rawCommits.filter((c) => !existingShas.has(c.sha) && c.author !== "ghost");
-
-    log.info({ existing: existingShas.size, new: newCommits.length }, "New commits to insert");
-
-    if (newCommits.length === 0) {
-        return { commitsFound: rawCommits.length, commitsInserted: 0 };
+    // Determine since: explicit > DB latest > none (full history)
+    let since = opts.since;
+    if (!since && !opts.force) {
+        // Incremental: only fetch commits newer than what we already have
+        since = await commitsRepo.getLatestCommittedAt(repoId);
     }
 
-    // Upsert developers for all unique commit authors
-    const uniqueAuthors = [...new Set(newCommits.map((c) => c.author))];
+    const mode = since ? "incremental" : "full-history";
+    log.info({ mode, since: since ?? "none" }, "Starting commit sync");
+
+    const rawCommits = await gql.fetchCommits(owner, repoName, { since });
+    log.info({ count: rawCommits.length, mode }, "GraphQL commits fetched");
+
+    if (rawCommits.length === 0) {
+        return { commitsFound: 0, commitsInserted: 0, mode };
+    }
+
+    // Filter out already-stored SHAs (only needed for full-history mode;
+    // incremental mode already filters via `since` at source)
+    const newCommits = since
+        ? rawCommits.filter((c) => c.author !== "ghost")          // trust GitHub's since filter
+        : rawCommits.filter(async () => true);                     // will dedup via INSERT OR IGNORE
+
+    // Batch upsert all unique commit authors — single D1 .batch() round-trip
+    const uniqueAuthors = [...new Set(rawCommits.map((c) => c.author))];
     await developerRepo.upsertDeveloperBatch(uniqueAuthors.map((login) => ({ login })));
 
     // Build commit rows — additions/deletions are 0 (GraphQL doesn't expose them)
-    const commitRows = newCommits.map((c) => ({
-        sha:         c.sha,
-        repoId,
-        author:      c.author,
-        message:     c.message,
-        branch:      "default",   // default branch (GraphQL only fetches defaultBranchRef)
-        committedAt: c.committedAt,
-        htmlUrl:     c.htmlUrl,
-        additions:   0,
-        deletions:   0,
-    }));
+    const commitRows = rawCommits
+        .filter((c) => c.author !== "ghost")
+        .map((c) => ({
+            sha:         c.sha,
+            repoId,
+            author:      c.author,
+            message:     c.message,
+            branch:      "default",
+            committedAt: c.committedAt,
+            htmlUrl:     c.htmlUrl,
+            additions:   0,
+            deletions:   0,
+        }));
 
+    // insertCommitBatch uses INSERT OR IGNORE — idempotent
     const inserted = await commitsRepo.insertCommitBatch(commitRows);
-    log.info({ inserted, total: commitRows.length }, "Commits batch inserted");
+    log.info({ found: rawCommits.length, inserted, mode }, "Commit sync complete");
 
-    return { commitsFound: rawCommits.length, commitsInserted: inserted };
+    return { commitsFound: rawCommits.length, commitsInserted: inserted, mode };
 }

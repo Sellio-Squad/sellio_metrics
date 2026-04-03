@@ -21,13 +21,13 @@ class FakeHealthDataSource implements HealthDataSource {
   @override
   Future<KvCacheQuotaModel?> fetchCacheQuota() async {
     return const KvCacheQuotaModel(
-      kvFreeWriteLimit: 950,
-      kvResetAtUtc: '2026-03-22T00:00:00Z',
-      kvSecondsToReset: 3600,
-      cachedKeys: {
-        'key1': {'hit': true},
-      },
+      kvFreeWriteLimit:    1000,
+      kvResetAtUtc:        '2026-03-22T00:00:00Z',
+      kvSecondsToReset:    3600,
+      cachedKeys:          {'key1': {'hit': true}},
       maxWritesPerRequest: 3,
+      writesTotal:         42,
+      writesThisIsolate:   12,
     );
   }
 
@@ -47,5 +47,17 @@ class FakeHealthDataSource implements HealthDataSource {
         minuteRequestLimit: 30,
       ),
     );
+  }
+
+  @override
+  Future<Map<String, dynamic>?> fetchLogQuota() async {
+    return {
+      'day': DateTime.now().toIso8601String().substring(0, 10),
+      'writesTotal': 42,
+      'writesThisIsolate': 12,
+      'freeLimit': 1000,
+      'percentUsed': 4,
+      'remainingWrites': 958,
+    };
   }
 }

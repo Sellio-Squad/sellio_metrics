@@ -5,4 +5,6 @@ abstract class HealthDataSource {
   Future<Map<String, dynamic>?> fetchHealthStatus();
   Future<KvCacheQuotaModel?> fetchCacheQuota();
   Future<GeminiUsageEntity?> fetchGeminiUsage();
+  /// Returns the raw JSON from GET /api/logs/quota
+  Future<Map<String, dynamic>?> fetchLogQuota();
 }

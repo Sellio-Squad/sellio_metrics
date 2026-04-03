@@ -401,22 +401,29 @@ export class GitHubGraphQLClient {
      * because it gives us author login + committedDate in one query.
      * Note: GraphQL does NOT give additions/deletions per commit, so we
      * store 0 for those (same behavior as REST fallback path).
+     *
+     * When `since` is provided (incremental mode) GitHub only returns commits
+     * AFTER that timestamp — so we paginate until done with no page cap.
+     * Without `since` (initial/force sync) we paginate all history.
      */
     async fetchCommits(
-        owner:    string,
-        repo:     string,
-        opts:     { maxPages?: number; since?: string } = {},
+        owner: string,
+        repo:  string,
+        opts:  { since?: string; maxPages?: number } = {},
     ): Promise<{ sha: string; author: string; message: string; committedAt: string; htmlUrl: string }[]> {
-        const { maxPages = 10 } = opts;
+        const { since, maxPages = 500 } = opts; // 500p × 100 = 50k commits — effectively unlimited
 
-        // GitHub GraphQL defaultBranchRef gives us the default branch commits
+        // `since` is a GitTimestamp (ISO-8601) supported natively by GitHub's history()
+        const sinceArg = since ? `, since: $since` : "";
+        const sinceVar = since ? ", $since: GitTimestamp" : "";
+
         const COMMITS_QUERY = `
-            query RepoCommits($owner: String!, $repo: String!, $cursor: String) {
+            query RepoCommits($owner: String!, $repo: String!, $cursor: String${sinceVar}) {
                 repository(owner: $owner, name: $repo) {
                     defaultBranchRef {
                         target {
                             ... on Commit {
-                                history(first: 100, after: $cursor) {
+                                history(first: 100, after: $cursor${sinceArg}) {
                                     pageInfo { hasNextPage endCursor }
                                     nodes {
                                         oid
@@ -442,14 +449,18 @@ export class GitHubGraphQLClient {
         let hasNextPage: boolean       = true;
         let page:        number        = 0;
 
+        this.logger.info(
+            { owner, repo, mode: since ? "incremental" : "full-history", since: since ?? "none" },
+            "Starting GraphQL commit fetch",
+        );
+
         while (hasNextPage && page < maxPages) {
             page++;
             try {
-                const result: any = await (this.octokit as any).graphql(COMMITS_QUERY, {
-                    owner,
-                    repo,
-                    cursor: cursor ?? undefined,
-                });
+                const variables: Record<string, any> = { owner, repo, cursor: cursor ?? undefined };
+                if (since) variables.since = since;
+
+                const result: any = await (this.octokit as any).graphql(COMMITS_QUERY, variables);
 
                 const rl: GqlRateLimit = result.rateLimit;
                 this.logger.info(
@@ -465,9 +476,8 @@ export class GitHubGraphQLClient {
 
                 const nodes = history.nodes ?? [];
                 for (const node of nodes) {
-                    // Prefer linked GitHub user login, fall back to git author name
                     const authorLogin = node.author?.user?.login ?? null;
-                    if (!authorLogin) continue; // skip commits with no linked account
+                    if (!authorLogin) continue;
 
                     allCommits.push({
                         sha:         node.oid,
@@ -492,7 +502,7 @@ export class GitHubGraphQLClient {
         }
 
         this.logger.info(
-            { owner, repo, totalCommits: allCommits.length, pages: page },
+            { owner, repo, totalCommits: allCommits.length, pages: page, mode: since ? "incremental" : "full-history" },
             "GraphQL commits fetch complete",
         );
 

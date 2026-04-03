@@ -4,6 +4,8 @@ class KvCacheQuotaStatus {
   final int kvSecondsToReset;
   final Map<String, dynamic> cachedKeys;
   final int maxWritesPerRequest;
+  final int writesTotal;
+  final int writesThisIsolate;
 
   const KvCacheQuotaStatus({
     required this.kvFreeWriteLimit,
@@ -11,11 +13,19 @@ class KvCacheQuotaStatus {
     required this.kvSecondsToReset,
     required this.cachedKeys,
     required this.maxWritesPerRequest,
+    this.writesTotal       = 0,
+    this.writesThisIsolate = 0,
   });
 
   int get cachedKeyCount =>
       cachedKeys.values.where((v) => (v as Map?)?['hit'] == true).length;
   int get totalKeys => cachedKeys.length;
+
+  /// Fraction of daily write quota used (0.0 – 1.0).
+  double get writeFraction => (writesTotal / kvFreeWriteLimit).clamp(0.0, 1.0);
+
+  /// Remaining writes before the daily free limit is hit.
+  int get remainingWrites => (kvFreeWriteLimit - writesTotal).clamp(0, kvFreeWriteLimit);
 
   String get resetLabel {
     if (kvSecondsToReset <= 0) return 'Resets soon';
@@ -26,7 +36,6 @@ class KvCacheQuotaStatus {
   }
 
   /// Fraction of the day elapsed (approximation using seconds to reset).
-  /// 86400 seconds = 24 hours
   double get dayFraction {
     if (kvSecondsToReset <= 0 || kvSecondsToReset >= 86400) return 0.0;
     return 1.0 - (kvSecondsToReset / 86400);
