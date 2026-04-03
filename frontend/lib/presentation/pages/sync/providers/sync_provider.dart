@@ -268,8 +268,40 @@ class SyncProvider extends ChangeNotifier {
       return;
     }
 
-    _selectedRepoNames = _repos.map((r) => r.fullName).toSet();
-    await startSync(force: true);
+    _status = SyncStatus.idle;
+    _repos = [];
+    _selectedRepoNames = {};
+    notifyListeners();
+    // Automatically reload repos after reset
+    await loadRepos();
+  }
+
+  Future<void> invalidateCache() async {
+    if (_status == SyncStatus.running || _status == SyncStatus.resetting) return;
+
+    _status = SyncStatus.resetting;
+    _results.clear();
+    _currentIndex = -1;
+    _globalError = null;
+    notifyListeners();
+
+    try {
+      await _reposRepository.syncGithubCache();
+      appLogger.info('SyncProvider', 'Cache invalidated successfully');
+    } catch (e) {
+      appLogger.error('SyncProvider', 'Cache invalidation failed', null);
+      _globalError = 'Invalidate failed: ${e.toString()}';
+      _status = SyncStatus.error;
+      notifyListeners();
+      return;
+    }
+
+    _status = SyncStatus.idle;
+    _repos = [];
+    _selectedRepoNames = {};
+    notifyListeners();
+    // Automatically reload repos after cache is cleared
+    await loadRepos();
   }
 
   Future<void> invalidateCache() async {
