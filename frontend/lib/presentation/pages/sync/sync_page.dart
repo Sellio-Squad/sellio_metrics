@@ -683,7 +683,7 @@ class _ActionRow extends StatelessWidget {
             ),
           ),
 
-        // ── Reset Database (danger) ───────────────────────────
+        // ── Delete Database (danger) ───────────────────────────
         if (isIdle)
           SButton(
             variant: SButtonVariant.outline,
@@ -696,7 +696,7 @@ class _ActionRow extends StatelessWidget {
                 Icon(Icons.delete_sweep_outlined, size: 14, color: scheme.red),
                 const SizedBox(width: 4),
                 Text(
-                  'Reset Database',
+                  'Delete Database',
                   style: TextStyle(color: scheme.red),
                 ),
               ],
@@ -719,7 +719,7 @@ class _ActionRow extends StatelessWidget {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Reset All Sync Data?'),
+        title: const Text('Delete All Sync Data?'),
         content: const Text(
           'This will permanently delete ALL synced PRs and comments from the database '
           'and bust all caches.\n\n'
@@ -733,7 +733,7 @@ class _ActionRow extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Reset Database'),
+            child: const Text('Delete Database'),
           ),
         ],
       ),
