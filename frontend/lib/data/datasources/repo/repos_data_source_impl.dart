@@ -48,4 +48,12 @@ class ReposDataSourceImpl implements ReposDataSource {
       tag: 'SyncGithubReset',
     );
   }
+
+  @override
+  Future<void> syncGithubCache() async {
+    await _apiClient.delete<dynamic>(
+      ApiEndpoints.syncGithubCache,
+      tag: 'SyncGithubCache',
+    );
+  }
 }

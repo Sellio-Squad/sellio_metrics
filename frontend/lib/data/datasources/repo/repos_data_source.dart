@@ -5,4 +5,5 @@ abstract class ReposDataSource {
 
   Future<Map<String, dynamic>> syncGithub(String repoFullName, {List<int>? prNumbers, bool force = false});
   Future<void> syncGithubReset();
+  Future<void> syncGithubCache();
 }

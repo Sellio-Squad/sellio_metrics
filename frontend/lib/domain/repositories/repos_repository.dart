@@ -9,4 +9,7 @@ abstract class ReposRepository {
   
   /// Reset all synced GitHub data
   Future<void> syncGithubReset();
+
+  /// Invalidate API caches
+  Future<void> syncGithubCache();
 }

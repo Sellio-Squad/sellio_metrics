@@ -16,11 +16,15 @@
 --   point_rules               — dynamic scoring rules
 -- ═══════════════════════════════════════════════════════════════════
 
--- ─── Drop legacy tables ──────────────────────────────────────────
-DROP TABLE IF EXISTS events_archive;
-DROP TABLE IF EXISTS events;
-DROP TABLE IF EXISTS developers;
-DROP TABLE IF EXISTS meeting_attendance;
+DROP TABLE IF EXISTS participant_sessions;
+DROP TABLE IF EXISTS meeting_sessions;
+DROP TABLE IF EXISTS pr_comments;
+DROP TABLE IF EXISTS merged_prs;
+DROP TABLE IF EXISTS commits;
+DROP TABLE IF EXISTS repos;
+DROP TABLE IF EXISTS members;
+DROP TABLE IF EXISTS regular_meeting_schedules;
+DROP TABLE IF EXISTS point_rules;
 
 -- ─── 1. Repos ────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS repos (
@@ -161,9 +165,9 @@ CREATE TABLE IF NOT EXISTS point_rules (
 );
 
 INSERT OR IGNORE INTO point_rules (event_type, points, description) VALUES
-    ('PR_MERGED',           5,    'Points per merged pull request'),
-    ('CODE_ADDITION',       0.01, 'Points per added line'),
-    ('CODE_DELETION',       0.01, 'Points per deleted line'),
+    ('PR_MERGED',           3,    'Points per merged pull request'),
+    ('CODE_ADDITION',       0.001, 'Points per added line'),
+    ('CODE_DELETION',       0.001, 'Points per deleted line'),
     ('PR_COMMENT',          2,    'Points per pull request comment'),
-    ('COMMIT',              2,    'Points per direct commit (push)'),
+    ('COMMIT',              1,    'Points per direct commit (push)'),
     ('ATTENDANCE_DURATION', 0.1,  'Points per minute of meeting attendance');

@@ -122,4 +122,27 @@ sync.delete("/github/reset", safe(async (c) => {
     });
 }));
 
+// ─── Invalidate Cache Only ────────────────────────────────────
+sync.delete("/github/cache", safe(async (c) => {
+    const cradle = useCradle(c);
+    const { cacheService, scoresKvCache, logger, env } = cradle;
+    
+    // Bust all relevant caches without wiping tables
+    const org = env.org;
+    await Promise.allSettled([
+        cacheService.del(`sellio:leaderboard:all`),
+        scoresKvCache.del(`sellio:leaderboard:all`),
+        cacheService.del(`github:open_prs:${org}`),
+        cacheService.del(`github:repos:${org}`),
+        cacheService.del(`github:org-members:${org}`),
+    ]);
+
+    logger.info("KV caches manually invalidated via /cache endpoint");
+
+    return c.json({
+        ok: true,
+        message: "Caches invalidated. Repos list will be freshly fetched.",
+    });
+}));
+
 export default sync;
