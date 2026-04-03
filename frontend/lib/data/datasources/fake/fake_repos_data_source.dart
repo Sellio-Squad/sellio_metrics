@@ -41,4 +41,10 @@ class FakeReposDataSource implements ReposDataSource {
   Future<void> syncGithubReset() async {
     await Future.delayed(const Duration(milliseconds: 500));
   }
+
+  @override
+  Future<void> syncGithubCache() async {
+    // Fake invalidate cache response
+    await Future.delayed(const Duration(milliseconds: 300));
+  }
 }

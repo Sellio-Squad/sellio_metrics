@@ -666,6 +666,23 @@ class _ActionRow extends StatelessWidget {
           ),
         ],
 
+        // ── Invalidate Cache ──────────────────────────────────
+        if (isIdle)
+          SButton(
+            variant: SButtonVariant.outline,
+            onPressed: sync.status == SyncStatus.resetting
+                ? null
+                : () => context.read<SyncProvider>().invalidateCache(),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.cleaning_services_outlined, size: 14, color: scheme.primary),
+                const SizedBox(width: 4),
+                Text('Clear Cache'),
+              ],
+            ),
+          ),
+
         // ── Reset Database & Re-Sync (danger) ─────────────────
         if (isIdle)
           SButton(

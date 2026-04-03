@@ -25,4 +25,9 @@ class ReposRepositoryImpl implements ReposRepository {
   Future<void> syncGithubReset() async {
     return await _dataSource.syncGithubReset();
   }
+
+  @override
+  Future<void> syncGithubCache() async {
+    return await _dataSource.syncGithubCache();
+  }
 }
