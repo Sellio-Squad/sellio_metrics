@@ -56,6 +56,7 @@ async function buildContainer(
     const { ReposRepository } = await import("../modules/repos/repos.repository");
     const { PrsRepository } = await import("../modules/prs/prs.repository");
     const { CommentsRepository } = await import("../modules/prs/comments.repository");
+    const { CommitsRepository } = await import("../modules/commits/commits.repository");
     const { ScoresRepository } = await import("../modules/scores/scores.repository");
     const { DeveloperRepository } = await import("../modules/developers/developer.repository");
     const { MeetingsRepository } = await import("../modules/meetings/meetings.repository");
@@ -129,6 +130,7 @@ async function buildContainer(
         reposRepo: asFunction(({ logger }: Cradle) => new ReposRepository(d1Database, logger)).singleton(),
         prsRepo: asFunction(({ logger, developerRepo }: Cradle) => new PrsRepository(d1Database, logger, developerRepo)).singleton(),
         commentsRepo: asFunction(({ logger, developerRepo }: Cradle) => new CommentsRepository(d1Database, logger, developerRepo)).singleton(),
+        commitsRepo: asFunction(({ logger, developerRepo }: Cradle) => new CommitsRepository(d1Database, logger, developerRepo)).singleton(),
         scoresRepo: asFunction(({ logger }: Cradle) => new ScoresRepository(d1Database, logger)).singleton(),
         meetingsRepo: asFunction(({ logger }: Cradle) => new MeetingsRepository(d1Database, logger)).singleton(),
         regularSchedulesRepo: asFunction(({ logger }: Cradle) => new RegularSchedulesRepository(d1Database, logger)).singleton(),
@@ -175,8 +177,8 @@ async function buildContainer(
 
         // Webhook
         webhookQueue: asFunction(() => webhookQueue).singleton(),
-        webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) =>
-            new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, openPrsService, cache, cachedGithubClient, env }),
+        webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) =>
+            new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env }),
         ).singleton(),
 
         // AI

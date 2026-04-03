@@ -4,6 +4,7 @@ class LeaderboardEntry {
   final int prsCreated;
   final int prsMerged;
   final int commentsGiven;
+  final int commitCount;
   /// Actual number of lines added (sum across all repos).
   final int lineAdditions;
   /// Actual number of lines deleted (sum across all repos).
@@ -16,6 +17,7 @@ class LeaderboardEntry {
     required this.prsCreated,
     required this.prsMerged,
     required this.commentsGiven,
+    required this.commitCount,
     required this.lineAdditions,
     required this.lineDeletions,
     required this.totalScore,

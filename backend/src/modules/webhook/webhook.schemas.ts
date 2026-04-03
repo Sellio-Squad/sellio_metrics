@@ -108,6 +108,31 @@ export const pullRequestReviewPayloadSchema = z.object({
 
 export type PullRequestReviewPayload = z.infer<typeof pullRequestReviewPayloadSchema>;
 
+// ─── Push Event ──────────────────────────────────────────────
+
+export const pushPayloadSchema = z.object({
+    ref:          z.string(),                    // "refs/heads/development"
+    repository:   repositorySchema,
+    organization: organizationSchema.optional(),
+    sender:       githubUserSchema.optional(),
+    forced:       z.boolean().optional(),
+    commits:      z.array(z.object({
+        id:        z.string(),                   // SHA
+        message:   z.string(),
+        timestamp: z.string(),
+        url:       z.string(),
+        author:    z.object({
+            name:     z.string(),
+            username: z.string().optional(),      // GitHub login (may be missing for non-linked authors)
+        }).passthrough(),
+        added:     z.array(z.string()).optional(),
+        removed:   z.array(z.string()).optional(),
+        modified:  z.array(z.string()).optional(),
+    })).default([]),
+}).passthrough();
+
+export type PushPayload = z.infer<typeof pushPayloadSchema>;
+
 // ─── Organization / Member Events ────────────────────────────
 
 export const orgMembershipPayloadSchema = z.object({
@@ -124,6 +149,7 @@ const schemaMap: Record<string, z.ZodType<any>> = {
     pull_request_review:        pullRequestReviewPayloadSchema,
     issue_comment:              issueCommentPayloadSchema,
     pull_request_review_comment: reviewCommentPayloadSchema,
+    push:                       pushPayloadSchema,
     organization:               orgMembershipPayloadSchema,
     member:                     orgMembershipPayloadSchema,
     membership:                 orgMembershipPayloadSchema,

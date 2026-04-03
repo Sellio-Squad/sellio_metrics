@@ -20,12 +20,14 @@ import type {
     IssueCommentPayload,
     ReviewCommentPayload,
     OrgMembershipPayload,
+    PushPayload,
 } from "./webhook.schemas";
 import type { WebhookHandlerResult } from "./webhook.service";
 
 const RELEVANT_EVENTS = new Set([
     "pull_request", "pull_request_review",
     "issue_comment", "pull_request_review_comment",
+    "push",
     "organization", "member", "membership",
 ]);
 
@@ -78,6 +80,7 @@ webhook.post("/github", async (c) => {
         pull_request_review:        (p) => cradle.webhookService.handlePullRequest(p as PullRequestPayload),
         issue_comment:              (p) => cradle.webhookService.handleIssueComment(p as IssueCommentPayload),
         pull_request_review_comment: (p) => cradle.webhookService.handleReviewComment(p as ReviewCommentPayload),
+        push:                       (p) => cradle.webhookService.handlePush(p as PushPayload),
         organization:               (p) => cradle.webhookService.handleOrgMembership(p as OrgMembershipPayload),
         member:                     (p) => cradle.webhookService.handleOrgMembership(p as OrgMembershipPayload),
         membership:                 (p) => cradle.webhookService.handleOrgMembership(p as OrgMembershipPayload),
