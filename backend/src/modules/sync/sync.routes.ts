@@ -104,13 +104,11 @@ sync.delete("/github/reset", safe(async (c) => {
     logger.info({ prsDeleted, commentsDeleted, commitsDeleted, devsDeleted, reposDeleted }, "Sync tables cleared");
 
     // Bust all relevant caches
-    const org = env.org;
     await Promise.allSettled([
-        cacheService.del(`sellio:leaderboard:all`),
-        scoresKvCache.del(`sellio:leaderboard:all`),
-        cacheService.del(`github:open_prs:${org}`),
-        cacheService.del(`github:repos:${org}`),
-        cacheService.del(`github:org-members:${org}`),
+        cacheService.clearAll(),
+        scoresKvCache.clearAll(),
+        cradle.membersKvCache.clearAll(),
+        cradle.attendanceKvCache.clearAll(),
     ]);
 
     logger.info("All KV caches cleared");
@@ -125,23 +123,21 @@ sync.delete("/github/reset", safe(async (c) => {
 // ─── Invalidate Cache Only ────────────────────────────────────
 sync.delete("/github/cache", safe(async (c) => {
     const cradle = useCradle(c);
-    const { cacheService, scoresKvCache, logger, env } = cradle;
+    const { cacheService, scoresKvCache, membersKvCache, attendanceKvCache, logger } = cradle;
     
-    // Bust all relevant caches without wiping tables
-    const org = env.org;
+    // Wipe every namespace cleanly
     await Promise.allSettled([
-        cacheService.del(`sellio:leaderboard:all`),
-        scoresKvCache.del(`sellio:leaderboard:all`),
-        cacheService.del(`github:open_prs:${org}`),
-        cacheService.del(`github:repos:${org}`),
-        cacheService.del(`github:org-members:${org}`),
+        cacheService.clearAll(),
+        scoresKvCache.clearAll(),
+        membersKvCache.clearAll(),
+        attendanceKvCache.clearAll(),
     ]);
 
-    logger.info("KV caches manually invalidated via /cache endpoint");
+    logger.info("KV caches manually invalidated completely via /cache endpoint");
 
     return c.json({
         ok: true,
-        message: "Caches invalidated. Repos list will be freshly fetched.",
+        message: "All caches invalidated. Repos list will be freshly fetched.",
     });
 }));
 

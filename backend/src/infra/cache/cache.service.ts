@@ -26,6 +26,7 @@ export interface KVNamespace {
     get(key: string, options?: { type?: "text" | "json" }): Promise<string | null>;
     put(key: string, value: string, options?: { expirationTtl?: number }): Promise<void>;
     delete(key: string): Promise<void>;
+    list(options?: { prefix?: string; limit?: number; cursor?: string }): Promise<{ keys: { name: string }[]; list_complete: boolean; cursor?: string }>;
 }
 
 export interface CachedValue<T> {
@@ -145,6 +146,29 @@ export class CacheService {
         } catch (err: any) {
             this.logger.warn({ err: err.message, key }, "Cache del failed");
             return false;
+        }
+    }
+
+    /**
+     * Clear all keys in this cache namespace.
+     * Caution: This relies on kv.list() and iteratively deletes all keys.
+     */
+    async clearAll(): Promise<void> {
+        this.memCache.clear();
+        if (!this.kv) return;
+
+        try {
+            let cursor: string | undefined;
+            do {
+                const results = await this.kv.list({ prefix: this.prefix, cursor });
+                for (const key of results.keys) {
+                    await this.kv.delete(key.name);
+                }
+                cursor = results.list_complete ? undefined : results.cursor;
+            } while (cursor);
+            this.logger.info("Cache namespace wiped successfully");
+        } catch (err: any) {
+            this.logger.warn({ err: err.message }, "Cache clearAll failed");
         }
     }
 }
