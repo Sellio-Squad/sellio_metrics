@@ -395,4 +395,107 @@ export class GitHubGraphQLClient {
             return null;
         }
     }
+
+    /**
+     * Fetch commits for a repo using GraphQL — much faster than REST
+     * because it gives us author login + committedDate in one query.
+     * Note: GraphQL does NOT give additions/deletions per commit, so we
+     * store 0 for those (same behavior as REST fallback path).
+     */
+    async fetchCommits(
+        owner:    string,
+        repo:     string,
+        opts:     { maxPages?: number; since?: string } = {},
+    ): Promise<{ sha: string; author: string; message: string; committedAt: string; htmlUrl: string }[]> {
+        const { maxPages = 10 } = opts;
+
+        // GitHub GraphQL defaultBranchRef gives us the default branch commits
+        const COMMITS_QUERY = `
+            query RepoCommits($owner: String!, $repo: String!, $cursor: String) {
+                repository(owner: $owner, name: $repo) {
+                    defaultBranchRef {
+                        target {
+                            ... on Commit {
+                                history(first: 100, after: $cursor) {
+                                    pageInfo { hasNextPage endCursor }
+                                    nodes {
+                                        oid
+                                        message
+                                        committedDate
+                                        url
+                                        author {
+                                            user { login }
+                                            name
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                rateLimit { cost remaining resetAt }
+            }
+        `;
+
+        const allCommits: { sha: string; author: string; message: string; committedAt: string; htmlUrl: string }[] = [];
+        let cursor:      string | null = null;
+        let hasNextPage: boolean       = true;
+        let page:        number        = 0;
+
+        while (hasNextPage && page < maxPages) {
+            page++;
+            try {
+                const result: any = await (this.octokit as any).graphql(COMMITS_QUERY, {
+                    owner,
+                    repo,
+                    cursor: cursor ?? undefined,
+                });
+
+                const rl: GqlRateLimit = result.rateLimit;
+                this.logger.info(
+                    { owner, repo, page, cost: rl.cost, remaining: rl.remaining },
+                    "GraphQL commits page — rate limit cost",
+                );
+
+                const history = result.repository?.defaultBranchRef?.target?.history;
+                if (!history) {
+                    this.logger.warn({ owner, repo }, "No commit history found via GraphQL (empty/archived repo?)");
+                    break;
+                }
+
+                const nodes = history.nodes ?? [];
+                for (const node of nodes) {
+                    // Prefer linked GitHub user login, fall back to git author name
+                    const authorLogin = node.author?.user?.login ?? null;
+                    if (!authorLogin) continue; // skip commits with no linked account
+
+                    allCommits.push({
+                        sha:         node.oid,
+                        author:      authorLogin,
+                        message:     (node.message ?? "").split("\n")[0].slice(0, 255),
+                        committedAt: node.committedDate,
+                        htmlUrl:     node.url,
+                    });
+                }
+
+                hasNextPage = history.pageInfo.hasNextPage;
+                cursor      = history.pageInfo.endCursor ?? null;
+
+                this.logger.info(
+                    { owner, repo, page, fetched: nodes.length, total: allCommits.length, hasNextPage },
+                    "Paginating commits",
+                );
+            } catch (err: any) {
+                this.logger.error({ owner, repo, page, err: err.message }, "GraphQL commits page failed");
+                break;
+            }
+        }
+
+        this.logger.info(
+            { owner, repo, totalCommits: allCommits.length, pages: page },
+            "GraphQL commits fetch complete",
+        );
+
+        return allCommits;
+    }
 }
