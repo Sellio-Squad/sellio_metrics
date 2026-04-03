@@ -15,8 +15,10 @@ class RepoSyncResult {
   final int? prsUpserted;
   final int? commentsInserted;
   final int? commitsInserted;
+  final int? commitsFound;   // total commits fetched from GitHub
   final int? linesAdded;
   final int? linesDeleted;
+  final String? syncMode;    // 'incremental' | 'full-history'
   final List<Map<String, dynamic>> fetchFailures;
 
   const RepoSyncResult({
@@ -26,8 +28,10 @@ class RepoSyncResult {
     this.prsUpserted,
     this.commentsInserted,
     this.commitsInserted,
+    this.commitsFound,
     this.linesAdded,
     this.linesDeleted,
+    this.syncMode,
     this.fetchFailures = const [],
   });
 
@@ -45,6 +49,8 @@ class SyncProvider extends ChangeNotifier {
   int _currentIndex = -1;
   final List<RepoSyncResult> _results = [];
   String? _globalError;
+  /// jobId → current phase string ('queued'|'pr_sync'|'prs_done'|'commit_sync'|'score_recompute')
+  final Map<String, String> _activePhases = {};
 
   SyncProvider(this._reposRepository, this._logsDataSource);
 
@@ -55,6 +61,9 @@ class SyncProvider extends ChangeNotifier {
   List<RepoSyncResult> get results => _results;
   String? get globalError => _globalError;
   bool get isRunning => _status == SyncStatus.running;
+
+  /// Get the live background phase for a job (by jobId). Returns null when not active.
+  String? activePhase(String jobId) => _activePhases[jobId];
 
   /// Fetch KV write quota for today — used by _KvQuotaBar on the sync page.
   Future<Map<String, dynamic>> fetchKvQuota() => _logsDataSource.fetchKvQuota();
@@ -139,14 +148,13 @@ class SyncProvider extends ChangeNotifier {
 
     _status = SyncStatus.running;
     _results.clear();
-    _currentIndex = -1;
+    _activePhases.clear();
+    _currentIndex = 0;
     _globalError = null;
     notifyListeners();
 
     try {
-      if (_repos.isEmpty) {
-        await loadRepos();
-      }
+      if (_repos.isEmpty) await loadRepos();
 
       final toSync = selectedRepos;
       if (toSync.isEmpty) {
@@ -161,22 +169,27 @@ class SyncProvider extends ChangeNotifier {
         toSync.map((r) => r.fullName).toList(),
         force: force,
       );
-
       final jobs = (enqueueResult['jobs'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
-      // Now poll each job until it finishes
-      for (var i = 0; i < jobs.length; i++) {
-        _currentIndex = i;
-        notifyListeners();
-
-        final jobId = jobs[i]['jobId'] as String;
-        final repo  = toSync[i];
-        await _pollJobUntilDone(jobId, repo);
-        notifyListeners();
+      // Mark every repo as 'queued' immediately so the UI shows all rows
+      for (final repo in toSync) {
+        _activePhases[repo.fullName] = 'queued';
       }
+      notifyListeners();
+
+      // ── Poll ALL repos in parallel ──────────────────────────────────
+      // Backend already running all jobs concurrently — polling sequentially
+      // would waste time waiting for each to finish before starting the next.
+      await Future.wait(
+        List.generate(jobs.length, (i) {
+          final jobId = jobs[i]['jobId'] as String;
+          final repo  = toSync[i];
+          return _pollJobUntilDone(jobId, repo);
+        }),
+      );
 
       _currentIndex = toSync.length;
-      _status = SyncStatus.done;
+      _status = _results.any((r) => !r.success) ? SyncStatus.error : SyncStatus.done;
     } catch (e, stack) {
       _globalError = e.toString();
       _status = SyncStatus.error;
@@ -186,7 +199,8 @@ class SyncProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Poll GET /api/sync/status/:jobId every 3 seconds until status is done/error.
+  /// Poll GET /api/sync/status/:jobId every 3 s until done/error.
+  /// Updates _activePhases[repoFullName] on every tick for live UI labels.
   Future<void> _pollJobUntilDone(String jobId, RepoInfo repo) async {
     const maxWait = Duration(minutes: 10);
     final deadline = DateTime.now().add(maxWait);
@@ -195,7 +209,7 @@ class SyncProvider extends ChangeNotifier {
       await Future.delayed(const Duration(seconds: 3));
 
       try {
-        final status = await _reposRepository.getSyncJobStatus(jobId);
+        final status    = await _reposRepository.getSyncJobStatus(jobId);
         final jobStatus = status['status'] as String? ?? 'queued';
 
         if (jobStatus == 'done') {
@@ -203,12 +217,16 @@ class SyncProvider extends ChangeNotifier {
           _results.add(RepoSyncResult(
             repo: repo,
             success: true,
-            prsUpserted:      result['prsUpserted'] as int?,
-            commentsInserted: result['commentsInserted'] as int?,
-            commitsInserted:  result['commitsInserted'] as int?,
-            linesAdded:       result['linesAdded'] as int?,
-            linesDeleted:     result['linesDeleted'] as int?,
+            prsUpserted:      result['prsUpserted']      as int?,
+            commentsInserted: result['commentsInserted']  as int?,
+            commitsInserted:  result['commitsInserted']   as int?,
+            commitsFound:     result['commitsFound']      as int?,
+            linesAdded:       result['linesAdded']        as int?,
+            linesDeleted:     result['linesDeleted']      as int?,
+            syncMode:         result['syncMode']          as String?,
           ));
+          _activePhases.remove(repo.fullName);
+          notifyListeners();
           return;
         }
 
@@ -218,22 +236,25 @@ class SyncProvider extends ChangeNotifier {
             success: false,
             error: status['error'] as String? ?? 'Unknown error',
           ));
+          _activePhases.remove(repo.fullName);
+          notifyListeners();
           return;
         }
 
-        // queued or running — keep polling
-      } catch (e) {
-        appLogger.error('SyncProvider', 'Failed to poll job $jobId', null);
-        // keep trying until deadline
+        // running/queued — extract live phase label
+        final liveResult = status['result'] as Map<String, dynamic>? ?? {};
+        final phase = liveResult['phase'] as String? ?? jobStatus;
+        _activePhases[repo.fullName] = phase;
+        notifyListeners();
+      } catch (_) {
+        // network blip — keep polling
       }
     }
 
-    // Timed out polling
-    _results.add(RepoSyncResult(
-      repo: repo,
-      success: false,
-      error: 'Sync job timed out after 10 minutes',
-    ));
+    // Timed out
+    _results.add(RepoSyncResult(repo: repo, success: false, error: 'Sync timed out after 10 minutes'));
+    _activePhases.remove(repo.fullName);
+    notifyListeners();
   }
 
   Future<void> retryFailed() async {

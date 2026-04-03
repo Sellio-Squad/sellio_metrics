@@ -215,8 +215,10 @@ export async function runSyncJob(
 /**
  * Phase 2: Commit Sync
  * Runs as a separate queue invocation → gets its own 30s CPU budget.
- * Uses incremental `since` from DB so only new commits are fetched.
- * After inserting commits, fires precomputeSnapshots() once.
+ *
+ * KEY FIX: Reads the existing KV state (written by Phase 1 with PR data)
+ * and merges commit results into it so the final 'done' state contains
+ * prsUpserted + commentsInserted + commitsInserted together.
  */
 export async function runCommitSyncJob(
     cradle: any,
@@ -227,6 +229,29 @@ export async function runCommitSyncJob(
     const log = logger.child({ module: "sync-queue:commits", jobId: job.jobId, repo: job.repoName });
 
     try {
+        // ── Read Phase 1 result (PR data) from KV ─────────────────
+        // Phase 1 wrote: { status: "running", result: { phase: "prs_done", prsUpserted, ... } }
+        const existingRaw   = await cacheService.get(syncStatusKey(job.jobId));
+        const existingState = existingRaw as { data: SyncJobState } | null;
+        const prResult      = (existingState?.data?.result as Record<string, any>) ?? {};
+
+        // ── Mark: commit sync starting ─────────────────────────────
+        await writeJobState(cacheService, {
+            jobId:      job.jobId,
+            owner:      job.owner,
+            repoName:   job.repoName,
+            status:     "running",
+            startedAt:  existingState?.data?.startedAt ?? new Date().toISOString(),
+            result: {
+                phase:            "commit_sync",
+                prsUpserted:      prResult.prsUpserted      ?? 0,
+                commentsInserted: prResult.commentsInserted  ?? 0,
+                linesAdded:       prResult.linesAdded        ?? 0,
+                linesDeleted:     prResult.linesDeleted      ?? 0,
+                commitsInserted:  null,  // null = still running
+            },
+        });
+
         log.info({ force: job.force }, "Starting commit sync job from queue");
 
         const commitResult = await syncCommitsForRepo(
@@ -236,13 +261,30 @@ export async function runCommitSyncJob(
 
         log.info({ commitResult }, "Commit sync complete");
 
-        // ── Recompute leaderboard once after commits are stored ──
-        // Offload to WEBHOOK_QUEUE so it runs async (doesn't count against this invocation)
+        // ── Mark: score recompute starting ────────────────────────
+        await writeJobState(cacheService, {
+            jobId:      job.jobId,
+            owner:      job.owner,
+            repoName:   job.repoName,
+            status:     "running",
+            startedAt:  existingState?.data?.startedAt ?? new Date().toISOString(),
+            result: {
+                phase:            "score_recompute",
+                prsUpserted:      prResult.prsUpserted      ?? 0,
+                commentsInserted: prResult.commentsInserted  ?? 0,
+                linesAdded:       prResult.linesAdded        ?? 0,
+                linesDeleted:     prResult.linesDeleted      ?? 0,
+                commitsInserted:  commitResult.commitsInserted,
+                commitsFound:     commitResult.commitsFound,
+                syncMode:         commitResult.mode,
+            },
+        });
+
+        // ── Recompute leaderboard ──────────────────────────────────
         if (env.WEBHOOK_QUEUE) {
             await env.WEBHOOK_QUEUE.send({ type: "recompute_scores" });
             log.info("Score recompute enqueued via webhook queue");
         } else {
-            // Fallback: run inline (local dev or unbound)
             try {
                 await cradle.scoreAggregationService.precomputeSnapshots();
             } catch (se: any) {
@@ -250,17 +292,28 @@ export async function runCommitSyncJob(
             }
         }
 
-        // Mark the overall job as done
+        // ── FINAL done state: merge PR data + commit data ──────────
         await writeJobState(cacheService, {
             jobId:      job.jobId,
             owner:      job.owner,
             repoName:   job.repoName,
             status:     "done",
+            startedAt:  existingState?.data?.startedAt ?? new Date().toISOString(),
             finishedAt: new Date().toISOString(),
-            result:     { ...commitResult },
+            result: {
+                // ← PR data preserved from Phase 1
+                prsUpserted:      prResult.prsUpserted      ?? 0,
+                commentsInserted: prResult.commentsInserted  ?? 0,
+                linesAdded:       prResult.linesAdded        ?? 0,
+                linesDeleted:     prResult.linesDeleted      ?? 0,
+                // ← Commit data from Phase 2
+                commitsInserted:  commitResult.commitsInserted,
+                commitsFound:     commitResult.commitsFound,
+                syncMode:         commitResult.mode,
+            },
         });
 
-        log.info("Sync job fully complete (PR + commits)");
+        log.info({ prResult, commitResult }, "Sync job fully complete (PRs + commits)");
     } catch (e: any) {
         log.error({ err: e.message }, "Commit sync job failed");
         await writeJobState(cacheService, {

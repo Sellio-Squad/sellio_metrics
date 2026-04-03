@@ -304,31 +304,31 @@ class _RepoList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Show only the repos that were / are being synced
+    // During running: show all selected repos. After done: show results.
     final displayRepos = sync.status == SyncStatus.running
         ? sync.selectedRepos
         : sync.results.map((r) => r.repo).toList();
 
     return Column(
       children: [
-        ...List.generate(displayRepos.length, (i) {
-          final repo   = displayRepos[i];
+        ...displayRepos.map((repo) {
           final result = sync.results.cast<RepoSyncResult?>()
-              .firstWhere(
-                  (r) => r?.repo.fullName == repo.fullName,
-                  orElse: () => null);
-          final isCurrent = sync.status == SyncStatus.running && i == sync.currentIndex;
-          final isDone    = result != null;
-          final isError   = isDone && !result.success;
+              .firstWhere((r) => r?.repo.fullName == repo.fullName, orElse: () => null);
+          final phase   = sync.activePhase(repo.fullName); // null = finished/not started
+          final isDone  = result != null;
+          final isError = isDone && !result.success;
+          // A repo is 'active' if it has a live phase (backend is working on it)
+          final isActive = phase != null && !isDone;
 
           return _RepoSyncRow(
             key: ValueKey(repo.fullName),
-            repoName: repo.name,
-            isCurrent: isCurrent,
-            isDone: isDone,
-            isError: isError,
-            isPending: !isDone && !isCurrent,
-            result: result,
+            repoName:  repo.name,
+            isActive:  isActive,
+            phase:     phase,
+            isDone:    isDone,
+            isError:   isError,
+            isPending: !isDone && !isActive,
+            result:    result,
           );
         }),
         const SizedBox(height: AppSpacing.md),
@@ -342,7 +342,8 @@ class _RepoList extends StatelessWidget {
 
 class _RepoSyncRow extends StatelessWidget {
   final String repoName;
-  final bool isCurrent;
+  final bool isActive;   // has a live phase running in the background
+  final String? phase;   // 'queued' | 'prs_done' | 'commit_sync' | 'score_recompute' | null
   final bool isDone;
   final bool isError;
   final bool isPending;
@@ -351,12 +352,26 @@ class _RepoSyncRow extends StatelessWidget {
   const _RepoSyncRow({
     super.key,
     required this.repoName,
-    required this.isCurrent,
+    required this.isActive,
+    required this.phase,
     required this.isDone,
     required this.isError,
     required this.isPending,
     required this.result,
   });
+
+  /// Human-readable label for each backend phase
+  static String _phaseLabel(String? phase) {
+    return switch (phase) {
+      'queued'          => 'Queued',
+      'pr_sync'         => 'Syncing PRs…',
+      'prs_done'        => 'PRs done · Waiting for commits…',
+      'commit_sync'     => 'Syncing commits…',
+      'score_recompute' => 'Computing scores…',
+      'running'         => 'Running…',
+      _                 => 'Working…',
+    };
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -369,7 +384,7 @@ class _RepoSyncRow extends StatelessWidget {
         curve: Curves.easeOut,
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 10),
         decoration: BoxDecoration(
-          color: isCurrent
+          color: isActive
               ? scheme.primary.withValues(alpha: 0.07)
               : isDone && !isError
                   ? scheme.green.withValues(alpha: 0.05)
@@ -378,7 +393,7 @@ class _RepoSyncRow extends StatelessWidget {
                       : Colors.transparent,
           borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: isCurrent
+            color: isActive
                 ? scheme.primary.withValues(alpha: 0.4)
                 : isDone && !isError
                     ? scheme.green.withValues(alpha: 0.3)
@@ -393,7 +408,6 @@ class _RepoSyncRow extends StatelessWidget {
           children: [
             Row(
               children: [
-                // Status icon with animation
                 AnimatedSwitcher(
                   duration: const Duration(milliseconds: 250),
                   transitionBuilder: (child, anim) =>
@@ -401,7 +415,6 @@ class _RepoSyncRow extends StatelessWidget {
                   child: _statusIcon(scheme),
                 ),
                 const SizedBox(width: AppSpacing.sm),
-
                 Expanded(
                   child: Text(
                     repoName,
@@ -411,23 +424,34 @@ class _RepoSyncRow extends StatelessWidget {
                           : isError
                               ? scheme.red
                               : scheme.title,
-                      fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                      fontWeight: isActive ? FontWeight.w600 : FontWeight.normal,
                     ),
                   ),
                 ),
-
-                // Step label badge when active
-                if (isCurrent)
-                  _PulseBadge(label: 'Syncing'),
+                // Live phase badge
+                if (isActive)
+                  _PhaseBadge(label: _phaseLabel(phase)),
               ],
             ),
 
-            // Indeterminate progress bar while active
-            if (isCurrent) ...[
+            // Progress bar + phase detail while active
+            if (isActive) ...[
               const SizedBox(height: 8),
               ClipRRect(
                 borderRadius: BorderRadius.circular(4),
                 child: const LinearProgressIndicator(minHeight: 4),
+              ),
+              const SizedBox(height: 4),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: Text(
+                  key: ValueKey(phase),
+                  _phaseLabel(phase),
+                  style: AppTypography.caption.copyWith(
+                    color: scheme.hint,
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
               ),
             ],
 
@@ -454,7 +478,7 @@ class _RepoSyncRow extends StatelessWidget {
   }
 
   Widget _statusIcon(dynamic scheme) {
-    if (isCurrent) {
+    if (isActive) {
       return const SizedBox(
         key: ValueKey('loading'),
         width: 18, height: 18,
@@ -474,6 +498,51 @@ class _RepoSyncRow extends StatelessWidget {
   }
 }
 
+// ── Phase badge ──────────────────────────────────────────────────────
+
+class _PhaseBadge extends StatelessWidget {
+  final String label;
+  const _PhaseBadge({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      child: Container(
+        key: ValueKey(label),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(
+          color: scheme.primary.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: scheme.primary.withValues(alpha: 0.3)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 8, height: 8,
+              child: CircularProgressIndicator(
+                strokeWidth: 1.5,
+                color: scheme.primary,
+              ),
+            ),
+            const SizedBox(width: 5),
+            Text(
+              label,
+              style: AppTypography.caption.copyWith(
+                color: scheme.primary,
+                fontWeight: FontWeight.w600,
+                fontSize: 11,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ── Repo stats chips ─────────────────────────────────────────────────
 
 class _RepoStats extends StatelessWidget {
@@ -483,12 +552,16 @@ class _RepoStats extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = context.colors;
+    final commitsLabel = result.commitsFound != null && result.commitsFound != result.commitsInserted
+        ? '${result.commitsInserted ?? 0} new / ${result.commitsFound} commits'
+        : '${result.commitsInserted ?? 0} commits';
+
     final items = <(IconData, String, Color)>[
-      (Icons.merge_type,            '${result.prsUpserted ?? 0} PRs',              scheme.primary),
-      (Icons.commit,                '${result.commitsInserted ?? 0} commits',       scheme.secondary),
-      (Icons.add,                   '+${result.linesAdded ?? 0}',                   scheme.green),
-      (Icons.remove,                '-${result.linesDeleted ?? 0}',                 scheme.red),
-      (Icons.comment_outlined,      '${result.commentsInserted ?? 0} comments',     scheme.hint),
+      (Icons.merge_type,       '${result.prsUpserted ?? 0} PRs',         scheme.primary),
+      (Icons.commit,            commitsLabel,                              scheme.secondary),
+      (Icons.add,              '+${result.linesAdded ?? 0}',               scheme.green),
+      (Icons.remove,           '-${result.linesDeleted ?? 0}',             scheme.red),
+      (Icons.comment_outlined, '${result.commentsInserted ?? 0} comments', scheme.hint),
     ];
 
     final fetchFailures = result.fetchFailures;
@@ -510,6 +583,37 @@ class _RepoStats extends StatelessWidget {
             ],
           );
         }),
+        // Sync mode badge (incremental vs full history)
+        if (result.syncMode != null)
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+            decoration: BoxDecoration(
+              color: scheme.surfaceHigh,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: scheme.stroke),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  result.syncMode == 'incremental'
+                      ? Icons.update
+                      : Icons.history,
+                  size: 11,
+                  color: scheme.hint,
+                ),
+                const SizedBox(width: 3),
+                Text(
+                  result.syncMode!,
+                  style: AppTypography.caption.copyWith(
+                    color: scheme.hint,
+                    fontWeight: FontWeight.w500,
+                    fontSize: 10,
+                  ),
+                ),
+              ],
+            ),
+          ),
         // Warning chip shown only when some PRs failed to fetch API payload
         if (fetchFailures.isNotEmpty)
           Container(
