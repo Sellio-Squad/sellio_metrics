@@ -32,7 +32,7 @@ import { getContainer } from "./core/container-factory";
 import healthRoutes     from "./modules/health/health.routes";
 import reposRoutes      from "./modules/repos/repos.routes";
 import prsRoutes        from "./modules/prs/prs.routes";
-import syncRoutes       from "./modules/sync/sync.routes";
+import syncRoutes, { runSyncJob } from "./modules/sync/sync.routes";
 import webhookRoutes    from "./modules/webhook/webhook.routes";
 import pointsRoutes     from "./modules/points/points.routes";
 import scoresRoutes     from "./modules/scores/scores.routes";
@@ -43,6 +43,7 @@ import { regularSchedulesRoutes } from "./modules/meetings/regular-schedules.rou
 import debugRoutes      from "./modules/debug/debug.routes";
 import logsRoutes       from "./modules/logs/logs.routes";
 import reviewRoutes     from "./modules/review/review.routes";
+import type { SyncRepoJob } from "./modules/sync/sync-job.types";
 
 // ─── Durable Object export (required by Cloudflare runtime) ────────────────
 export { MeetingRoom } from "./modules/meetings/meeting-room.do";
@@ -65,6 +66,7 @@ interface WorkerEnv {
     ATTENDANCE_KV:  KVNamespace;
     DB:             D1Database;
     WEBHOOK_QUEUE?: any;
+    SYNC_QUEUE?:    any;          // Long-running sync jobs queue
     MEETING_ROOMS:  CFDurableObjectNamespace;
     GEMINI_API_KEY?: string;
 }
@@ -198,11 +200,26 @@ export default {
 
             for (const msg of batch.messages) {
                 try {
-                    const body = msg.body as { type: string; developers?: string[] };
+                    const body = msg.body as { type?: string; developers?: string[] };
+
+                    // Webhook-triggered score recomputation
                     if (body.type === "recompute_scores") {
                         await container.cradle.scoreAggregationService
                             .precomputeSnapshots(body.developers);
+                        msg.ack();
+                        continue;
                     }
+
+                    // GitHub sync job (from SYNC_QUEUE or WEBHOOK_QUEUE)
+                    const syncBody = msg.body as { jobId?: string };
+                    if (syncBody.jobId) {
+                        await runSyncJob(container.cradle, msg.body as SyncRepoJob);
+                        msg.ack();
+                        continue;
+                    }
+
+                    // Unknown message type — ack to avoid infinite retry
+                    console.warn("Queue: unknown message type, acking", body);
                     msg.ack();
                 } catch (e: any) {
                     console.error("Queue message processing error:", e?.message);

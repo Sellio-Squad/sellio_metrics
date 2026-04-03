@@ -7,4 +7,6 @@ abstract class ReposDataSource {
   Future<Map<String, dynamic>> syncGithub(String repoFullName, {List<int>? prNumbers, bool force = false});
   Future<void> syncGithubReset();
   Future<void> syncGithubCache();
+  Future<Map<String, dynamic>> enqueueSyncJobs(List<String> repoFullNames, {bool force = false});
+  Future<Map<String, dynamic>> getSyncJobStatus(String jobId);
 }

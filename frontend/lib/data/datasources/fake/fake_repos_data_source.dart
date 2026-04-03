@@ -52,4 +52,32 @@ class FakeReposDataSource implements ReposDataSource {
     // Fake invalidate cache response
     await Future.delayed(const Duration(milliseconds: 300));
   }
+
+  @override
+  Future<Map<String, dynamic>> enqueueSyncJobs(List<String> repoFullNames, {bool force = false}) async {
+    await Future.delayed(const Duration(milliseconds: 100));
+    return {
+      'ok': true,
+      'message': 'Sync jobs enqueued',
+      'jobs': repoFullNames.map((r) => {
+        'jobId': 'fake-job-${r.hashCode}',
+        'repo': r,
+      }).toList(),
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> getSyncJobStatus(String jobId) async {
+    await Future.delayed(const Duration(seconds: 1));
+    return {
+      'jobId': jobId,
+      'status': 'done',
+      'result': {
+        'prsUpserted': 5,
+        'commentsInserted': 12,
+        'linesAdded': 1500,
+        'linesDeleted': 300,
+      },
+    };
+  }
 }
