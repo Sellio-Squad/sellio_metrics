@@ -69,4 +69,35 @@ class ReposDataSourceImpl implements ReposDataSource {
       tag: 'SyncGithubCache',
     );
   }
+
+  @override
+  Future<Map<String, dynamic>> enqueueSyncJobs(List<String> repoFullNames, {bool force = false}) async {
+    // Backend accepts repos as string list + optional owner prefix
+    final repos = repoFullNames.map((r) => r.split('/').last).toList();
+    final owners = repoFullNames.map((r) {
+      final parts = r.split('/');
+      return parts.length == 2 ? parts[0] : null;
+    }).toSet();
+    final owner = owners.length == 1 ? owners.first : null;
+
+    return await _apiClient.post<Map<String, dynamic>>(
+      ApiEndpoints.syncGithub,
+      tag: 'EnqueueSyncJobs',
+      data: {
+        'repos': repos,
+        if (owner != null) 'owner': owner,
+        if (force) 'force': true,
+      },
+      parser: (data) => data as Map<String, dynamic>,
+    );
+  }
+
+  @override
+  Future<Map<String, dynamic>> getSyncJobStatus(String jobId) async {
+    return await _apiClient.get<Map<String, dynamic>>(
+      ApiEndpoints.syncJobStatus(jobId),
+      tag: 'SyncJobStatus',
+      parser: (data) => data as Map<String, dynamic>,
+    );
+  }
 }

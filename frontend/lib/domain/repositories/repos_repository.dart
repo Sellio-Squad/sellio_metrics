@@ -15,4 +15,10 @@ abstract class ReposRepository {
 
   /// Invalidate API caches
   Future<void> syncGithubCache();
+
+  /// Enqueue sync jobs for a list of repos (queue-based, non-blocking)
+  Future<Map<String, dynamic>> enqueueSyncJobs(List<String> repoFullNames, {bool force = false});
+
+  /// Poll the status of a queued sync job
+  Future<Map<String, dynamic>> getSyncJobStatus(String jobId);
 }

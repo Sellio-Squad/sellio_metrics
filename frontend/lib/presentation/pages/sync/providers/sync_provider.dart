@@ -149,12 +149,22 @@ class SyncProvider extends ChangeNotifier {
         return;
       }
 
-      for (var i = 0; i < toSync.length; i++) {
+      // Enqueue all repos at once — backend returns 202 + list of jobIds
+      final enqueueResult = await _reposRepository.enqueueSyncJobs(
+        toSync.map((r) => r.fullName).toList(),
+        force: force,
+      );
+
+      final jobs = (enqueueResult['jobs'] as List?)?.cast<Map<String, dynamic>>() ?? [];
+
+      // Now poll each job until it finishes
+      for (var i = 0; i < jobs.length; i++) {
         _currentIndex = i;
         notifyListeners();
 
-        final repo = toSync[i];
-        await _syncRepo(repo, force: force);
+        final jobId = jobs[i]['jobId'] as String;
+        final repo  = toSync[i];
+        await _pollJobUntilDone(jobId, repo);
         notifyListeners();
       }
 
@@ -167,6 +177,55 @@ class SyncProvider extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  /// Poll GET /api/sync/status/:jobId every 3 seconds until status is done/error.
+  Future<void> _pollJobUntilDone(String jobId, RepoInfo repo) async {
+    const maxWait = Duration(minutes: 10);
+    final deadline = DateTime.now().add(maxWait);
+
+    while (DateTime.now().isBefore(deadline)) {
+      await Future.delayed(const Duration(seconds: 3));
+
+      try {
+        final status = await _reposRepository.getSyncJobStatus(jobId);
+        final jobStatus = status['status'] as String? ?? 'queued';
+
+        if (jobStatus == 'done') {
+          final result = status['result'] as Map<String, dynamic>? ?? {};
+          _results.add(RepoSyncResult(
+            repo: repo,
+            success: true,
+            prsUpserted: result['prsUpserted'] as int?,
+            commentsInserted: result['commentsInserted'] as int?,
+            linesAdded: result['linesAdded'] as int?,
+            linesDeleted: result['linesDeleted'] as int?,
+          ));
+          return;
+        }
+
+        if (jobStatus == 'error') {
+          _results.add(RepoSyncResult(
+            repo: repo,
+            success: false,
+            error: status['error'] as String? ?? 'Unknown error',
+          ));
+          return;
+        }
+
+        // queued or running — keep polling
+      } catch (e) {
+        appLogger.error('SyncProvider', 'Failed to poll job $jobId', null);
+        // keep trying until deadline
+      }
+    }
+
+    // Timed out polling
+    _results.add(RepoSyncResult(
+      repo: repo,
+      success: false,
+      error: 'Sync job timed out after 10 minutes',
+    ));
   }
 
   Future<void> retryFailed() async {

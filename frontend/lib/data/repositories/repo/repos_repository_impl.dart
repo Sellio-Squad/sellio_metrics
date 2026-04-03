@@ -36,4 +36,14 @@ class ReposRepositoryImpl implements ReposRepository {
   Future<void> syncGithubCache() async {
     return await _dataSource.syncGithubCache();
   }
+
+  @override
+  Future<Map<String, dynamic>> enqueueSyncJobs(List<String> repoFullNames, {bool force = false}) async {
+    return await _dataSource.enqueueSyncJobs(repoFullNames, force: force);
+  }
+
+  @override
+  Future<Map<String, dynamic>> getSyncJobStatus(String jobId) async {
+    return await _dataSource.getSyncJobStatus(jobId);
+  }
 }

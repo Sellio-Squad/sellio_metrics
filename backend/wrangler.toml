@@ -67,7 +67,6 @@ new_sqlite_classes = ["MeetingRoom"]
 
 # ─── Cloudflare Queues ───────────────────────────────────────
 # Queue for offloading heavy webhook background tasks
-# (score recomputation, etc.)
 
 [[queues.producers]]
 queue = "webhook"
@@ -77,6 +76,18 @@ binding = "WEBHOOK_QUEUE"
 queue = "webhook"
 max_batch_size = 10
 max_retries = 3
+
+# Queue for long-running GitHub sync jobs (PRs + commits per repo)
+# Consumer gets up to 15 minutes per batch — no 30s wall-time limit
+[[queues.producers]]
+queue = "sync-jobs"
+binding = "SYNC_QUEUE"
+
+[[queues.consumers]]
+queue = "sync-jobs"
+max_batch_size = 1
+max_batch_timeout = 30
+max_retries = 2
 
 # ─── Cron Triggers ───────────────────────────────────────────
 # Precompute leaderboard snapshots every 6 hours
