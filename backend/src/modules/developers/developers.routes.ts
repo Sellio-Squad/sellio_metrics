@@ -18,7 +18,7 @@ developers.delete("/:developerId/events", safe(async (c) => {
     const deleted = await scoresRepo.deleteDeveloperData(developerId);
     await scoreAggregationService.precomputeSnapshots();
 
-    return c.json({ ok: true, developerId, eventsDeleted: deleted.prs + deleted.comments + deleted.attendance });
+    return c.json({ ok: true, developerId, eventsDeleted: deleted.prs + deleted.comments + deleted.commits + deleted.attendance });
 }));
 
 export default developers;

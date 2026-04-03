@@ -11,6 +11,7 @@ import type { D1Service } from "../infra/database/d1.service";
 import type { ReposRepository } from "../modules/repos/repos.repository";
 import type { PrsRepository } from "../modules/prs/prs.repository";
 import type { CommentsRepository } from "../modules/prs/comments.repository";
+import type { CommitsRepository } from "../modules/commits/commits.repository";
 import type { ScoresRepository } from "../modules/scores/scores.repository";
 import type { DeveloperRepository } from "../modules/developers/developer.repository";
 import type { MeetingsRepository } from "../modules/meetings/meetings.repository";
@@ -66,6 +67,7 @@ export interface Cradle {
     reposRepo: ReposRepository;
     prsRepo: PrsRepository;
     commentsRepo: CommentsRepository;
+    commitsRepo: CommitsRepository;
     scoresRepo: ScoresRepository;
     meetingsRepo: MeetingsRepository;
     regularSchedulesRepo: RegularSchedulesRepository;

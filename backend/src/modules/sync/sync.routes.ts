@@ -8,7 +8,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
-import { syncOneRepo, syncOrgMembers } from "./sync.service";
+import { syncOneRepo, syncOrgMembers, syncCommitsForRepo } from "./sync.service";
 
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";
@@ -50,7 +50,21 @@ sync.post("/github", zValidator("json", syncSchema), safe(async (c) => {
 
     for (const repoName of repoNames) {
         try {
-            results.push(await syncOneRepo(cradle, owner, repoName, orgRepos, body.prNumbers, force));
+            const prResult = await syncOneRepo(cradle, owner, repoName, orgRepos, body.prNumbers, force);
+
+            // Also sync commits for this repo
+            const repoMeta = orgRepos.find((r: any) => r.name === repoName);
+            let commitResult = { commitsFound: 0, commitsInserted: 0 };
+            if (repoMeta?.id) {
+                try {
+                    const repoId = repoMeta.id as number;
+                    commitResult = await syncCommitsForRepo(cradle, owner, repoName, repoId);
+                } catch (ce: any) {
+                    cradle.logger.warn({ repo: repoName, err: ce.message }, "Commit sync failed (non-fatal)");
+                }
+            }
+
+            results.push({ ...prResult as object, ...commitResult });
         } catch (e: any) {
             cradle.logger.error({ repo: repoName, err: e.message }, "Repo sync failed");
             results.push({ ok: false, repo: `${owner}/${repoName}`, error: e.message });
@@ -85,9 +99,9 @@ sync.delete("/github/reset", safe(async (c) => {
 
     logger.info("Starting full database reset");
 
-    const { prsDeleted, commentsDeleted, devsDeleted, reposDeleted } = await d1Service.truncateSyncData();
+    const { prsDeleted, commentsDeleted, commitsDeleted, devsDeleted, reposDeleted } = await d1Service.truncateSyncData();
 
-    logger.info({ prsDeleted, commentsDeleted, devsDeleted, reposDeleted }, "Sync tables cleared");
+    logger.info({ prsDeleted, commentsDeleted, commitsDeleted, devsDeleted, reposDeleted }, "Sync tables cleared");
 
     // Bust all relevant caches
     const org = env.org;
@@ -104,7 +118,7 @@ sync.delete("/github/reset", safe(async (c) => {
     return c.json({
         ok: true,
         message: "All sync data wiped. Run a fresh sync to repopulate.",
-        cleared: { prsDeleted, commentsDeleted, devsDeleted, reposDeleted },
+        cleared: { prsDeleted, commentsDeleted, commitsDeleted, devsDeleted, reposDeleted },
     });
 }));
 

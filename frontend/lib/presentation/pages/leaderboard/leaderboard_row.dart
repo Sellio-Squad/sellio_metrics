@@ -62,7 +62,8 @@ class LeaderboardRow extends StatelessWidget {
                   children: [
                     Text(
                       '${entry.prsCreated} ${l10n.unitPrs} · '
-                      '${entry.commentsGiven} ${l10n.unitComments}',
+                      '${entry.commentsGiven} ${l10n.unitComments}'
+                      '${entry.commitCount > 0 ? ' · ${entry.commitCount} commits' : ''}',
                       style: AppTypography.caption.copyWith(
                         color: scheme.hint,
                         fontSize: 11,

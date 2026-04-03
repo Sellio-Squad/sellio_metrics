@@ -9,6 +9,7 @@ extension LeaderboardModelMapper on LeaderboardModel {
       prsCreated: prsCreated,
       prsMerged: prsMerged,
       commentsGiven: commentsGiven,
+      commitCount: commitCount,
       lineAdditions: lineAdditions,
       lineDeletions: lineDeletions,
       totalScore: totalScore,
