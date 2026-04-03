@@ -95,7 +95,7 @@ class SyncProvider extends ChangeNotifier {
 
   Future<void> loadRepos() async {
     try {
-      _repos = await _reposRepository.getRepositories();
+      _repos = await _reposRepository.getGithubRepositories();
       if (_selectedRepoNames.isEmpty) {
         _selectedRepoNames = _repos.map((r) => r.fullName).toSet();
       }

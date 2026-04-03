@@ -24,6 +24,19 @@ class ReposDataSourceImpl implements ReposDataSource {
   }
 
   @override
+  Future<List<RepoModel>> fetchGithubRepositories() async {
+    return await _apiClient.get<List<RepoModel>>(
+      ApiEndpoints.repos,                // GitHub-backed — raw org repos
+      tag: 'ReposDataSource_GitHub',
+      parser: (data) {
+        final body = data as Map<String, dynamic>;
+        final repoList = body['repos'] as List<dynamic>? ?? [];
+        return repoList.map((r) => RepoModel.fromJson(r as Map<String, dynamic>)).toList();
+      },
+    );
+  }
+
+  @override
   Future<Map<String, dynamic>> syncGithub(String repoFullName, {List<int>? prNumbers, bool force = false}) async {
     final parts = repoFullName.split('/');
     final owner = parts.length == 2 ? parts[0] : null;

@@ -26,6 +26,11 @@ class FakeReposDataSource implements ReposDataSource {
   }
 
   @override
+  Future<List<RepoModel>> fetchGithubRepositories() async {
+    return await fetchRepositories();
+  }
+
+  @override
   Future<Map<String, dynamic>> syncGithub(String repoFullName, {List<int>? prNumbers, bool force = false}) async {
     await Future.delayed(const Duration(milliseconds: 500));
     return {

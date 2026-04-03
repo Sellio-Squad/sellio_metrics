@@ -17,6 +17,12 @@ class ReposRepositoryImpl implements ReposRepository {
   }
 
   @override
+  Future<List<RepoInfo>> getGithubRepositories() async {
+    final models = await _dataSource.fetchGithubRepositories();
+    return models.map((m) => m.toEntity()).toList();
+  }
+
+  @override
   Future<Map<String, dynamic>> syncGithub(String repoFullName, {List<int>? prNumbers, bool force = false}) async {
     return await _dataSource.syncGithub(repoFullName, prNumbers: prNumbers, force: force);
   }
