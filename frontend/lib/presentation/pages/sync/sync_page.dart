@@ -683,7 +683,7 @@ class _ActionRow extends StatelessWidget {
             ),
           ),
 
-        // ── Reset Database & Re-Sync (danger) ─────────────────
+        // ── Reset Database (danger) ───────────────────────────
         if (isIdle)
           SButton(
             variant: SButtonVariant.outline,
@@ -696,7 +696,7 @@ class _ActionRow extends StatelessWidget {
                 Icon(Icons.delete_sweep_outlined, size: 14, color: scheme.red),
                 const SizedBox(width: 4),
                 Text(
-                  'Reset DB & Re-Sync',
+                  'Reset Database',
                   style: TextStyle(color: scheme.red),
                 ),
               ],
@@ -722,7 +722,7 @@ class _ActionRow extends StatelessWidget {
         title: const Text('Reset All Sync Data?'),
         content: const Text(
           'This will permanently delete ALL synced PRs and comments from the database '
-          'and bust all caches.\n\nAfter reset, a full force re-sync of all repos will start automatically.\n\n'
+          'and bust all caches.\n\n'
           'This cannot be undone.',
         ),
         actions: [
@@ -733,7 +733,7 @@ class _ActionRow extends StatelessWidget {
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Reset & Re-Sync'),
+            child: const Text('Reset Database'),
           ),
         ],
       ),

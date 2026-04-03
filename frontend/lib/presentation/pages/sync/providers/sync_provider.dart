@@ -268,8 +268,12 @@ class SyncProvider extends ChangeNotifier {
       return;
     }
 
-    _selectedRepoNames = _repos.map((r) => r.fullName).toSet();
-    await startSync(force: true);
+    _status = SyncStatus.idle;
+    _repos = [];
+    _selectedRepoNames = {};
+    notifyListeners();
+    // Automatically reload repos after reset
+    await loadRepos();
   }
 
   Future<void> invalidateCache() async {
