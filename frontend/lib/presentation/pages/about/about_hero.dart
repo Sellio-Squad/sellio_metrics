@@ -21,24 +21,10 @@ class AboutHero extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Container(
-            width: 72,
+          Image.asset(
+            'assets/official_logo.png',
             height: 72,
-            decoration: BoxDecoration(
-              gradient: SellioColors.primaryGradient,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Center(
-              child: Text(
-                'S',
-                style: TextStyle(
-                  color: scheme.onPrimary,
-                  fontSize: 36,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -1,
-                ),
-              ),
-            ),
+            fit: BoxFit.contain,
           ),
           const SizedBox(height: AppSpacing.xl),
           Container(

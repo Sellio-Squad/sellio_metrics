@@ -12,25 +12,10 @@ class SidebarLogo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).extension<SellioColorScheme>();
-
-    return Container(
-      width: size,
+    return Image.asset(
+      'assets/official_logo.png',
       height: size,
-      decoration: BoxDecoration(
-        gradient: SellioColors.primaryGradient,
-        borderRadius: BorderRadius.circular(size * 0.25),
-      ),
-      child: Center(
-        child: Text(
-          'S',
-          style: TextStyle(
-            color: scheme?.onPrimary ?? Colors.white,
-            fontSize: size * 0.5,
-            fontWeight: FontWeight.w800,
-          ),
-        ),
-      ),
+      fit: BoxFit.contain,
     );
   }
 }
