@@ -26,8 +26,8 @@ import 'package:sellio_metrics/presentation/pages/sync/providers/sync_provider.d
 import 'package:sellio_metrics/presentation/pages/review/code_review_page.dart';
 import 'package:sellio_metrics/presentation/pages/review/providers/review_provider.dart';
 import 'package:sellio_metrics/presentation/pages/app_preview/app_preview_page.dart';
-import 'package:sellio_metrics/presentation/pages/open_issues/open_issues_page.dart';
-import 'package:sellio_metrics/presentation/pages/open_issues/providers/issues_provider.dart';
+import 'package:sellio_metrics/presentation/pages/open_tickets/open_tickets_page.dart';
+import 'package:sellio_metrics/presentation/pages/open_tickets/providers/tickets_provider.dart';
 
 // ─── Route Groups ────────────────────────────────────────────
 enum NavGroup { team, product, system }
@@ -115,17 +115,17 @@ class AppNavigation {
       ),
     ),
 
-    // ── Team (secondary) — Issues ───────────────────────────
+    // ── Team (secondary) — Open Tickets ─────────────────────
     AppRoute(
-      id: 'open_issues',
-      path: '/issues',
-      icon: LucideIcons.alertCircle,
+      id: 'open_tickets',
+      path: '/tickets',
+      icon: LucideIcons.clipboardList,
       group: NavGroup.team,
       primaryNav: false,
-      labelBuilder: (_) => 'Open Issues',
+      labelBuilder: (_) => 'Open Tickets',
       pageBuilder: (_) => ChangeNotifierProvider.value(
-        value: getIt<IssuesProvider>(),
-        child: const OpenIssuesPage(),
+        value: getIt<TicketsProvider>(),
+        child: const OpenTicketsPage(),
       ),
     ),
 
