@@ -21,7 +21,7 @@ import type { CachedGitHubClient } from "../infra/github/cached-github.client";
 import type { ReposService } from "../modules/repos/repos.service";
 import type { PrFetcherService } from "../modules/metrics/pr-fetcher.service";
 import type { OpenPrsService } from "../modules/prs/open-prs.service";
-import type { OpenIssuesService } from "../modules/issues/issues.service";
+import type { OpenTicketsService } from "../modules/tickets/tickets.service";
 import type { GoogleMeetClient } from "../infra/google/google-meet.client";
 import type { MeetingsService } from "../modules/meetings/meetings.service";
 import type { WebhookHandlerService } from "../modules/meetings/webhook-handler.service";
@@ -82,8 +82,8 @@ export interface Cradle {
     // PRs
     openPrsService: OpenPrsService;
 
-    // Issues
-    openIssuesService: OpenIssuesService;
+    // Tickets
+    openTicketsService: OpenTicketsService;
 
     // Scoring
     pointsRulesService: PointsRulesService;

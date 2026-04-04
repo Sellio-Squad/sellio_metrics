@@ -48,7 +48,7 @@ async function buildContainer(
     const { ReposService } = await import("../modules/repos/repos.service");
     const { PrFetcherService } = await import("../modules/metrics/pr-fetcher.service");
     const { OpenPrsService } = await import("../modules/prs/open-prs.service");
-    const { OpenIssuesService } = await import("../modules/issues/issues.service");
+    const { OpenTicketsService } = await import("../modules/tickets/tickets.service");
     const { GoogleMeetClient } = await import("../infra/google/google-meet.client");
     const { MeetingsService } = await import("../modules/meetings/meetings.service");
     const { LogsService } = await import("../modules/logs/logs.service");
@@ -150,7 +150,7 @@ async function buildContainer(
         // Metrics
         prFetcherService: asClass(PrFetcherService).singleton(),
         openPrsService: asClass(OpenPrsService).singleton(),
-        openIssuesService: asClass(OpenIssuesService).singleton(),
+        openTicketsService: asClass(OpenTicketsService).singleton(),
 
         pointsRulesService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
             new PointsRulesService({ d1Service, scoresKvCache, logger }),
