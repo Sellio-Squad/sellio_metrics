@@ -100,6 +100,37 @@ export interface GqlSearchPrsResult {
     pagesLoaded:    number;
 }
 
+// ─── Issues types ────────────────────────────────────────────
+
+export interface GqlIssueLabel {
+    name:  string;
+    color: string;
+}
+
+export interface GqlIssueMilestone {
+    title: string;
+    dueOn: string | null;
+}
+
+export interface GqlOpenIssue {
+    number:     number;
+    title:      string;
+    url:        string;
+    bodyText:   string;
+    createdAt:  string;
+    author:     GqlAuthor | null;
+    repository: { name: string; nameWithOwner: string; owner: { login: string } };
+    assignees:  { nodes: GqlAuthor[] };
+    labels:     { nodes: GqlIssueLabel[] };
+    milestone:  GqlIssueMilestone | null;
+}
+
+export interface GqlSearchIssuesResult {
+    issues:        GqlOpenIssue[];
+    totalCostUsed: number;
+    pagesLoaded:   number;
+}
+
 // ─── GraphQL fragments ───────────────────────────────────────
 
 const AUTHOR_FIELDS = `
@@ -247,6 +278,36 @@ const OPEN_PRS_SEARCH_QUERY = `
     }
 `;
 
+const OPEN_ISSUES_SEARCH_QUERY = `
+    query OpenIssuesSearch($searchQuery: String!, $cursor: String) {
+        search(query: $searchQuery, type: ISSUE, first: 50, after: $cursor) {
+            pageInfo { hasNextPage endCursor }
+            nodes {
+                ... on Issue {
+                    number
+                    title
+                    url
+                    bodyText
+                    createdAt
+                    author { ${AUTHOR_FIELDS} }
+                    repository { name nameWithOwner owner { login } }
+                    assignees(first: 10) {
+                        nodes { __typename login avatarUrl }
+                    }
+                    labels(first: 20) {
+                        nodes { name color }
+                    }
+                    milestone {
+                        title
+                        dueOn
+                    }
+                }
+            }
+        }
+        ${RATE_LIMIT_FIELDS}
+    }
+`;
+
 // ─── Client ─────────────────────────────────────────────────
 
 export class GitHubGraphQLClient {
@@ -368,6 +429,59 @@ export class GitHubGraphQLClient {
         );
 
         return { openPrs: allPrs, totalCostUsed, pagesLoaded: page };
+    }
+
+    /**
+     * Search all OPEN Issues (not PRs) across an org using GraphQL search API.
+     * Uses `is:issue is:open org:{org}` to exclude PRs.
+     */
+    async searchOpenIssues(org: string, opts: { maxPages?: number } = {}): Promise<GqlSearchIssuesResult> {
+        const { maxPages = 10 } = opts;
+
+        const allIssues: GqlOpenIssue[] = [];
+        let cursor:        string | null = null;
+        let hasNextPage:   boolean       = true;
+        let page:          number        = 0;
+        let totalCostUsed: number        = 0;
+
+        const searchQuery = `is:issue is:open org:${org}`;
+
+        while (hasNextPage && page < maxPages) {
+            page++;
+
+            const result: any = await (this.octokit as any).graphql(OPEN_ISSUES_SEARCH_QUERY, {
+                searchQuery,
+                cursor: cursor ?? undefined,
+            });
+
+            const rl: GqlRateLimit = result.rateLimit;
+            totalCostUsed += rl.cost;
+
+            this.logger.info(
+                { org, page, cost: rl.cost, remaining: rl.remaining, resetAt: rl.resetAt },
+                "GraphQL open issues page — rate limit cost",
+            );
+
+            const searchPage = result.search;
+            // filter to Issue nodes only (exclude any PR nodes that slip through)
+            const nodes: GqlOpenIssue[] = (searchPage.nodes ?? []).filter((n: any) => n?.number && !n.additions && !n.deletions);
+
+            allIssues.push(...nodes);
+            hasNextPage = searchPage.pageInfo.hasNextPage;
+            cursor      = searchPage.pageInfo.endCursor ?? null;
+
+            this.logger.info(
+                { org, page, fetched: nodes.length, total: allIssues.length, hasNextPage },
+                "Paginating open issues",
+            );
+        }
+
+        this.logger.info(
+            { org, totalIssues: allIssues.length, pages: page, totalCostUsed },
+            "GraphQL open issues search complete",
+        );
+
+        return { issues: allIssues, totalCostUsed, pagesLoaded: page };
     }
 
     /**

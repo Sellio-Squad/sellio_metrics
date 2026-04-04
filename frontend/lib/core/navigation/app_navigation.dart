@@ -26,6 +26,8 @@ import 'package:sellio_metrics/presentation/pages/sync/providers/sync_provider.d
 import 'package:sellio_metrics/presentation/pages/review/code_review_page.dart';
 import 'package:sellio_metrics/presentation/pages/review/providers/review_provider.dart';
 import 'package:sellio_metrics/presentation/pages/app_preview/app_preview_page.dart';
+import 'package:sellio_metrics/presentation/pages/open_issues/open_issues_page.dart';
+import 'package:sellio_metrics/presentation/pages/open_issues/providers/issues_provider.dart';
 
 // ─── Route Groups ────────────────────────────────────────────
 enum NavGroup { team, product, system }
@@ -110,6 +112,20 @@ class AppNavigation {
           ChangeNotifierProvider.value(value: getIt<AnalyticsProvider>()),
         ],
         child: const OpenPrsPage(),
+      ),
+    ),
+
+    // ── Team (secondary) — Issues ───────────────────────────
+    AppRoute(
+      id: 'open_issues',
+      path: '/issues',
+      icon: LucideIcons.alertCircle,
+      group: NavGroup.team,
+      primaryNav: false,
+      labelBuilder: (_) => 'Open Issues',
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: getIt<IssuesProvider>(),
+        child: const OpenIssuesPage(),
       ),
     ),
 

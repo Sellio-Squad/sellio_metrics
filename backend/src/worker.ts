@@ -32,6 +32,7 @@ import { getContainer } from "./core/container-factory";
 import healthRoutes     from "./modules/health/health.routes";
 import reposRoutes      from "./modules/repos/repos.routes";
 import prsRoutes        from "./modules/prs/prs.routes";
+import issuesRoutes     from "./modules/issues/issues.routes";
 import syncRoutes, { runSyncJob, runCommitSyncJob } from "./modules/sync/sync.routes";
 import webhookRoutes    from "./modules/webhook/webhook.routes";
 import pointsRoutes     from "./modules/points/points.routes";
@@ -119,6 +120,7 @@ function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
     app.route("/api",             healthRoutes);
     app.route("/api/repos",       reposRoutes);
     app.route("/api/prs",         prsRoutes);
+    app.route("/api/issues",      issuesRoutes);
     app.route("/api/sync",        syncRoutes);
     app.route("/api/webhooks",    webhookRoutes);
     app.route("/api/points",      pointsRoutes);
