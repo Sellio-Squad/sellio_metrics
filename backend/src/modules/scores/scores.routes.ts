@@ -66,4 +66,11 @@ scores.delete("/cache", safe(async (c) => {
     return c.json({ ok: true, message: "Leaderboard KV cache cleared. Next request will recompute." });
 }));
 
+// POST /api/scores/recompute — rebuild the all-time leaderboard KV snapshot from DB
+scores.post("/recompute", safe(async (c) => {
+    const { scoreAggregationService } = useCradle(c);
+    await scoreAggregationService.precomputeSnapshots();
+    return c.json({ ok: true, message: "Leaderboard recomputed and cached." });
+}));
+
 export default scores;
