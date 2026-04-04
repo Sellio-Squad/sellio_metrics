@@ -25,8 +25,11 @@ scores.get("/leaderboard", zValidator("query", leaderboardQuerySchema), safe(asy
     const { scoreAggregationService, cachedGithubClient, developerRepo, env } = useCradle(c);
 
     const { limit, since, until, repos: reposParam } = c.req.valid("query") as LeaderboardQuery;
+    // Note: reposParam is comma-separated repo IDs (integers), not names
     const repoIds = reposParam
-        ? reposParam.split(",").map((r) => parseInt(r.trim(), 10)).filter((n) => !isNaN(n))
+        ? reposParam.split(",")
+            .map((r) => parseInt(r.trim(), 10))
+            .filter((n) => Number.isFinite(n) && n > 0)  // guard against NaN/negative
         : [];
 
     const result = await scoreAggregationService.getLeaderboard(limit, since, until, repoIds);
@@ -53,6 +56,14 @@ scores.get("/leaderboard", zValidator("query", leaderboardQuerySchema), safe(asy
         }));
 
     return c.json(result);
+}));
+
+// DELETE /api/scores/cache — bust the all-time leaderboard KV snapshot
+// Use when the leaderboard returns errors or stale/corrupt data.
+scores.delete("/cache", safe(async (c) => {
+    const { scoreAggregationService } = useCradle(c);
+    await scoreAggregationService.bustCache();
+    return c.json({ ok: true, message: "Leaderboard KV cache cleared. Next request will recompute." });
 }));
 
 export default scores;
