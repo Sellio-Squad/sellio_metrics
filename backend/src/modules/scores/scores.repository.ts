@@ -34,11 +34,12 @@ export class ScoresRepository {
         const attendUntil    = until ? `AND ps.start_time <= '${until}'` : "";
 
         // Repo filter — filter directly by integer repo_id (no JOIN needed)
-        const hasRepoFilter    = repoIds.length > 0;
-        const repoIdList       = repoIds.join(",");
+        const safeRepoIds      = Array.isArray(repoIds) ? repoIds.filter((id) => Number.isFinite(id)) : [];
+        const hasRepoFilter    = safeRepoIds.length > 0;
+        const repoIdList       = safeRepoIds.join(",");
         const prRepoFilter     = hasRepoFilter ? `AND mp.repo_id IN (${repoIdList})` : "";
         const cmtRepoFilter    = hasRepoFilter ? `AND pc.repo_id IN (${repoIdList})` : "";
-        const commitRepoFilter = hasRepoFilter ? `AND c.repo_id IN (${repoIdList})` : "";
+        const commitRepoFilter = hasRepoFilter ? `AND c.repo_id  IN (${repoIdList})` : "";
         // Note: attendance (participant_sessions) is not linked to repos — no filter applied
 
         const botFilter = `

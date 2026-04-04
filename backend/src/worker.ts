@@ -97,11 +97,13 @@ function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
         allowHeaders: ["Content-Type", "Authorization"],
     }));
 
-    // 2. Cradle injection — must come BEFORE routes so c.get('cradle') is available
+    // 2. Cradle injection + request logger
     app.use("*", async (c, next) => {
         c.set("cradle", cradle);
         const start = Date.now();
         await next();
+        // Skip logging for OPTIONS preflight — avoids KV writes on every browser preflight
+        if (c.req.method === "OPTIONS") return;
         const ms = Date.now() - start;
         cradle.logger.info({
             module: "system",

@@ -62,17 +62,23 @@ export class ScoreAggregationService {
         until?: string,
         repoIds: number[] = [],
     ): Promise<LeaderboardResult> {
-        const hasFilters = !!since || !!until || repoIds.length > 0;
+        // Defensive: ensure repoIds is always an array (protects against corrupt KV cache deserialization)
+        const safeRepoIds = Array.isArray(repoIds) ? repoIds : [];
+        const hasFilters = !!since || !!until || safeRepoIds.length > 0;
 
         if (!hasFilters) {
             const cached = await this.scoresKv.get<LeaderboardResult>(ALL_TIME_CACHE_KEY);
             if (cached?.data) {
+                // Also guard cached data in case it was stored with a corrupt shape
+                const data = cached.data;
+                data.entries  = Array.isArray(data.entries)  ? data.entries  : [];
+                data.repoIds  = Array.isArray(data.repoIds)  ? data.repoIds  : [];
                 this.logger.info("Leaderboard served from KV cache");
-                return cached.data;
+                return data;
             }
         }
 
-        return this.computeAndCache(limit, since, until, repoIds, !hasFilters);
+        return this.computeAndCache(limit, since, until, safeRepoIds, !hasFilters);
     }
 
     /**
@@ -90,6 +96,13 @@ export class ScoreAggregationService {
             await this.computeAndCache(50, undefined, undefined, [], true);
             this.logger.info("All-time leaderboard snapshot updated");
         }
+    }
+
+    /** Delete the all-time leaderboard KV snapshot and its lock key. */
+    async bustCache(): Promise<void> {
+        try { await this.scoresKv.del(ALL_TIME_CACHE_KEY); } catch { /* ok */ }
+        try { await this.scoresKv.del(`lock:${ALL_TIME_CACHE_KEY}`); } catch { /* ok */ }
+        this.logger.info("Leaderboard KV cache busted");
     }
 
     /**
