@@ -81,6 +81,18 @@ class LeaderboardProvider extends ChangeNotifier {
   DateTime?              get customEnd      => _customEnd;
   Set<int>               get selectedRepoIds => _selectedRepoIds;
 
+  DateTime? get effectiveStart {
+    if (_preset == LeaderboardPreset.custom) return _customStart;
+    final iso = _preset.toSince();
+    return iso == null ? null : DateTime.parse(iso).toLocal();
+  }
+
+  DateTime? get effectiveEnd {
+    if (_preset == LeaderboardPreset.custom) return _customEnd;
+    if (_preset == LeaderboardPreset.allTime) return null;
+    return DateTime.now();
+  }
+
   bool get hasActiveFilters =>
       _preset != LeaderboardPreset.allTime || _selectedRepoIds.isNotEmpty;
 
