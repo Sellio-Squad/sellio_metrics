@@ -34,8 +34,8 @@ class LeaderboardFilterBar extends StatelessWidget {
                   _ClearChip(onTap: provider.clearAllFilters),
               ],
             ),
-            // Row 2: custom date pickers (only when Custom preset)
-            if (provider.preset == LeaderboardPreset.custom) ...[
+            // Row 2: show active date boundaries (unless All Time is selected)
+            if (provider.preset != LeaderboardPreset.allTime) ...[
               const SizedBox(height: AppSpacing.sm),
               const _CustomDateRow(),
             ],
@@ -425,9 +425,9 @@ class _CustomDateRow extends StatelessWidget {
           placeholder: 'Start date',
           firstDate: DateTime(2020),
           lastDate: DateTime.now(),
-          initialDate: provider.customStart,
+          initialDate: provider.effectiveStart,
           onDateChanged: (date) {
-            provider.setCustomDateRange(date, provider.customEnd);
+            provider.setCustomDateRange(date, provider.effectiveEnd);
           },
         ),
         const SizedBox(width: AppSpacing.sm),
@@ -440,9 +440,9 @@ class _CustomDateRow extends StatelessWidget {
           placeholder: 'End date',
           firstDate: DateTime(2020),
           lastDate: DateTime.now().add(const Duration(days: 1)),
-          initialDate: provider.customEnd,
+          initialDate: provider.effectiveEnd,
           onDateChanged: (date) {
-            provider.setCustomDateRange(provider.customStart, date);
+            provider.setCustomDateRange(provider.effectiveStart, date);
           },
         ),
       ],
