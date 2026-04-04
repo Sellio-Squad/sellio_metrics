@@ -131,6 +131,46 @@ export interface GqlSearchIssuesResult {
     pagesLoaded:   number;
 }
 
+// ─── Projects v2 types ──────────────────────────────────
+
+export interface GqlProjectItem {
+    id:     string;
+    type:   string; // ISSUE | DRAFT_ISSUE | PULL_REQUEST
+    content: {
+        __typename: string;
+        number?:    number;
+        title?:     string;
+        url?:       string;
+        bodyText?:  string;
+        createdAt?: string;
+        author?:    GqlAuthor | null;
+        repository?: { name: string; owner: { login: string } };
+        assignees?:  { nodes: GqlAuthor[] };
+        labels?:     { nodes: GqlIssueLabel[] };
+        milestone?:  GqlIssueMilestone | null;
+    } | null;
+    fieldValues: {
+        nodes: Array<
+            | { __typename: 'ProjectV2ItemFieldTextValue';         text:  string | null; field: { name: string } }
+            | { __typename: 'ProjectV2ItemFieldDateValue';         date:  string | null; field: { name: string } }
+            | { __typename: 'ProjectV2ItemFieldSingleSelectValue'; name:  string | null; field: { name: string } }
+            | { __typename: 'ProjectV2ItemFieldNumberValue';       number: number | null; field: { name: string } }
+            | { __typename: string }
+        >;
+    };
+}
+
+export interface GqlProject {
+    number: number;
+    title:  string;
+    items:  { nodes: GqlProjectItem[]; pageInfo: { hasNextPage: boolean; endCursor: string | null } };
+}
+
+export interface GqlOrgProjectsResult {
+    projects:      GqlProject[];
+    totalCostUsed: number;
+}
+
 // ─── GraphQL fragments ───────────────────────────────────────
 
 const AUTHOR_FIELDS = `
@@ -305,6 +345,73 @@ const OPEN_ISSUES_SEARCH_QUERY = `
             }
         }
         ${RATE_LIMIT_FIELDS}
+    }
+`;
+
+// Fetches first 10 open projects for an org, and all their items (open issues + draft issues)
+// Each project's items are paginated — 50 per page, up to 200 items total
+const ORG_PROJECTS_QUERY = `
+    query OrgProjects($org: String!, $projectCursor: String) {
+        organization(login: $org) {
+            projectsV2(first: 10, after: $projectCursor, orderBy: { field: UPDATED_AT, direction: DESC }) {
+                pageInfo { hasNextPage endCursor }
+                nodes {
+                    number
+                    title
+                    items(first: 50, orderBy: { field: POSITION, direction: ASC }) {
+                        pageInfo { hasNextPage endCursor }
+                        nodes {
+                            id
+                            type
+                            content {
+                                __typename
+                                ... on Issue {
+                                    number
+                                    title
+                                    url
+                                    bodyText
+                                    createdAt
+                                    state
+                                    author { __typename login avatarUrl }
+                                    repository { name owner { login } }
+                                    assignees(first: 10) { nodes { __typename login avatarUrl } }
+                                    labels(first: 20) { nodes { name color } }
+                                    milestone { title dueOn }
+                                }
+                                ... on DraftIssue {
+                                    title
+                                    body
+                                    createdAt
+                                    assignees(first: 10) { nodes { __typename login avatarUrl } }
+                                }
+                            }
+                            fieldValues(first: 15) {
+                                nodes {
+                                    __typename
+                                    ... on ProjectV2ItemFieldTextValue {
+                                        text
+                                        field { ... on ProjectV2FieldCommon { name } }
+                                    }
+                                    ... on ProjectV2ItemFieldDateValue {
+                                        date
+                                        field { ... on ProjectV2FieldCommon { name } }
+                                    }
+                                    ... on ProjectV2ItemFieldSingleSelectValue {
+                                        name
+                                        field { ... on ProjectV2SingleSelectField { name } }
+                                    }
+                                    ... on ProjectV2ItemFieldNumberValue {
+                                        number
+                                        field { ... on ProjectV2FieldCommon { name } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        rateLimit { cost remaining resetAt }
     }
 `;
 
@@ -485,10 +592,51 @@ export class GitHubGraphQLClient {
     }
 
     /**
+     * Fetch all Projects v2 for an org and their items (issues + draft issues).
+     * Returns an enriched list ready for merging with regular open issues.
+     * Only fetches open items (filters by content.state === 'OPEN' for issues).
+     */
+    async searchOrgProjectItems(org: string, opts: { maxProjects?: number } = {}): Promise<GqlOrgProjectsResult> {
+        const { maxProjects = 10 } = opts;
+
+        const projects: GqlProject[] = [];
+        let projectCursor: string | null = null;
+        let hasMoreProjects = true;
+        let totalCostUsed = 0;
+
+        while (hasMoreProjects && projects.length < maxProjects) {
+            const result: any = await (this.octokit as any).graphql(ORG_PROJECTS_QUERY, {
+                org,
+                projectCursor: projectCursor ?? undefined,
+            });
+
+            const rl: GqlRateLimit = result.rateLimit;
+            totalCostUsed += rl.cost;
+
+            this.logger.info(
+                { org, cost: rl.cost, remaining: rl.remaining },
+                "GraphQL org projects page — rate limit cost",
+            );
+
+            const projectsPage = result.organization?.projectsV2;
+            if (!projectsPage) break;
+
+            projects.push(...(projectsPage.nodes ?? []));
+            hasMoreProjects = projectsPage.pageInfo.hasNextPage;
+            projectCursor = projectsPage.pageInfo.endCursor ?? null;
+        }
+
+        this.logger.info({ org, totalProjects: projects.length, totalCostUsed }, "GraphQL org projects fetch complete");
+
+        return { projects, totalCostUsed };
+    }
+
+    /**
      * Fetch a single PR and all its historical comments efficiently.
      * Helpful for populating comments immediately after a webhook merge event.
      */
     async fetchSinglePR(owner: string, repo: string, number: number): Promise<GqlPullRequest | null> {
+
         this.logger.info({ owner, repo, number }, "Fetching single PR via GraphQL");
         try {
             const result: any = await (this.octokit as any).graphql(SINGLE_PR_QUERY, {
