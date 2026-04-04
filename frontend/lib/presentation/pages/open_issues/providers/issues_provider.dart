@@ -36,7 +36,7 @@ class ScrumInsight {
 
 // ─── Provider ────────────────────────────────────────────────
 
-@injectable
+@lazySingleton
 class IssuesProvider extends ChangeNotifier {
   final IssuesRepository _repository;
 
