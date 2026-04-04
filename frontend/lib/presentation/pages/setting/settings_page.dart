@@ -4,7 +4,7 @@ import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/l10n/app_localizations.dart';
 import 'package:sellio_metrics/presentation/pages/setting/widgets/settings_section.dart';
-import 'package:sellio_metrics/presentation/pages/setting/widgets/repository_selector.dart';
+
 import 'package:sellio_metrics/presentation/pages/setting/widgets/theme_toggle.dart';
 import 'package:sellio_metrics/presentation/pages/setting/widgets/language_toggle.dart';
 class SettingsPage extends StatelessWidget {
@@ -29,15 +29,7 @@ class SettingsPage extends StatelessWidget {
             const SizedBox(height: AppSpacing.xxl),
 
 
-            // Repository Selection
-            SettingsSection(
-              title: l10n.settingsRepository,
-              icon: Icons.source_outlined,
-              children: const [
-                RepositorySelector(),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xl),
+
 
             // Appearance
             SettingsSection(
