@@ -16,9 +16,11 @@ import type { CachedGitHubClient } from "../../infra/github/cached-github.client
 import type { Logger } from "../../core/logger";
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { LogsService } from "../logs/logs.service";
+import type { Env } from "../../config/env";
 import { GitHubApiError } from "../../core/errors";
 import { GitHubGraphQLClient } from "../../infra/github/github-graphql.client";
 import type { TicketMetric, TicketSource } from "./tickets.types";
+import { Octokit } from "@octokit/rest";
 
 const PRIORITY_LABELS: Record<string, string> = {
     critical: "critical",
@@ -49,22 +51,26 @@ export class OpenTicketsService {
     private readonly logger: Logger;
     private readonly logsService: LogsService;
     private readonly cacheService: CacheService;
+    private readonly githubToken: string;
 
     constructor({
         cachedGithubClient,
         logger,
         logsService,
         cacheService,
+        env,
     }: {
         cachedGithubClient: CachedGitHubClient;
         logger: Logger;
         logsService: LogsService;
         cacheService: CacheService;
+        env: Env;
     }) {
         this.github = cachedGithubClient;
         this.logger = logger.child({ module: "open-tickets" });
         this.logsService = logsService;
         this.cacheService = cacheService;
+        this.githubToken = env.githubToken;
     }
 
     // ─── Public ──────────────────────────────────────────────
@@ -80,7 +86,18 @@ export class OpenTicketsService {
             }
 
             this.logger.info({ org }, "Fetching open tickets via GraphQL");
-            const gql = new GitHubGraphQLClient(this.github.raw as any, this.logger);
+
+            // Use a PAT if available (GitHub App may lack Projects v2 read permission)
+            let octokitAuth: any;
+            if (this.githubToken) {
+                this.logger.info({ org }, "Using GITHUB_TOKEN (PAT) for tickets fetch");
+                octokitAuth = new Octokit({ auth: this.githubToken });
+            } else {
+                this.logger.warn({ org }, "No GITHUB_TOKEN set — falling back to App token (may miss Projects)");
+                octokitAuth = (this.github as any).raw ?? this.github;
+            }
+
+            const gql = new GitHubGraphQLClient(octokitAuth, this.logger);
 
             // ── 1. Fetch regular GitHub issues ────────────────
             const { issues, totalCostUsed: issueCost } = await gql.searchOpenIssues(org);

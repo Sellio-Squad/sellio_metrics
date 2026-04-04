@@ -125,6 +125,7 @@ interface EnvSchema {
     RATE_LIMIT_WINDOW_MS?: string;
     GITHUB_RATE_LIMIT_THRESHOLD?: string;
     GITHUB_WEBHOOK_SECRET?: string;
+    GITHUB_TOKEN?: string;
     GOOGLE_CLIENT_ID?: string;
     GOOGLE_CLIENT_SECRET?: string;
     GOOGLE_REDIRECT_URI?: string;
@@ -200,6 +201,14 @@ function _createEnv() {
 
         /** GitHub webhook secret for verifying webhook payloads (optional). */
         githubWebhookSecret: optionalEnv("GITHUB_WEBHOOK_SECRET", ""),
+
+        /**
+         * Optional GitHub Personal Access Token (PAT).
+         * When set, the tickets service uses this instead of the App installation token.
+         * Required if the GitHub App lacks Projects v2 (read) permission.
+         * Needs scopes: repo, read:org, read:project
+         */
+        githubToken: optionalEnv("GITHUB_TOKEN", ""),
 
         /** Google OAuth2 Client ID for Meet API */
         googleClientId: optionalEnv("GOOGLE_CLIENT_ID", ""),
