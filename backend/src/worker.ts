@@ -125,12 +125,12 @@ function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
     app.route("/api/scores",      scoresRoutes);
     app.route("/api/members",     membersRoutes);
     app.route("/api/developers",  developersRoutes);
+    app.route("/api/meetings/schedules", regularSchedulesRoutes(cradle.regularSchedulesRepo));
     app.route("/api/meetings",    meetingsRoutes(
         cradle.meetingsService,
         cradle.webhookHandlerService,
         meetingRooms,
     ));
-    app.route("/api/meetings/schedules", regularSchedulesRoutes(cradle.regularSchedulesRepo));
     app.route("/api/debug",       debugRoutes);
     app.route("/api/logs",        logsRoutes);
     app.route("/api/review",      reviewRoutes);
