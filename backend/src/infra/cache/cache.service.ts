@@ -15,6 +15,7 @@
  */
 
 import type { Logger } from "../../core/logger";
+import { trackKvWrite } from "./cache-metrics";
 
 // ─── Types ──────────────────────────────────────────────────
 
@@ -121,6 +122,7 @@ export class CacheService {
             }
             // When ttlSeconds is omitted, no expirationTtl → stored permanently
             await this.kv.put(this.prefix + key, JSON.stringify(value), putOptions);
+            trackKvWrite();
         } catch (err: any) {
             if (CRITICAL_KEYS.has(key)) {
                 // For critical keys, surface the error so callers know the write failed
@@ -142,6 +144,7 @@ export class CacheService {
 
         try {
             await this.kv.delete(this.prefix + key);
+            trackKvWrite();
             return true;
         } catch (err: any) {
             this.logger.warn({ err: err.message, key }, "Cache del failed");
@@ -163,6 +166,7 @@ export class CacheService {
                 const results = await this.kv.list({ prefix: this.prefix, cursor });
                 for (const key of results.keys) {
                     await this.kv.delete(key.name);
+                    trackKvWrite();
                 }
                 cursor = results.list_complete ? undefined : results.cursor;
             } while (cursor);

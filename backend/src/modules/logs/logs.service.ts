@@ -1,6 +1,7 @@
 import type { CacheService } from "../../infra/cache/cache.service";
 import type { Logger } from "../../core/logger";
 import type { LogEntry, LogCategory, LogSeverity } from "./logs.types";
+import { getKvWriteCountForToday } from "../../infra/cache/cache-metrics";
 
 const LOGS_CACHE_KEY  = "system_events_log";
 const QUOTA_CACHE_KEY = "kv_write_counter";
@@ -14,29 +15,17 @@ const LOGS_TTL        = 7 * 24 * 60 * 60; // 7 days
  * requests on the same instance. This allows us to:
  *  (a) Buffer log entries in memory and flush to KV at most every 60s
  *      instead of on every single log() call.
- *  (b) Track how many KV writes we've made so the UI can show quota usage.
  *
  * Result: ~80 KV writes per sync → 1-2 KV writes per sync.
  */
 let _memBuffer:       LogEntry[]  = [];
 let _lastFlushMs:     number      = 0;
-let _kvWriteCount:    number      = 0;
-let _kvWriteResetDay: string      = "";   // "YYYY-MM-DD"
 
 /** Flush to KV at most once per this many ms (60 seconds). */
 const FLUSH_INTERVAL_MS = 60_000;
 
 function todayKey(): string {
     return new Date().toISOString().slice(0, 10); // "YYYY-MM-DD"
-}
-
-function trackWrite() {
-    const today = todayKey();
-    if (_kvWriteResetDay !== today) {
-        _kvWriteCount    = 0;
-        _kvWriteResetDay = today;
-    }
-    _kvWriteCount++;
 }
 
 export class LogsService {
@@ -98,7 +87,6 @@ export class LogsService {
             if (merged.length > MAX_LOGS) merged.length = MAX_LOGS;
 
             await this.cacheService.set(LOGS_CACHE_KEY, merged, LOGS_TTL);
-            trackWrite();
 
             // Also persist write count for quota display
             await this._persistWriteCount();
@@ -114,7 +102,7 @@ export class LogsService {
         try {
             await this.cacheService.set(QUOTA_CACHE_KEY, {
                 day:    todayKey(),
-                writes: _kvWriteCount,
+                writes: getKvWriteCountForToday(), // Always fetches global isolate count
             }, 25 * 60 * 60); // TTL slightly > 24h
         } catch { /* non-critical */ }
     }
@@ -137,7 +125,7 @@ export class LogsService {
         const today  = todayKey();
         return {
             day:                today,
-            writesThisIsolate:  _kvWriteResetDay === today ? _kvWriteCount : 0,
+            writesThisIsolate:  getKvWriteCountForToday(),
             writesTotal:        cached?.data?.day === today ? cached.data.writes : 0,
         };
     }
