@@ -8,8 +8,23 @@ import 'package:sellio_metrics/presentation/pages/setting/providers/app_settings
 import 'package:sellio_metrics/presentation/pages/open_prs/providers/filter_provider.dart';
 import 'package:sellio_metrics/core/navigation/app_navigation.dart';
 
-class SellioMetricsApp extends StatelessWidget {
+import 'package:flutter_native_splash/flutter_native_splash.dart';
+
+class SellioMetricsApp extends StatefulWidget {
   const SellioMetricsApp({super.key});
+
+  @override
+  State<SellioMetricsApp> createState() => _SellioMetricsAppState();
+}
+
+class _SellioMetricsAppState extends State<SellioMetricsApp> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      FlutterNativeSplash.remove();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
