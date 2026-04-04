@@ -1,17 +1,20 @@
-
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:injectable/injectable.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:sellio_metrics/core/di/injection.dart';
 import 'package:sellio_metrics/core/constants/app_constants.dart';
 import 'package:sellio_metrics/app.dart';
 import 'package:sellio_metrics/core/logging/app_logger.dart';
 
 void main() {
-  WidgetsFlutterBinding.ensureInitialized();
+  WidgetsBinding widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
-  configureDependencies(ApiConfig.useFakeData ? Environment.dev : Environment.prod);
+  configureDependencies(
+    ApiConfig.useFakeData ? Environment.dev : Environment.prod,
+  );
 
   FlutterError.onError = (details) {
     appLogger.error('Flutter', details.exception, details.stack);
@@ -26,7 +29,9 @@ void main() {
     if (kDebugMode) {
       return ErrorWidget.withDetails(
         message: details.exceptionAsString(),
-        error: details.exception is FlutterError ? details.exception as FlutterError : null,
+        error: details.exception is FlutterError
+            ? details.exception as FlutterError
+            : null,
       );
     }
 
@@ -55,10 +60,7 @@ void main() {
             Text(
               'This section failed to load. Try navigating away and back.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade500,
-              ),
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
             ),
           ],
         ),
