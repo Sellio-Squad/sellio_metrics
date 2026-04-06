@@ -9,8 +9,6 @@
  *   The server reads it directly from disk — no escaping needed.
  */
 
-import fs from "fs";
-import path from "path";
 import dotenv from "dotenv";
 
 // NOTE: dotenv.config() is called lazily inside _createEnv() so that
@@ -42,10 +40,8 @@ function normalizePemKey(raw: string): string {
     // reconstruct the PEM format
     if (key.includes("-----") && !key.includes("\n")) {
         key = key
-            .replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-            .replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
-            .replace("-----BEGIN RSA PRIVATE KEY-----", "-----BEGIN RSA PRIVATE KEY-----\n")
-            .replace("-----END RSA PRIVATE KEY-----", "\n-----END RSA PRIVATE KEY-----");
+            .replace(/(-----BEGIN [^-]+-----)/, "$1\n")
+            .replace(/(-----END [^-]+-----)/, "\n$1");
 
         // Split the base64 content into 64-char lines (PEM standard)
         const match = key.match(/-----BEGIN [^-]+-----\n?([\s\S]+?)\n?-----END [^-]+-----/);
@@ -61,6 +57,13 @@ function normalizePemKey(raw: string): string {
     return key;
 }
 
+function validatePem(key: string): string {
+    if (!key.includes("-----BEGIN") || !key.includes("-----END")) {
+        throw new Error("❌ Loaded private key does not appear to be in PEM format");
+    }
+    return key;
+}
+
 /**
  * Reads the GitHub App RSA private key.
  *
@@ -73,19 +76,21 @@ function normalizePemKey(raw: string): string {
  * work when APP_PRIVATE_KEY is set as a secret, while local dev can still
  * use a .pem file on disk.
  */
-function loadPrivateKey(): string {
+function loadPrivateKey(envSrc: Record<string, string | undefined>): string {
     // Option 1: env var (Workers-friendly — check first)
-    const envKey = process.env["APP_PRIVATE_KEY"];
+    const envKey = envSrc["APP_PRIVATE_KEY"];
     if (envKey) {
-        return normalizePemKey(envKey);
+        return validatePem(normalizePemKey(envKey));
     }
 
     // Option 2: explicit path from env
-    const customPath = process.env["PRIVATE_KEY_PATH"];
+    const customPath = envSrc["PRIVATE_KEY_PATH"];
     if (customPath) {
+        const path = require("node:path");
+        const fs = require("node:fs");
         const resolved = path.resolve(customPath);
         if (fs.existsSync(resolved)) {
-            return fs.readFileSync(resolved, "utf-8");
+            return validatePem(fs.readFileSync(resolved, "utf-8"));
         }
         throw new Error(
             `❌ PRIVATE_KEY_PATH is set to "${customPath}" but file not found at: ${resolved}`,
@@ -93,9 +98,11 @@ function loadPrivateKey(): string {
     }
 
     // Option 3: default location — backend/private-key.pem
+    const path = require("node:path");
+    const fs = require("node:fs");
     const defaultPath = path.resolve(process.cwd(), "private-key.pem");
     if (fs.existsSync(defaultPath)) {
-        return fs.readFileSync(defaultPath, "utf-8");
+        return validatePem(fs.readFileSync(defaultPath, "utf-8"));
     }
 
     throw new Error(
@@ -108,57 +115,64 @@ function loadPrivateKey(): string {
     );
 }
 
-// removed loadGoogleServiceAccountKey
-
 // ─── Validation ─────────────────────────────────────────────
 
-interface EnvSchema {
-    APP_ID: string;
-    PRIVATE_KEY_PATH?: string;
-    APP_PRIVATE_KEY?: string;
-    INSTALLATION_ID: string;
-    GITHUB_ORG?: string;
-    PORT?: string;
-    REQUIRED_APPROVALS?: string;
-    LOG_LEVEL?: string;
-    RATE_LIMIT_MAX?: string;
-    RATE_LIMIT_WINDOW_MS?: string;
-    GITHUB_RATE_LIMIT_THRESHOLD?: string;
-    GITHUB_WEBHOOK_SECRET?: string;
-    GITHUB_TOKEN?: string;
-    GOOGLE_CLIENT_ID?: string;
-    GOOGLE_CLIENT_SECRET?: string;
-    GOOGLE_REDIRECT_URI?: string;
-    GOOGLE_PUBSUB_TOPIC?: string;
-    GEMINI_API_KEY?: string;
-}
-
-function requireEnv(name: keyof EnvSchema): string {
-    const value = process.env[name];
+function requireEnv(name: string, envSrc: Record<string, string | undefined>): string {
+    const value = envSrc[name];
     if (!value) {
         throw new Error(`❌ Missing required env var: ${name}`);
     }
     return value;
 }
 
-function optionalEnv(name: keyof EnvSchema, fallback: string): string {
-    return process.env[name] || fallback;
+function requireNumericEnv(name: string, envSrc: Record<string, string | undefined>): number {
+    const raw = envSrc[name];
+    if (!raw) {
+        throw new Error(`❌ Missing required env var: ${name}`);
+    }
+    const parsed = parseInt(raw, 10);
+    if (Number.isNaN(parsed)) {
+        throw new Error(`❌ Env var ${name}="${raw}" is not a valid integer`);
+    }
+    return parsed;
+}
+
+function optionalEnv(name: string, fallback: string, envSrc: Record<string, string | undefined>): string {
+    const val = envSrc[name];
+    return val !== undefined && val !== "" ? val : fallback;
+}
+
+function numericEnv(name: string, fallback: number, envSrc: Record<string, string | undefined>): number {
+    const raw = envSrc[name];
+    if (raw === undefined || raw === "") return fallback;
+    const parsed = parseInt(raw, 10);
+    if (Number.isNaN(parsed)) {
+        throw new Error(`❌ Env var ${name}="${raw}" is not a valid integer`);
+    }
+    return parsed;
 }
 
 // ─── Exported Config (lazy — safe for Cloudflare Workers) ───
 
 /**
- * Builds the frozen config object from process.env.
+ * Builds the frozen config object from process.env (or overrides for testing).
  * Called lazily on first property access (not at import time)
  * so Cloudflare Workers can populate process.env from bindings first.
  */
-function _createEnv() {
+function _createEnv(overrides?: Record<string, string | undefined>) {
     // dotenv loads .env file for local dev; silently skips if no file exists
     dotenv.config();
 
-    return Object.freeze({
+    const envSrc = overrides || process.env;
+
+    const githubWebhookSecret = optionalEnv("GITHUB_WEBHOOK_SECRET", "", envSrc);
+    if (!githubWebhookSecret) {
+        console.warn("⚠️  GITHUB_WEBHOOK_SECRET is not set — webhook payloads will NOT be verified");
+    }
+
+    const config = {
         /** GitHub App — numeric App ID. */
-        appId: requireEnv("APP_ID"),
+        appId: requireEnv("APP_ID", envSrc),
 
         /**
          * GitHub App — RSA private key (PEM format, full content with newlines).
@@ -167,40 +181,34 @@ function _createEnv() {
          * Locally: place private-key.pem in backend/ or set PRIVATE_KEY_PATH.
          * See loadPrivateKey() for full resolution order.
          */
-        privateKey: loadPrivateKey(),
+        privateKey: loadPrivateKey(envSrc),
 
         /** GitHub App — Installation ID for the Sellio-Squad org. */
-        installationId: parseInt(requireEnv("INSTALLATION_ID"), 10),
+        installationId: requireNumericEnv("INSTALLATION_ID", envSrc),
 
         /** GitHub org slug to fetch repos from. */
-        org: optionalEnv("GITHUB_ORG", "Sellio-Squad"),
+        org: optionalEnv("GITHUB_ORG", "Sellio-Squad", envSrc),
 
         /** HTTP server port. */
-        port: parseInt(optionalEnv("PORT", "3001"), 10),
+        port: numericEnv("PORT", 3001, envSrc),
 
         /** Number of approvals required for a PR to be considered "approved". */
-        requiredApprovals: parseInt(optionalEnv("REQUIRED_APPROVALS", "2"), 10),
+        requiredApprovals: numericEnv("REQUIRED_APPROVALS", 2, envSrc),
 
         /** Pino log level. */
-        logLevel: optionalEnv("LOG_LEVEL", "info"),
+        logLevel: optionalEnv("LOG_LEVEL", "info", envSrc),
 
         /** Rate limit: max requests per window. */
-        rateLimitMax: parseInt(optionalEnv("RATE_LIMIT_MAX", "100"), 10),
+        rateLimitMax: numericEnv("RATE_LIMIT_MAX", 100, envSrc),
 
         /** Rate limit: window duration in milliseconds. */
-        rateLimitWindowMs: parseInt(
-            optionalEnv("RATE_LIMIT_WINDOW_MS", "60000"),
-            10,
-        ),
+        rateLimitWindowMs: numericEnv("RATE_LIMIT_WINDOW_MS", 60000, envSrc),
 
         /** GitHub rate limit threshold — delays requests when remaining quota is below this. */
-        githubRateLimitThreshold: parseInt(
-            optionalEnv("GITHUB_RATE_LIMIT_THRESHOLD", "100"),
-            10,
-        ),
+        githubRateLimitThreshold: numericEnv("GITHUB_RATE_LIMIT_THRESHOLD", 100, envSrc),
 
         /** GitHub webhook secret for verifying webhook payloads (optional). */
-        githubWebhookSecret: optionalEnv("GITHUB_WEBHOOK_SECRET", ""),
+        githubWebhookSecret,
 
         /**
          * Optional GitHub Personal Access Token (PAT).
@@ -208,23 +216,26 @@ function _createEnv() {
          * Required if the GitHub App lacks Projects v2 (read) permission.
          * Needs scopes: repo, read:org, read:project
          */
-        githubToken: optionalEnv("GITHUB_TOKEN", ""),
+        githubToken: optionalEnv("GITHUB_TOKEN", "", envSrc),
 
         /** Google OAuth2 Client ID for Meet API */
-        googleClientId: optionalEnv("GOOGLE_CLIENT_ID", ""),
+        googleClientId: optionalEnv("GOOGLE_CLIENT_ID", "", envSrc),
 
         /** Google OAuth2 Client Secret */
-        googleClientSecret: optionalEnv("GOOGLE_CLIENT_SECRET", ""),
+        googleClientSecret: optionalEnv("GOOGLE_CLIENT_SECRET", "", envSrc),
 
         /** Google OAuth2 Redirect URI */
-        googleRedirectUri: optionalEnv("GOOGLE_REDIRECT_URI", "http://localhost:3001/api/meetings/oauth2callback"),
+        googleRedirectUri: optionalEnv("GOOGLE_REDIRECT_URI", "http://localhost:3001/api/meetings/oauth2callback", envSrc),
 
         /** Google Pub/Sub topic for Workspace Events (e.g. "projects/my-proj/topics/meet-events-topic"). */
-        googlePubsubTopic: optionalEnv("GOOGLE_PUBSUB_TOPIC", ""),
+        googlePubsubTopic: optionalEnv("GOOGLE_PUBSUB_TOPIC", "", envSrc),
 
         /** Google Gemini API key for AI code review. */
-        geminiApiKey: optionalEnv("GEMINI_API_KEY", ""),
-    });
+        geminiApiKey: optionalEnv("GEMINI_API_KEY", "", envSrc),
+
+    };
+
+    return Object.freeze(config);
 }
 
 type EnvConfig = ReturnType<typeof _createEnv>;
@@ -256,4 +267,3 @@ export const env: EnvConfig = new Proxy({} as EnvConfig, {
 });
 
 export type Env = EnvConfig;
-

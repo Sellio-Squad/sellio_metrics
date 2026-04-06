@@ -80,6 +80,17 @@ npm run deploy
 # Get what inside cache
 npx wrangler kv key list --binding CACHE
 
+
+
+# add secrets
+wrangler secret put APP_PRIVATE_KEY
+
+
+# wrangler deploy
+wrangler deploy
+
+
+
 # Get what inside cache using prefix
 npx wrangler kv key list --binding CACHE --prefix "sellio:google"
 ```
