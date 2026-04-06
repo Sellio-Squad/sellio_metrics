@@ -1,5 +1,5 @@
 import type { D1Database } from "../../infra/database/d1.service";
-import type { Logger } from "../../core/console-logger";
+import type { Logger } from "../../core/logger";
 import type { DeveloperRepository } from "../developers/developer.repository";
 
 export interface Commit {

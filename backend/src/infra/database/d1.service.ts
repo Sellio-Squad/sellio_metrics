@@ -64,6 +64,10 @@ export class D1Service {
         return this.db !== null;
     }
 
+    get database(): D1Database | null {
+        return this.db;
+    }
+
     // ─── Point Rules ────────────────────────────────────────
 
     async getPointRules(): Promise<PointRule[]> {

@@ -9,7 +9,7 @@
 import type { Context } from "hono";
 import type { HonoEnv } from "../core/hono-env";
 import type { Cradle } from "../core/container";
-import { AppError } from "../core/app-error";
+import { AppError } from "../core/errors";
 
 // ─── Cradle accessor ──────────────────────────────────────────
 

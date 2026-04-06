@@ -11,10 +11,14 @@ import type { AwilixContainer } from "awilix";
 import type { Cradle } from "./container";
 import type { KVNamespace } from "../infra/cache/cache.service";
 import type { D1Database } from "../infra/database/d1.service";
-import { createConsoleLogger } from "./console-logger";
+import { createConsoleLogger } from "./logger";
 import { CacheRegistry } from "../infra/cache/cache-registry";
 
 let containerPromise: Promise<AwilixContainer<Cradle>> | null = null;
+
+export function resetContainer(): void {
+    containerPromise = null;
+}
 
 export function getContainer(
     kvNamespace: KVNamespace | null,
@@ -83,12 +87,10 @@ async function buildContainer(
 
             let category = "system";
             if (objAny) {
-               if (objAny.err?.message?.includes("github") || objAny.module === "github" || objAny.module === "webhook" || objAny.module === "sync" || objAny.module === "repos" || objAny.module === "prs") category = "github";
-               if (objAny.module === "google-meet" || objAny.module === "meetings") category = "googleMeet";
                if (objAny.category) category = objAny.category;
             }
 
-            logsServiceRef.log(msg, level as any, category, obj).catch(() => {});
+            logsServiceRef.log(msg, level as any, category, obj).catch((err: any) => console.error("Structured logging error:", err));
         } finally {
             isLogging = false;
         }
@@ -104,104 +106,64 @@ async function buildContainer(
         logger,
     });
 
-    container.register({
-        env: asFunction(() => env).singleton(),
-        logger: asFunction(() => logger).singleton(),
+    function registerInfrastructure() {
+        container.register({
+            env: asFunction(() => env).singleton(),
+            logger: asFunction(() => logger).singleton(),
+            githubClient: asFunction(({ env }: Cradle) => createGitHubClient({ env })).singleton(),
+            kvNamespace: asFunction(() => kvNamespace).singleton(),
+            cache: asFunction(() => cacheRegistry).singleton(),
+            cacheService: asFunction(({ cache }: Cradle) => cache.general).singleton(),
+            scoresKvCache: asFunction(({ cache }: Cradle) => cache.scores).singleton(),
+            membersKvCache: asFunction(({ cache }: Cradle) => cache.members).singleton(),
+            attendanceKvCache: asFunction(({ cache }: Cradle) => cache.attendance).singleton(),
+            d1Service: asFunction(({ logger }: Cradle) => new D1Service({ d1Database, logger })).singleton(),
+            rateLimitGuard: asFunction(({ logger, env }: Cradle) => new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold })).singleton(),
+            cachedGithubClient: asFunction(({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }: Cradle) => new CachedGitHubClient({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger })).singleton(),
+            webhookQueue: asFunction(() => webhookQueue).singleton(),
+            geminiClient: asFunction(({ env, logger, cacheService }: Cradle) => new GeminiClient({ geminiApiKey: env.geminiApiKey, logger, cacheService })).singleton(),
+            googleMeetClient: asFunction(({ logger, env, cacheService }: Cradle) => new GoogleMeetClient({ logger, clientId: env.googleClientId, clientSecret: env.googleClientSecret, redirectUri: env.googleRedirectUri, cacheService })).singleton(),
+        });
+    }
 
-        githubClient: asFunction(({ env }: Cradle) =>
-            createGitHubClient({ env }),
-        ).singleton(),
+    function registerRepositories() {
+        container.register({
+            developerRepo: asFunction(({ d1Service, logger }: Cradle) => new DeveloperRepository(d1Service.database, logger)).singleton(),
+            reposRepo: asFunction(({ d1Service, logger }: Cradle) => new ReposRepository(d1Service.database, logger)).singleton(),
+            prsRepo: asFunction(({ d1Service, logger, developerRepo }: Cradle) => new PrsRepository(d1Service.database, logger, developerRepo)).singleton(),
+            commentsRepo: asFunction(({ d1Service, logger, developerRepo }: Cradle) => new CommentsRepository(d1Service.database, logger, developerRepo)).singleton(),
+            commitsRepo: asFunction(({ d1Service, logger, developerRepo }: Cradle) => new CommitsRepository(d1Service.database, logger, developerRepo)).singleton(),
+            scoresRepo: asFunction(({ d1Service, logger }: Cradle) => new ScoresRepository(d1Service.database, logger)).singleton(),
+            meetingsRepo: asFunction(({ d1Service, logger }: Cradle) => new MeetingsRepository(d1Service.database, logger)).singleton(),
+            regularSchedulesRepo: asFunction(({ d1Service, logger }: Cradle) => new RegularSchedulesRepository(d1Service.database, logger)).singleton(),
+        });
+    }
 
-        // ─── Cache (registry + backward-compat aliases) ───────────────────
-        kvNamespace: asFunction(() => kvNamespace).singleton(),
-        cache: asFunction(() => cacheRegistry).singleton(),
+    function registerServices() {
+        container.register({
+            reposService: asClass(ReposService).singleton(),
+            logsService: asClass(LogsService).singleton(),
+            prFetcherService: asClass(PrFetcherService).singleton(),
+            openPrsService: asClass(OpenPrsService).singleton(),
+            openTicketsService: asClass(OpenTicketsService).singleton(),
+            pointsRulesService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) => new PointsRulesService({ d1Service, scoresKvCache, logger })).singleton(),
+            scoreAggregationService: asFunction(({ scoresRepo, scoresKvCache, logger }: Cradle) => new ScoreAggregationService({ scoresRepo, scoresKvCache, logger })).singleton(),
+            meetingsService: asFunction(({ logger, googleMeetClient, meetingsRepo, env }: Cradle) => new MeetingsService(googleMeetClient, meetingsRepo, env.googlePubsubTopic, logger)).singleton(),
+            webhookHandlerService: asFunction(({ logger, googleMeetClient }: Cradle) => new WebhookHandlerService({ logger, googleMeetClient })).singleton(),
+            webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) => new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env })).singleton(),
+            prContextFetcher: asFunction(({ cachedGithubClient, logger }: Cradle) => new PrContextFetcher({ cachedGithubClient, logger })).singleton(),
+            reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, logger }: Cradle) => new ReviewService({ prContextFetcher, geminiClient, cacheService, logger })).singleton(),
+        });
+    }
 
-        // Aliases — services that use these names still work unchanged
-        cacheService:    asFunction(({ cache }: Cradle) => cache.general).singleton(),
-        scoresKvCache:   asFunction(({ cache }: Cradle) => cache.scores).singleton(),
-        membersKvCache:  asFunction(({ cache }: Cradle) => cache.members).singleton(),
-        attendanceKvCache: asFunction(({ cache }: Cradle) => cache.attendance).singleton(),
-
-        // D1 Database
-        d1Service: asFunction(({ logger }: Cradle) =>
-            new D1Service({ d1Database, logger }),
-        ).singleton(),
-
-        developerRepo: asFunction(({ logger }: Cradle) => new DeveloperRepository(d1Database, logger)).singleton(),
-        reposRepo: asFunction(({ logger }: Cradle) => new ReposRepository(d1Database, logger)).singleton(),
-        prsRepo: asFunction(({ logger, developerRepo }: Cradle) => new PrsRepository(d1Database, logger, developerRepo)).singleton(),
-        commentsRepo: asFunction(({ logger, developerRepo }: Cradle) => new CommentsRepository(d1Database, logger, developerRepo)).singleton(),
-        commitsRepo: asFunction(({ logger, developerRepo }: Cradle) => new CommitsRepository(d1Database, logger, developerRepo)).singleton(),
-        scoresRepo: asFunction(({ logger }: Cradle) => new ScoresRepository(d1Database, logger)).singleton(),
-        meetingsRepo: asFunction(({ logger }: Cradle) => new MeetingsRepository(d1Database, logger)).singleton(),
-        regularSchedulesRepo: asFunction(({ logger }: Cradle) => new RegularSchedulesRepository(d1Database, logger)).singleton(),
-
-        rateLimitGuard: asFunction(({ logger, env }: Cradle) =>
-            new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold }),
-        ).singleton(),
-
-        cachedGithubClient: asFunction(({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }: Cradle) =>
-            new CachedGitHubClient({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }),
-        ).singleton(),
-
-        reposService: asClass(ReposService).singleton(),
-        logsService: asClass(LogsService).singleton(),
-
-        // Metrics
-        prFetcherService: asClass(PrFetcherService).singleton(),
-        openPrsService: asClass(OpenPrsService).singleton(),
-        openTicketsService: asClass(OpenTicketsService).singleton(),
-
-        pointsRulesService: asFunction(({ d1Service, scoresKvCache, logger }: Cradle) =>
-            new PointsRulesService({ d1Service, scoresKvCache, logger }),
-        ).singleton(),
-
-        scoreAggregationService: asFunction(({ scoresRepo, scoresKvCache, logger }: Cradle) =>
-            new ScoreAggregationService({ scoresRepo, scoresKvCache, logger }),
-        ).singleton(),
-
-        // Google Meet
-        googleMeetClient: asFunction(({ logger, env, cacheService }: Cradle) =>
-            new GoogleMeetClient({
-                logger,
-                clientId: env.googleClientId,
-                clientSecret: env.googleClientSecret,
-                redirectUri: env.googleRedirectUri,
-                cacheService,
-            }),
-        ).singleton(),
-        meetingsService: asFunction(({ logger, googleMeetClient, meetingsRepo, env }: Cradle) =>
-            new MeetingsService(googleMeetClient, meetingsRepo, env.googlePubsubTopic, logger),
-        ).singleton(),
-        webhookHandlerService: asFunction(({ logger, googleMeetClient }: Cradle) =>
-            new WebhookHandlerService({ logger, googleMeetClient }),
-        ).singleton(),
-
-        // Webhook
-        webhookQueue: asFunction(() => webhookQueue).singleton(),
-        webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) =>
-            new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env }),
-        ).singleton(),
-
-        // AI
-        geminiClient: asFunction(({ env, logger, cacheService }: Cradle) =>
-            new GeminiClient({ geminiApiKey: env.geminiApiKey, logger, cacheService }),
-        ).singleton(),
-
-        // Review
-        prContextFetcher: asFunction(({ cachedGithubClient, logger }: Cradle) =>
-            new PrContextFetcher({ cachedGithubClient, logger }),
-        ).singleton(),
-
-        reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, logger }: Cradle) =>
-            new ReviewService({ prContextFetcher, geminiClient, cacheService, logger }),
-        ).singleton(),
-    });
+    registerInfrastructure();
+    registerRepositories();
+    registerServices();
 
     try {
         logsServiceRef = container.resolve("logsService");
     } catch (e) {
-        /* ignore */
+        console.warn("Failed to resolve logsService for structured logging:", e);
     }
 
     return container;

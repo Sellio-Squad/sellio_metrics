@@ -34,6 +34,11 @@ import type { GeminiClient } from "../infra/ai/gemini.client";
 import type { PrContextFetcher } from "../modules/review/pr-context-fetcher";
 import type { ReviewService } from "../modules/review/review.service";
 import type { Logger } from "./logger";
+import type { GitHubClient } from "../infra/github/github.client";
+
+export interface CloudflareQueue<Body = unknown> {
+    send(message: Body, options?: any): Promise<void>;
+}
 
 // ─── Container Shape ────────────────────────────────────────
 
@@ -42,7 +47,7 @@ export interface Cradle {
     logger: Logger;
 
     // Infrastructure — GitHub
-    githubClient: any;
+    githubClient: GitHubClient;
     rateLimitGuard: RateLimitGuard;
     cachedGithubClient: CachedGitHubClient;
 
@@ -99,7 +104,7 @@ export interface Cradle {
 
     // Webhook
     webhookService: WebhookService;
-    webhookQueue: any | null;
+    webhookQueue: CloudflareQueue | null;
 
     // AI
     geminiClient: GeminiClient;

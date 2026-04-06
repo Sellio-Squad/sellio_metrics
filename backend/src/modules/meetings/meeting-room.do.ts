@@ -20,7 +20,7 @@ import type { DurableObjectState } from "@cloudflare/workers-types";
 import type { D1Database } from "../../infra/database/d1.service";
 import type { Logger } from "../../core/logger";
 import { MeetingsRepository } from "./meetings.repository";
-import { createConsoleLogger } from "../../core/console-logger";
+import { createConsoleLogger } from "../../core/logger";
 import { LogsService } from "../logs/logs.service";
 import { CacheService } from "../../infra/cache/cache.service";
 import { CloudflareConnectionManager } from "./websocket/cloudflare-connection-manager";
