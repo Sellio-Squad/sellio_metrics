@@ -7,7 +7,7 @@
 import { Hono } from "hono";
 import type { HonoEnv } from "../../core/hono-env";
 import { useCradle, safe } from "../../lib/route-helpers";
-import { AppError } from "../../core/app-error";
+import { AppError } from "../../core/errors";
 
 import { z } from "zod";
 import { zValidator } from "@hono/zod-validator";

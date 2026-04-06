@@ -9,19 +9,27 @@ export class AppError extends Error {
     public readonly statusCode: number;
     public readonly code: string;
     public readonly isOperational: boolean;
+    public readonly details?: Record<string, any>;
 
     constructor(
         message: string,
         statusCode = 500,
         code = "INTERNAL_ERROR",
         isOperational = true,
+        details?: Record<string, any>
     ) {
         super(message);
         this.name = this.constructor.name;
         this.statusCode = statusCode;
         this.code = code;
         this.isOperational = isOperational;
-        Error.captureStackTrace(this, this.constructor);
+        this.details = details;
+
+        if (typeof Error.captureStackTrace === "function") {
+            Error.captureStackTrace(this, this.constructor);
+        } else {
+            Object.setPrototypeOf(this, new.target.prototype);
+        }
     }
 }
 
