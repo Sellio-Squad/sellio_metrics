@@ -234,7 +234,7 @@ async function syncTargetedPrs(
         const chunk = targetPrNumbers.slice(i, i + batchSize);
         const details = await Promise.all(
             chunk.map((num) =>
-                cachedGithubClient.getPull(owner, repoName, num, false).catch(() => null),
+                cachedGithubClient.getPull(owner, repoName, num).catch(() => null),
             ),
         );
         restCalls += chunk.length;

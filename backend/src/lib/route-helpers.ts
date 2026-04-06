@@ -40,6 +40,7 @@ export const safe = <C extends Context<any, any, any>>(
             if (e instanceof AppError) {
                 return c.json({
                     error: e.message,
+                    code: e.code,
                     ...(e.details && { details: e.details })
                 }, e.statusCode as any);
             }
@@ -69,12 +70,16 @@ export function oauthSuccessHtml(): Response {
     );
 }
 
+function escapeHtml(s: string): string {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 export function oauthErrorHtml(error: string, hint?: string): Response {
     return new Response(
         `<html><body style="font-family:sans-serif;padding:24px">
         <h2 style="color:red">❌ Authentication Failed</h2>
-        <p><b>Error:</b> ${error}</p>
-        ${hint ? `<p>${hint}</p>` : ""}
+        <p><b>Error:</b> ${escapeHtml(error)}</p>
+        ${hint ? `<p>${escapeHtml(hint)}</p>` : ""}
         </body></html>`,
         { status: 400, headers: OAUTH_CORS },
     );
@@ -84,7 +89,7 @@ export function oauthFailHtml(error: string): Response {
     return new Response(
         `<html><body style="font-family:sans-serif;padding:24px">
         <h2 style="color:red">❌ Token Exchange Failed</h2>
-        <p><b>Error:</b> ${error}</p>
+        <p><b>Error:</b> ${escapeHtml(error)}</p>
         <p>Possible causes: invalid OAuth credentials, redirect URI mismatch, or KV write quota exceeded.</p>
         </body></html>`,
         { status: 500, headers: OAUTH_CORS },

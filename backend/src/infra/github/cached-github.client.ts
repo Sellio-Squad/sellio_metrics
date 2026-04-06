@@ -13,6 +13,49 @@ import type { CacheService } from "../cache/cache.service";
 import type { RateLimitGuard } from "./rate-limit-guard";
 import type { Logger } from "../../core/logger";
 
+export interface SlimRepo {
+    id: number;
+    name: string;
+    full_name: string;
+    html_url: string;
+    description: string | null;
+    created_at: string;
+    pushed_at: string;
+    language: string | null;
+    private: boolean;
+    fork: boolean;
+}
+
+export interface SlimMember {
+    login: string;
+    avatar_url: string;
+}
+
+export interface SlimPr {
+    id: number;
+    number: number;
+    title: string;
+    state: string;
+    user: { login: string } | null;
+    html_url: string;
+    head: { sha: string; ref: string };
+    additions: number;
+    deletions: number;
+    changed_files: number;
+    created_at: string;
+    merged_at: string | null;
+    closed_at: string | null;
+    body: string | null;
+}
+
+export interface SlimCommit {
+    sha: string;
+    stats?: { additions?: number; deletions?: number; total?: number };
+    commit: { message: string; author: any };
+    author: any;
+    html_url: string;
+}
+
 // ─── Service ────────────────────────────────────────────────
 
 export class CachedGitHubClient {
@@ -47,7 +90,7 @@ export class CachedGitHubClient {
     /**
      * List repos for an org — cached for 24 hours (single write).
      */
-    async listOrgRepos(org: string): Promise<any[]> {
+    async listOrgRepos(org: string): Promise<SlimRepo[]> {
         const cacheKey = `github:repos:${org}`;
         const cached = await this.cache.get<any[]>(cacheKey);
         if (cached) return cached.data;
@@ -59,7 +102,7 @@ export class CachedGitHubClient {
         );
 
         // Cache only the fields needed by sync/repos routes — not the hundreds of URL fields
-        const slim = repos.map((r: any) => ({
+        const slim: SlimRepo[] = repos.map((r: any) => ({
             id:          r.id,
             name:        r.name,
             full_name:   r.full_name,
@@ -79,7 +122,7 @@ export class CachedGitHubClient {
      * List all members of an organization — cached permanently.
      * Webhook handler flushes this cache on changes.
      */
-    async listOrgMembers(org: string): Promise<any[]> {
+    async listOrgMembers(org: string): Promise<SlimMember[]> {
         const cacheKey = `github:org-members:${org}`;
         const cached = await this.membersKv.get<any[]>(cacheKey);
         if (cached) return cached.data;
@@ -91,7 +134,7 @@ export class CachedGitHubClient {
         );
 
         // Cache only login + avatar_url — not all 30+ URL fields per member
-        const slim = members.map((m: any) => ({ login: m.login, avatar_url: m.avatar_url }));
+        const slim: SlimMember[] = members.map((m: any) => ({ login: m.login, avatar_url: m.avatar_url }));
         await this.membersKv.set(cacheKey, slim);
         return slim;
     }
@@ -137,7 +180,7 @@ export class CachedGitHubClient {
      * request *frequency*, not just remaining quota. We add a minimum
      * 300 ms gap between calls to stay inside GitHub's tolerated burst.
      */
-    async getPull(owner: string, repo: string, pullNumber: number, _isOpen: boolean): Promise<any> {
+    async getPull(owner: string, repo: string, pullNumber: number): Promise<SlimPr> {
         const MAX_RETRIES = 3;
         let attempt = 0;
 
@@ -169,7 +212,7 @@ export class CachedGitHubClient {
                     continue;
                 }
 
-                return data;
+                return data as SlimPr;
             } catch (error: any) {
                 const status = error.status || error.response?.status;
                 const isSecondaryRateLimit = status === 403 && error.message?.toLowerCase().includes("secondary rate limit");
@@ -198,7 +241,7 @@ export class CachedGitHubClient {
     /**
      * List reviews for a PR — NO intermediate cache.
      */
-    async listReviews(owner: string, repo: string, pullNumber: number, _isOpen: boolean): Promise<any[]> {
+    async listReviews(owner: string, repo: string, pullNumber: number): Promise<any[]> {
         await this.guard.checkAndWait();
         return this.github.paginate(
             this.github.rest.pulls.listReviews,
@@ -209,7 +252,7 @@ export class CachedGitHubClient {
     /**
      * List issue comments — NO intermediate cache.
      */
-    async listIssueComments(owner: string, repo: string, issueNumber: number, _isOpen: boolean): Promise<any[]> {
+    async listIssueComments(owner: string, repo: string, issueNumber: number): Promise<any[]> {
         await this.guard.checkAndWait();
         return this.github.paginate(
             this.github.rest.issues.listComments,
@@ -220,7 +263,7 @@ export class CachedGitHubClient {
     /**
      * List review comments — NO intermediate cache.
      */
-    async listReviewComments(owner: string, repo: string, pullNumber: number, _isOpen: boolean): Promise<any[]> {
+    async listReviewComments(owner: string, repo: string, pullNumber: number): Promise<any[]> {
         await this.guard.checkAndWait();
         return this.github.paginate(
             this.github.rest.pulls.listReviewComments,
@@ -334,7 +377,7 @@ export class CachedGitHubClient {
      * Get a single commit with full stats (additions/deletions per file).
      * Cached for 24h since commit data is immutable.
      */
-    async getCommit(owner: string, repo: string, ref: string): Promise<any> {
+    async getCommit(owner: string, repo: string, ref: string): Promise<SlimCommit> {
         const cacheKey = `github:commit:${owner}/${repo}/${ref}`;
         const cached = await this.cache.get<any>(cacheKey);
         if (cached) return cached.data;
@@ -345,7 +388,7 @@ export class CachedGitHubClient {
         const response = await this.github.rest.repos.getCommit({ owner, repo, ref });
         if (response?.headers) this.guard.updateFromHeaders(response.headers as Record<string, string | undefined>);
 
-        const slim = {
+        const slim: SlimCommit = {
             sha: response.data.sha,
             stats: response.data.stats,
             commit: {

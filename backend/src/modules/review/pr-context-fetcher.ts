@@ -85,10 +85,10 @@ export class PrContextFetcher {
         this.logger = logger.child({ module: "pr-context" });
     }
 
-    async fetch(owner: string, repo: string, prNumber: number): Promise<PrContext> {
-        // Fetch in parallel — PR metadata and file list are independent
+    async fetch(owner: string, repo: string, prNumber: number, prMeta?: any): Promise<PrContext> {
+        // Fetch in parallel — PR metadata (if not provided) and file list are independent
         const [pr, rawFiles] = await Promise.all([
-            this.github.getPull(owner, repo, prNumber, false),
+            prMeta ? Promise.resolve(prMeta) : this.github.getPull(owner, repo, prNumber),
             this.github.listPrFiles(owner, repo, prNumber),
         ]);
 
@@ -166,7 +166,7 @@ export class PrContextFetcher {
                 ? raw.slice(0, MAX_PATCH) + "\n... [truncated]"
                 : raw;
 
-            if (totalChars + truncated.length > MAX_TOTAL && reviewable.length > 0) break;
+            if (totalChars + truncated.length > MAX_TOTAL) break;
 
             reviewable.push({ filename: f.filename, status: f.status, additions: f.additions, deletions: f.deletions, patch: truncated });
             totalChars += truncated.length;

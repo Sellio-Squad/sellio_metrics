@@ -152,7 +152,7 @@ async function buildContainer(
             webhookHandlerService: asFunction(({ logger, googleMeetClient }: Cradle) => new WebhookHandlerService({ logger, googleMeetClient })).singleton(),
             webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) => new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env })).singleton(),
             prContextFetcher: asFunction(({ cachedGithubClient, logger }: Cradle) => new PrContextFetcher({ cachedGithubClient, logger })).singleton(),
-            reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, logger }: Cradle) => new ReviewService({ prContextFetcher, geminiClient, cacheService, logger })).singleton(),
+            reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger }: Cradle) => new ReviewService({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger })).singleton(),
         });
     }
 
