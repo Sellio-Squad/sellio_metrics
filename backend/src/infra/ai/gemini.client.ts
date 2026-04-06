@@ -56,8 +56,14 @@ export class GeminiClient {
     private readonly apiKey: string;
     private readonly logger: Logger;
     private readonly cache: CacheService;
-    // gemini-2.0-flash-lite: 30 RPM, 1500 RPD — better free tier than flash
-    private readonly model = "gemini-2.0-flash-lite";
+    private readonly models = [
+        "gemini-2.5-flash",
+        "gemini-2.5-flash-lite",
+        "gemini-2.0-flash", 
+        "gemini-2.0-flash-lite", 
+        "gemini-flash-latest",
+        "gemini-pro-latest"
+    ];
     private readonly baseUrl = "https://generativelanguage.googleapis.com/v1beta/models";
 
     // Free tier limits for dashboard display
@@ -94,13 +100,13 @@ export class GeminiClient {
         ]);
 
         const lastReq = await this.cache.get<string>(`gemini:last_request`);
-        const retryUntil = await this.cache.get<number>(`gemini:retry_until`);
+        const retryUntil = await this.cache.get<number>(`gemini:retry_until:${this.models[0]}`);
         const retryAfterSeconds = retryUntil?.data
             ? Math.max(0, Math.ceil((retryUntil.data - Date.now()) / 1000))
             : null;
 
         return {
-            model: this.model,
+            model: this.models[0],
             requestsToday: reqCount?.data ?? 0,
             errorsToday: errStats?.data?.count ?? 0,
             lastRequestAt: lastReq?.data ?? null,
@@ -127,20 +133,56 @@ export class GeminiClient {
             patch?: string;
         }>;
     }): Promise<GeminiReviewResult> {
-        // Check if we're in a retry-after window
-        const retryUntil = await this.cache.get<number>(`gemini:retry_until`);
-        if (retryUntil?.data && Date.now() < retryUntil.data) {
-            const waitSecs = Math.ceil((retryUntil.data - Date.now()) / 1000);
-            throw new RateLimitError(
-                `Gemini rate limit active. Please retry in ${waitSecs}s. ` +
-                `The free tier allows ${this.MINUTE_LIMIT} requests/minute and ${this.DAILY_LIMIT} requests/day.`
-            );
+        let lastError: Error | null = null;
+        
+        for (const model of this.models) {
+            try {
+                // Check if this specific model is in a retry-after window
+                const retryUntil = await this.cache.get<number>(`gemini:retry_until:${model}`);
+                if (retryUntil?.data && Date.now() < retryUntil.data) {
+                    this.logger.info({ model }, "Model is in rate-limit cooldown, skipping");
+                    lastError = new RateLimitError(`Rate limit active for ${model}`);
+                    continue;
+                }
+
+                return await this._executeRequest(model, params);
+            } catch (error: any) {
+                lastError = error;
+                if (error instanceof RateLimitError) {
+                    this.logger.warn({ model }, "Model rate limited, falling back to next available model");
+                    continue;
+                }
+                
+                // If it's a 5xx error or format error from this model, maybe the next model works better.
+                if (error instanceof AppError && error.code === "GEMINI_API_ERROR") {
+                    this.logger.warn({ model, err: error.message }, "Model failed, trying next model");
+                    continue; 
+                }
+
+                // If it's unhandled, bubble up
+                throw error;
+            }
         }
 
-        const prompt = this._buildPrompt(params);
-        this.logger.info({ files: params.files.length, model: this.model }, "Sending PR to Gemini for review");
+        throw lastError ?? new AppError("All Gemini models failed or rate-limited", 500, "GEMINI_ALL_MODELS_FAILED");
+    }
 
-        const url = `${this.baseUrl}/${this.model}:generateContent`;
+    private async _executeRequest(model: string, params: {
+        prTitle: string;
+        prAuthor: string;
+        prBody: string | null;
+        files: Array<{
+            filename: string;
+            status: string;
+            additions: number;
+            deletions: number;
+            patch?: string;
+        }>;
+    }): Promise<GeminiReviewResult> {
+        const prompt = this._buildPrompt(params);
+        this.logger.info({ files: params.files.length, model }, "Sending PR to Gemini for review");
+
+        const url = `${this.baseUrl}/${model}:generateContent`;
         const body = {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
@@ -150,8 +192,8 @@ export class GeminiClient {
             },
         };
 
-        // Retry loop for transient errors (429, 503)
-        const MAX_RETRIES = 2;
+        // Retry loop for transient errors (429, 503) from this specific model
+        const MAX_RETRIES = 1;
         let lastError: Error | null = null;
 
         for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
@@ -166,8 +208,8 @@ export class GeminiClient {
                     body: JSON.stringify(body),
                 });
             } catch (e: any) {
-                this.logger.error({ err: e.message }, "Gemini fetch failed");
-                throw new Error(`Gemini API request failed: ${e.message}`);
+                this.logger.error({ err: e.message, model }, "Gemini fetch failed");
+                throw new Error(`Gemini API request failed for ${model}: ${e.message}`);
             }
 
             if (response.ok) {
@@ -177,7 +219,7 @@ export class GeminiClient {
                 const text: string = raw?.candidates?.[0]?.content?.parts?.[0]?.text ?? "{}";
                 let parsed: any;
                 try { parsed = JSON.parse(text); }
-                catch { this.logger.warn({ text }, "Failed to parse Gemini JSON"); parsed = {}; }
+                catch { this.logger.warn({ text, model }, "Failed to parse Gemini JSON"); parsed = {}; }
                 return this._normalize(parsed);
             }
 
@@ -197,37 +239,38 @@ export class GeminiClient {
                     }
                 } catch { /* ignore parse errors */ }
 
-                this.logger.warn({ status, attempt, retryDelay }, "Gemini 429 — rate limited");
+                this.logger.warn({ status, attempt, retryDelay, model }, "Gemini 429 — rate limited");
                 await this._trackError(status, retryDelay, `Rate limited — retry in ${retryDelay}s`);
 
-                // Store retry window in KV
+                // Store retry window in KV for this specific model
                 await this.cache.set(
-                    `gemini:retry_until`,
+                    `gemini:retry_until:${model}`,
                     Date.now() + retryDelay * 1000,
                     retryDelay + 10,
                 );
 
                 lastError = new RateLimitError(
-                    `Gemini rate limit hit. Retry in ${retryDelay}s. ` +
+                    `Gemini rate limit hit for ${model}. Retry in ${retryDelay}s. ` +
                     `Free tier: ${this.MINUTE_LIMIT} req/min, ${this.DAILY_LIMIT} req/day.`
                 );
-                break; // No point retrying a 429 immediately
+                // Throw immediately so analyzeCode can move to the next fallback model
+                throw lastError;
             }
 
             if (status >= 500 && attempt < MAX_RETRIES) {
-                // Transient server error — wait and retry
-                this.logger.warn({ status, attempt }, "Gemini 5xx — retrying");
+                // Transient server error — wait and retry same model
+                this.logger.warn({ status, attempt, model }, "Gemini 5xx — retrying");
                 await new Promise(r => setTimeout(r, 1500 * (attempt + 1)));
                 continue;
             }
 
             // Non-retryable error
-            this.logger.error({ status, body: errText }, "Gemini API error");
+            this.logger.error({ status, body: errText, model }, "Gemini API error");
             await this._trackError(status, null, `HTTP ${status}`);
-            throw new AppError(`Gemini API error (${status}): ${errText}`, status, "GEMINI_API_ERROR");
+            throw new AppError(`Gemini API error (${status}) for ${model}: ${errText}`, status, "GEMINI_API_ERROR");
         }
 
-        throw lastError ?? new AppError("Gemini API failed after retries", 500, "GEMINI_API_ERROR");
+        throw lastError ?? new AppError(`Gemini API failed after retries for ${model}`, 500, "GEMINI_API_ERROR");
     }
 
     // ─── Private helpers ────────────────────────────────────
