@@ -164,9 +164,10 @@ export class CacheService {
             let cursor: string | undefined;
             do {
                 const results = await this.kv.list({ prefix: this.prefix, cursor });
-                for (const key of results.keys) {
-                    await this.kv.delete(key.name);
-                    trackKvWrite();
+                for (let i = 0; i < results.keys.length; i += 20) {
+                    const chunk = results.keys.slice(i, i + 20);
+                    await Promise.all(chunk.map(key => this.kv!.delete(key.name)));
+                    chunk.forEach(() => trackKvWrite());
                 }
                 cursor = results.list_complete ? undefined : results.cursor;
             } while (cursor);

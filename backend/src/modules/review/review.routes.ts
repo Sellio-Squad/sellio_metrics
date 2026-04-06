@@ -33,9 +33,10 @@ review.get("/meta", safe(async (c) => {
     // never needs to parse URLs itself.
     // URL format: https://github.com/{owner}/{repo}/pull/{number}
     const shapedPrs = openPrs.map((pr: any) => {
-        const parts    = (pr.url as string).split("/");
-        const prOwner  = parts[3] ?? org;
-        const repoName = parts[4] ?? "";
+        const urlStr   = pr.url as string || "";
+        const match    = urlStr.match(/repos\/([^/]+)\/([^/]+)\/pulls/) || urlStr.match(/github\.com\/([^/]+)\/([^/]+)\/pull/);
+        const prOwner  = match?.[1] ?? org;
+        const repoName = match?.[2] ?? "";
         return {
             prNumber:  pr.pr_number,
             title:     pr.title,

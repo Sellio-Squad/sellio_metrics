@@ -7,6 +7,7 @@
  */
 
 import type { Logger } from "../../core/logger";
+import { RateLimitError } from "../../core/errors";
 
 export class RateLimitGuard {
     private readonly logger: Logger;
@@ -70,9 +71,9 @@ export class RateLimitGuard {
         if (waitSeconds > 60) {
             this.logger.error(
                 { waitSeconds },
-                "Rate limit reset too far in the future — proceeding without delay",
+                "Rate limit reset too far in the future — throwing RateLimitError",
             );
-            return true;
+            throw new RateLimitError();
         }
 
         // Wait until reset

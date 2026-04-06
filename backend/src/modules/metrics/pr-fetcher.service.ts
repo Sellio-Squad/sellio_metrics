@@ -96,10 +96,10 @@ export class PrFetcherService {
     private async enrichSingle(owner: string, repo: string, pr: any): Promise<PrMetric> {
         const isOpen = !pr.merged_at && !pr.closed_at;
         const [fullPr, reviews, issueComments, reviewComments] = await Promise.all([
-            this.github.getPull(owner, repo, pr.number, isOpen).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "getPull failed"); return pr; }),
-            this.github.listReviews(owner, repo, pr.number, isOpen).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listReviews failed"); return []; }),
-            this.github.listIssueComments(owner, repo, pr.number, isOpen).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listIssueComments failed"); return []; }),
-            this.github.listReviewComments(owner, repo, pr.number, isOpen).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listReviewComments failed"); return []; }),
+            this.github.getPull(owner, repo, pr.number).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "getPull failed"); return pr; }),
+            this.github.listReviews(owner, repo, pr.number).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listReviews failed"); return []; }),
+            this.github.listIssueComments(owner, repo, pr.number).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listIssueComments failed"); return []; }),
+            this.github.listReviewComments(owner, repo, pr.number).catch((e: any) => { this.logger.error({ err: e.message, pr: pr.number }, "listReviewComments failed"); return []; }),
         ]);
 
         return mapToPrMetric({

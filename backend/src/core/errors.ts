@@ -52,7 +52,7 @@ export class GitHubApiError extends AppError {
 }
 
 export class RateLimitError extends AppError {
-    constructor() {
-        super("GitHub API rate limit exceeded. Try again later.", 429, "RATE_LIMIT");
+    constructor(message: string = "API rate limit exceeded. Try again later.") {
+        super(message, 429, "RATE_LIMIT");
     }
 }
