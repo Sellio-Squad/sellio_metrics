@@ -142,6 +142,32 @@ export const orgMembershipPayloadSchema = z.object({
 
 export type OrgMembershipPayload = z.infer<typeof orgMembershipPayloadSchema>;
 
+// ─── Projects V2 Item Event ──────────────────────────────────
+
+export const projectsV2ItemPayloadSchema = z.object({
+    action:       z.string(),
+    organization: organizationSchema.optional(),
+    projects_v2_item: z.object({
+        id:              z.number(),
+        node_id:         z.string(),
+        project_node_id: z.string(),
+        content_node_id: z.string(),
+        content_type:    z.string(),
+    }).passthrough(),
+    changes: z.object({
+        field_value: z.object({
+            field_id:         z.string(),
+            field_name:       z.string(),
+            field_type:       z.string(),
+            field_value_id:   z.string().nullable().optional(),
+            field_value_name: z.string().nullable().optional(),
+            project_number:   z.number().optional(),
+        }).passthrough().optional(),
+    }).passthrough().optional(),
+}).passthrough();
+
+export type ProjectsV2ItemPayload = z.infer<typeof projectsV2ItemPayloadSchema>;
+
 // ─── Schema Selector ─────────────────────────────────────────
 
 const schemaMap: Record<string, z.ZodType<any>> = {
@@ -153,6 +179,7 @@ const schemaMap: Record<string, z.ZodType<any>> = {
     organization:               orgMembershipPayloadSchema,
     member:                     orgMembershipPayloadSchema,
     membership:                 orgMembershipPayloadSchema,
+    projects_v2_item:           projectsV2ItemPayloadSchema,
 };
 
 /**

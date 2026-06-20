@@ -27,9 +27,10 @@ export function getContainer(
     attendanceKv: KVNamespace | null,
     d1Database: D1Database | null,
     webhookQueue: any | null = null,
+    syncQueue: any | null = null,
 ): Promise<AwilixContainer<Cradle>> {
     if (!containerPromise) {
-        containerPromise = buildContainer(kvNamespace, scoresKv, membersKv, attendanceKv, d1Database, webhookQueue);
+        containerPromise = buildContainer(kvNamespace, scoresKv, membersKv, attendanceKv, d1Database, webhookQueue, syncQueue);
     }
     return containerPromise;
 }
@@ -41,6 +42,7 @@ async function buildContainer(
     attendanceKv: KVNamespace | null,
     d1Database: D1Database | null,
     webhookQueue: any | null = null,
+    syncQueue: any | null = null,
 ): Promise<AwilixContainer<Cradle>> {
     const { createContainer, asFunction, asClass, InjectionMode } = await import("awilix");
     const { env } = await import("../config/env");
@@ -121,6 +123,7 @@ async function buildContainer(
             rateLimitGuard: asFunction(({ logger, env }: Cradle) => new RateLimitGuard({ logger, githubRateLimitThreshold: env.githubRateLimitThreshold })).singleton(),
             cachedGithubClient: asFunction(({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }: Cradle) => new CachedGitHubClient({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger })).singleton(),
             webhookQueue: asFunction(() => webhookQueue).singleton(),
+            syncQueue: asFunction(() => syncQueue).singleton(),
             geminiClient: asFunction(({ env, logger, cacheService }: Cradle) => new GeminiClient({ geminiApiKey: env.geminiApiKey, logger, cacheService })).singleton(),
             googleMeetClient: asFunction(({ logger, env, cacheService }: Cradle) => new GoogleMeetClient({ logger, clientId: env.googleClientId, clientSecret: env.googleClientSecret, redirectUri: env.googleRedirectUri, cacheService })).singleton(),
         });
@@ -139,7 +142,12 @@ async function buildContainer(
         });
     }
 
-    function registerServices() {
+    async function registerServices() {
+        const { AiProviderClient } = await import("../infra/ai/ai-provider.client");
+        const { ContextService } = await import("../modules/ai-pipeline/context.service");
+        const { GitOpsService } = await import("../modules/ai-pipeline/git-ops.service");
+        const { AiPipelineService } = await import("../modules/ai-pipeline/ai-pipeline.service");
+
         container.register({
             reposService: asClass(ReposService).singleton(),
             logsService: asClass(LogsService).singleton(),
@@ -153,12 +161,23 @@ async function buildContainer(
             webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) => new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env })).singleton(),
             prContextFetcher: asFunction(({ cachedGithubClient, logger }: Cradle) => new PrContextFetcher({ cachedGithubClient, logger })).singleton(),
             reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger }: Cradle) => new ReviewService({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger })).singleton(),
+            
+            aiProviderClient: asFunction(({ env, logger, cacheService }: Cradle) => new AiProviderClient({
+                geminiApiKey: env.geminiApiKey,
+                openaiApiKey: env.openaiApiKey,
+                grokApiKey: env.grokApiKey,
+                logger,
+                cacheService,
+            })).singleton(),
+            contextService: asClass(ContextService).singleton(),
+            gitOpsService: asClass(GitOpsService).singleton(),
+            aiPipelineService: asClass(AiPipelineService).singleton(),
         });
     }
 
     registerInfrastructure();
     registerRepositories();
-    registerServices();
+    await registerServices();
 
     try {
         logsServiceRef = container.resolve("logsService");

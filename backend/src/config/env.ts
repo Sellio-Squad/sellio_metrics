@@ -233,6 +233,17 @@ function _createEnv(overrides?: Record<string, string | undefined>) {
         /** Google Gemini API key for AI code review. */
         geminiApiKey: optionalEnv("GEMINI_API_KEY", "", envSrc),
 
+        /** GitHub Project column that triggers AI implementation. */
+        aiImplementColumn: optionalEnv("AI_IMPLEMENT_COLUMN", "AI Implement", envSrc),
+
+        /** OpenAI API Key for fallback code generation. */
+        openaiApiKey: optionalEnv("OPENAI_API_KEY", "", envSrc),
+
+        /** Grok (xAI) API Key for second fallback code generation. */
+        grokApiKey: optionalEnv("GROK_API_KEY", "", envSrc),
+
+        /** Maximum number of files allowed for AI context gathering. */
+        maxAiFiles: numericEnv("MAX_AI_FILES", 30, envSrc),
     };
 
     return Object.freeze(config);

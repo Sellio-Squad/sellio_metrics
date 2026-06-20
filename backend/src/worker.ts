@@ -70,6 +70,8 @@ interface WorkerEnv {
     SYNC_QUEUE?:    any;          // Long-running sync jobs queue
     MEETING_ROOMS:  CFDurableObjectNamespace;
     GEMINI_API_KEY?: string;
+    OPENAI_API_KEY?: string;
+    GROK_API_KEY?: string;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -86,6 +88,8 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.GOOGLE_REDIRECT_URI)   process.env.GOOGLE_REDIRECT_URI  = workerEnv.GOOGLE_REDIRECT_URI;
     if (workerEnv.GOOGLE_PUBSUB_TOPIC)   process.env.GOOGLE_PUBSUB_TOPIC  = workerEnv.GOOGLE_PUBSUB_TOPIC;
     if (workerEnv.GEMINI_API_KEY)        process.env.GEMINI_API_KEY       = workerEnv.GEMINI_API_KEY;
+    if (workerEnv.OPENAI_API_KEY)        process.env.OPENAI_API_KEY       = workerEnv.OPENAI_API_KEY;
+    if (workerEnv.GROK_API_KEY)          process.env.GROK_API_KEY         = workerEnv.GROK_API_KEY;
 }
 
 function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
@@ -156,6 +160,7 @@ export default {
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB           || null,
                 workerEnv.WEBHOOK_QUEUE || null,
+                workerEnv.SYNC_QUEUE    || null,
             );
 
             const app = buildApp(container.cradle, workerEnv.MEETING_ROOMS);
@@ -181,6 +186,7 @@ export default {
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB           || null,
                 workerEnv.WEBHOOK_QUEUE || null,
+                workerEnv.SYNC_QUEUE    || null,
             );
             await container.cradle.scoreAggregationService.precomputeSnapshots();
             console.log("Cron: leaderboard snapshots refreshed");
@@ -200,11 +206,19 @@ export default {
                 workerEnv.ATTENDANCE_KV || null,
                 workerEnv.DB           || null,
                 workerEnv.WEBHOOK_QUEUE || null,
+                workerEnv.SYNC_QUEUE    || null,
             );
 
             for (const msg of batch.messages) {
                 try {
                     const body = msg.body as { type?: string; developers?: string[]; jobId?: string };
+
+                    // AI Implementation Pipeline (Phases 1, 2, 3)
+                    if (body.type === "ai_implement" || body.type === "ai_implement_poll") {
+                        await container.cradle.aiPipelineService.execute(body);
+                        msg.ack();
+                        continue;
+                    }
 
                     // Webhook-triggered score recomputation
                     if (body.type === "recompute_scores") {
