@@ -91,12 +91,20 @@ export class WebhookService {
             return { affectedDevelopers };
         }
 
+        const repoOwner = repo.owner?.login ?? org;
+
+        // Invalidate AI context cache
+        const cacheTreeKey = `ai:repo:${repoOwner}/${repo.name}:tree`;
+        const cacheDocsKey = `ai:repo:${repoOwner}/${repo.name}:docs`;
+        await Promise.all([
+            this.cache.general.del(cacheTreeKey),
+            this.cache.general.del(cacheDocsKey),
+        ]).catch(err => this.logger.error({ err }, "Failed to bust AI context cache on merge"));
+
         const author = pr.user?.login;
         if (!author || isBot(author, pr.user?.type)) {
             return { affectedDevelopers };
         }
-
-        const repoOwner = repo.owner?.login ?? org;
 
         // Parallel: upsert repo + upsert developer (independent operations)
         const [repoId] = await Promise.all([
@@ -320,6 +328,86 @@ export class WebhookService {
                 { repo: `${repoOwner}/${repo.name}`, branch, total: commitRows.length, inserted },
                 "Push webhook: commits processed",
             );
+        }
+
+        return { affectedDevelopers };
+    }
+
+    /**
+     * Handles Projects v2 item events to catch when a card is moved to the "AI Implement" column.
+     */
+    async handleProjectItem(
+        payload: any,
+        aiColumnName: string
+    ): Promise<{ affectedDevelopers: string[]; enqueueJob?: any }> {
+        const affectedDevelopers: string[] = [];
+        const action = payload.action;
+        const item = payload.projects_v2_item;
+
+        if (!item) return { affectedDevelopers };
+        
+        if (action !== "edited" || item.content_type !== "Issue") {
+            return { affectedDevelopers };
+        }
+
+        const changes = payload.changes;
+        const fieldValue = changes?.field_value;
+
+        // Check if the status column was changed to the AI Implement column name
+        const isStatusChange = fieldValue?.field_name?.toLowerCase() === "status";
+        const isAIColumn = fieldValue?.field_value_name === aiColumnName;
+
+        if (isStatusChange && isAIColumn) {
+            const issueId = item.content_node_id;
+            const projectId = item.project_node_id;
+            const itemId = item.node_id;
+            const fieldId = fieldValue.field_id;
+
+            this.logger.info({ issueId, projectId, itemId }, "AI implement trigger detected");
+
+            if (this.cachedGithubClient) {
+                const octokit = this.cachedGithubClient.raw;
+                const result: any = await octokit.graphql(
+                    `query GetIssueDetails($id: ID!) {
+                      node(id: $id) {
+                        ... on Issue {
+                          number
+                          title
+                          body
+                          repository {
+                            name
+                            owner {
+                              login
+                            }
+                          }
+                        }
+                      }
+                    }`,
+                    { id: issueId }
+                );
+
+                const issue = result?.node;
+                if (issue && issue.repository) {
+                    const owner = issue.repository.owner.login;
+                    const repo = issue.repository.name;
+                    
+                    const enqueueJob = {
+                        type: "ai_implement",
+                        owner,
+                        repo,
+                        issueNumber: issue.number,
+                        issueTitle: issue.title,
+                        issueBody: issue.body,
+                        projectId,
+                        itemId,
+                        fieldId,
+                        phase: 1,
+                        taskId: `${owner}-${repo}-${issue.number}-${Date.now()}`,
+                    };
+
+                    return { affectedDevelopers, enqueueJob };
+                }
+            }
         }
 
         return { affectedDevelopers };

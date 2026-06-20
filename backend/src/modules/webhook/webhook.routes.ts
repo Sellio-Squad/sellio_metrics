@@ -29,6 +29,7 @@ const RELEVANT_EVENTS = new Set([
     "issue_comment", "pull_request_review_comment",
     "push",
     "organization", "member", "membership",
+    "projects_v2_item",
 ]);
 
 const DEDUP_TTL_SECONDS = 86400; // 24 hours
@@ -86,12 +87,34 @@ webhook.post("/github", async (c) => {
         membership:                 (p) => cradle.webhookService.handleOrgMembership(p as OrgMembershipPayload),
     };
 
-    const handler = handlers[event];
-    if (!handler) {
-        return c.json({ ignored: true, event });
+    let result: WebhookHandlerResult & { enqueueJob?: any };
+
+    if (event === "projects_v2_item") {
+        result = await cradle.webhookService.handleProjectItem(payload, cradle.env.aiImplementColumn);
+    } else {
+        const handler = handlers[event];
+        if (!handler) {
+            return c.json({ ignored: true, event });
+        }
+        result = await handler(payload);
     }
 
-    const result = await handler(payload);
+    // ─── If AI implement queue job is generated, enqueue it ──────
+    if (result.enqueueJob) {
+        if (cradle.syncQueue) {
+            const queuePromise = cradle.syncQueue.send(result.enqueueJob)
+                .catch((err: Error) => {
+                    cradle.logger.error({ err: err.message }, "Failed to enqueue AI Implement job to syncQueue");
+                });
+            if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(queuePromise);
+            else await queuePromise;
+        } else {
+            const p = cradle.aiPipelineService.execute(result.enqueueJob)
+                .catch((err: Error) => cradle.logger.error({ err: err.message }, "Sync execution of AI Implement failed"));
+            if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(p);
+            else await p;
+        }
+    }
 
     // ─── Mark delivery as processed (deduplication) ────────
     if (deliveryId) {

@@ -105,11 +105,18 @@ export interface Cradle {
     // Webhook
     webhookService: WebhookService;
     webhookQueue: CloudflareQueue | null;
+    syncQueue: CloudflareQueue | null;
 
     // AI
     geminiClient: GeminiClient;
+    aiProviderClient: import("../infra/ai/ai-provider.client").AiProviderClient;
 
     // Review
     prContextFetcher: PrContextFetcher;
     reviewService: ReviewService;
+
+    // AI Implement Pipeline
+    contextService: import("../modules/ai-pipeline/context.service").ContextService;
+    gitOpsService: import("../modules/ai-pipeline/git-ops.service").GitOpsService;
+    aiPipelineService: import("../modules/ai-pipeline/ai-pipeline.service").AiPipelineService;
 }
