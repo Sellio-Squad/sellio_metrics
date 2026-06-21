@@ -26,7 +26,7 @@ export class AiPipelineService {
     private readonly cache: CacheService;
     private readonly ai: AiProviderClient;
     private readonly contextService: ContextService;
-    private readonly gitOps: GitOpsService;
+    public readonly gitOps: GitOpsService;
     private readonly syncQueue: CloudflareQueue | null;
     private readonly webhookQueue: CloudflareQueue | null;
     private readonly logger: Logger;
@@ -122,8 +122,14 @@ export class AiPipelineService {
             job.issueBody
         );
 
+        // Extract and cache images
+        const images = await this.extractAndFetchImages(job.issueBody || "");
+        if (images.length > 0) {
+            await this.cache.set(`ai:task:${job.taskId}:images`, images, 3600);
+        }
+
         // 5. Generate plan using LLM
-        const plan = await this.generatePlan(context, job.issueTitle, job.issueBody);
+        const plan = await this.generatePlan(context, job.issueTitle, job.issueBody, images);
 
         // Comment with plan summary
         await this.gitOps.commentOnIssue(
@@ -162,10 +168,11 @@ export class AiPipelineService {
 
         await this.emitEvent(job, "phase2", "Generating Code", "Generating code changes file-by-file...", "running");
 
-        // 1. Retrieve plan and context from KV
-        const [contextVal, planVal] = await Promise.all([
+        // 1. Retrieve plan, context, and images from KV
+        const [contextVal, planVal, imagesVal] = await Promise.all([
             this.cache.get<RepoContext>(`ai:task:${job.taskId}:context`),
             this.cache.get<ImplementationPlan>(`ai:task:${job.taskId}:plan`),
+            this.cache.get<{ mimeType: string; data: string }[]>(`ai:task:${job.taskId}:images`),
         ]);
 
         if (!contextVal || !planVal) {
@@ -174,6 +181,7 @@ export class AiPipelineService {
 
         const context = contextVal.data;
         const plan = planVal.data;
+        const images = imagesVal?.data || [];
 
         // Comment on issue that code generation has started
         await this.gitOps.commentOnIssue(
@@ -202,7 +210,8 @@ export class AiPipelineService {
                     existingContent,
                     plan,
                     context,
-                    feedback
+                    feedback,
+                    images
                 );
                 changes.push({ path: filePath, content, action: "modify" });
             }
@@ -214,7 +223,8 @@ export class AiPipelineService {
                     "",
                     plan,
                     context,
-                    feedback
+                    feedback,
+                    images
                 );
                 changes.push({ path: filePath, content, action: "create" });
             }
@@ -369,8 +379,9 @@ Please review the changes and run the build tests.`;
         pollAttempt: number;
         taskId: string;
         issueTitle?: string;
+        retryCount?: number;
     }): Promise<void> {
-        this.logger.info({ prNumber: job.prNumber, attempt: job.pollAttempt }, "Polling CI status");
+        this.logger.info({ prNumber: job.prNumber, attempt: job.pollAttempt, retryCount: job.retryCount }, "Polling CI status");
 
         const prUrl = `https://github.com/${job.owner}/${job.repo}/pull/${job.prNumber}`;
         const issueTitle = job.issueTitle || `Issue #${job.issueNumber}`;
@@ -420,21 +431,193 @@ Please review the changes and run the build tests.`;
         if (failedRun) {
             // Build failed!
             const logsUrl = failedRun.html_url || "";
-            await this.emitEvent(
-                { ...job, issueTitle },
-                "ci_poll",
-                "CI Failed",
-                `CI build failed. Logs: ${logsUrl}`,
-                "failed"
-            );
-            await this.gitOps.commentOnIssue(
-                job.owner,
-                job.repo,
-                job.issueNumber,
-                `❌ **Build failed** on CI. Moving card to **AI: Failed**.\n- Check [CI Logs](${logsUrl}) for details.`
-            );
-            await this.gitOps.moveProjectCardByName(job.projectId, job.itemId, job.fieldId, "AI: Failed");
-            await this.cleanupTask(job.taskId);
+            const currentRetryCount = job.retryCount || 0;
+            const newRetryCount = currentRetryCount + 1;
+
+            if (newRetryCount <= 5) {
+                await this.emitEvent(
+                    { ...job, issueTitle },
+                    "ci_poll",
+                    `CI Failed (Retry ${newRetryCount}/5)`,
+                    `CI build failed. Fetching logs and self-correcting...`,
+                    "running",
+                    { prNumber: job.prNumber, prUrl }
+                );
+
+                try {
+                    // 1. Fetch branch name from PR
+                    const octokit = this.gitOps["github"].raw;
+                    const { data: prInfo } = await octokit.pulls.get({
+                        owner: job.owner,
+                        repo: job.repo,
+                        pull_number: job.prNumber
+                    });
+                    const branchName = prInfo.head.ref;
+                    
+                    // 2. List workflow runs to download failed log
+                    const runs = await this.gitOps.listWorkflowRunsForBranch(job.owner, job.repo, branchName);
+                    const matchingRun = runs.find(run => run.head_sha === job.prHeadSha);
+                    const runId = matchingRun ? matchingRun.id : (runs[0] ? runs[0].id : null);
+                    
+                    let logs = "";
+                    if (runId) {
+                        logs = await this.gitOps.getWorkflowJobLogs(job.owner, job.repo, runId);
+                    } else {
+                        logs = "Could not locate workflow run ID for commit SHA " + job.prHeadSha;
+                    }
+                    
+                    // 3. Classify failure (infra vs code)
+                    const failureClass = await this.classifyFailure(logs);
+                    this.logger.info({ taskId: job.taskId, failureClass }, "Classified CI failure");
+                    
+                    if (failureClass === "infra") {
+                        await this.emitEvent(
+                            { ...job, issueTitle },
+                            "failed",
+                            "CI Failed (Infra Error)",
+                            "Failed due to Infrastructure/Env error. No self-correction.",
+                            "failed"
+                        );
+                        await this.gitOps.commentOnIssue(
+                            job.owner,
+                            job.repo,
+                            job.issueNumber,
+                            `❌ **CI build failed due to an infrastructure/environment issue** (e.g., runner, secrets, network, dependencies setup).\nSince this is not a code error, I cannot resolve it automatically. Stopping self-correction.\n- Move card to **AI: Failed**.\n- Check [CI Logs](${logsUrl}) for details.`
+                        );
+                        await this.gitOps.moveProjectCardByName(job.projectId, job.itemId, job.fieldId, "AI: Failed");
+                        await this.cleanupTask(job.taskId);
+                        return;
+                    }
+                    
+                    // Code/Test error - perform self-correction
+                    await this.gitOps.commentOnIssue(
+                        job.owner,
+                        job.repo,
+                        job.issueNumber,
+                        `🔄 **CI build failed with a code/test error** (Attempt ${newRetryCount}/5).\nLogs analyzed. Self-correcting the code modifications and pushing a new fix commit...\n- [Check Failed Run Logs](${logsUrl})`
+                    );
+                    
+                    // Load plan, context and images
+                    const [contextVal, planVal, imagesVal] = await Promise.all([
+                        this.cache.get<RepoContext>(`ai:task:${job.taskId}:context`),
+                        this.cache.get<ImplementationPlan>(`ai:task:${job.taskId}:plan`),
+                        this.cache.get<{ mimeType: string; data: string }[]>(`ai:task:${job.taskId}:images`),
+                    ]);
+                    
+                    const context = contextVal?.data;
+                    const plan = planVal?.data;
+                    const images = imagesVal?.data || [];
+                    
+                    if (!context || !plan) {
+                        throw new Error("Context or plan not found in KV cache during self-correction.");
+                    }
+                    
+                    // Ask LLM to generate patched/fixed code changes
+                    const systemPrompt = `You are a principal engineer. A pull request was generated but failed the CI checks.
+Your task is to analyze the failure logs and correct the code modifications.
+Generate the corrected contents for the files. Return ONLY the files that need to be updated.
+
+You MUST respond with a valid JSON object matching this schema:
+{
+  "files": [
+    {
+      "path": "path/to/file",
+      "content": "Full corrected content of the file",
+      "action": "modify" | "create" | "delete"
+    }
+  ]
+}`;
+                    const userPrompt = `Issue Title: ${job.issueTitle || issueTitle}
+Issue Body: ${context.recentPrs[0]?.body || ""}
+
+Failed CI Logs:
+${logs}
+
+Original Implementation Plan:
+Summary: ${plan.summary}
+Approach: ${plan.approach}
+
+Files Modified originally: ${plan.filesToModify.join(", ")}
+New Files originally: ${plan.newFiles.join(", ")}
+`;
+                    const response = await this.ai.generateCompletion({
+                        systemPrompt,
+                        userPrompt,
+                        jsonMode: true,
+                        images
+                    });
+                    
+                    const parsed = JSON.parse(response);
+                    const fixedFiles: CodeChange[] = parsed.files || [];
+                    
+                    if (fixedFiles.length === 0) {
+                        throw new Error("LLM did not generate any code changes for the fix.");
+                    }
+                    
+                    // Push fix commit to the same branch
+                    const ref = await octokit.git.getRef({
+                        owner: job.owner,
+                        repo: job.repo,
+                        ref: `heads/${branchName}`
+                    });
+                    const branchHeadSha = ref.data.object.sha;
+                    
+                    this.logger.info({ branchName, branchHeadSha }, "Pushing self-correction commit to branch");
+                    const newCommitSha = await this.gitOps.commitFiles(
+                        job.owner,
+                        job.repo,
+                        branchName,
+                        branchHeadSha,
+                        fixedFiles,
+                        `Fix CI check failures - Retry #${newRetryCount}`
+                    );
+                    
+                    // Requeue CI polling job with pollAttempt: 1, prHeadSha: newCommitSha, retryCount: newRetryCount
+                    if (this.syncQueue) {
+                        await this.syncQueue.send({
+                            ...job,
+                            pollAttempt: 1,
+                            prHeadSha: newCommitSha,
+                            retryCount: newRetryCount
+                        }, { delaySeconds: 30 });
+                        
+                        this.logger.info({ taskId: job.taskId, newCommitSha }, "Enqueued new CI status polling after self-correction");
+                    } else {
+                        await this.executePollCI({
+                            ...job,
+                            pollAttempt: 1,
+                            prHeadSha: newCommitSha,
+                            retryCount: newRetryCount
+                        });
+                    }
+                } catch (corrErr: any) {
+                    this.logger.error({ taskId: job.taskId, error: corrErr.message }, "Self-correction failed, halting");
+                    await this.gitOps.commentOnIssue(
+                        job.owner,
+                        job.repo,
+                        job.issueNumber,
+                        `❌ **Self-correction failed** during execution: ${corrErr.message}. Moving card to **AI: Failed**.`
+                    );
+                    await this.gitOps.moveProjectCardByName(job.projectId, job.itemId, job.fieldId, "AI: Failed");
+                    await this.cleanupTask(job.taskId);
+                }
+            } else {
+                await this.emitEvent(
+                    { ...job, issueTitle },
+                    "ci_poll",
+                    "CI Failed (Max Retries)",
+                    "CI build failed and retry limit reached.",
+                    "failed"
+                );
+                await this.gitOps.commentOnIssue(
+                    job.owner,
+                    job.repo,
+                    job.issueNumber,
+                    `❌ **CI build failed** after 5 attempts at self-correction. Moving card to **AI: Failed**.\n- Check [CI Logs](${logsUrl}) for details.`
+                );
+                await this.gitOps.moveProjectCardByName(job.projectId, job.itemId, job.fieldId, "AI: Failed");
+                await this.cleanupTask(job.taskId);
+            }
         } else {
             // Build passed!
             await this.emitEvent(
@@ -487,7 +670,7 @@ Please review the changes and run the build tests.`;
 
     // ─── Helpers & LLM Calls ──────────────────────────────────
 
-    private async generatePlan(context: RepoContext, title: string, body: string | null): Promise<ImplementationPlan> {
+    private async generatePlan(context: RepoContext, title: string, body: string | null, images?: { mimeType: string; data: string }[]): Promise<ImplementationPlan> {
         const systemPrompt = `You are a senior principal developer. Given a repository's context (file tree, docs, dependencies, recent PRs) and a ticket, create a complete implementation plan.
 Analyze the issue and list:
 1. A summary of the approach
@@ -523,6 +706,7 @@ ${JSON.stringify(context.dependencies, null, 2)}
             systemPrompt,
             userPrompt,
             jsonMode: true,
+            images,
         });
 
         const cleaned = raw.trim().replace(/^```json/, "").replace(/```$/, "").trim();
@@ -534,7 +718,8 @@ ${JSON.stringify(context.dependencies, null, 2)}
         existingContent: string,
         plan: ImplementationPlan,
         context: RepoContext,
-        feedback: string
+        feedback: string,
+        images?: { mimeType: string; data: string }[]
     ): Promise<string> {
         const systemPrompt = `You are a world-class principal developer. You write clean, production-grade, well-tested code that adheres to the styles of the existing codebase.
 Given:
@@ -569,6 +754,7 @@ ${context.fileTree.join("\n")}
             systemPrompt,
             userPrompt,
             jsonMode: false,
+            images,
         });
 
         return this.cleanCodeContent(raw);
@@ -767,5 +953,213 @@ ${context.fileTree.join("\n")}
         } catch (err: any) {
             this.logger.error({ err: err?.message }, "Failed to update runs index in KV");
         }
+    }
+
+    async handleCommentMention(
+        owner: string,
+        repo: string,
+        issueNumber: number,
+        commentId: number,
+        commentBody: string,
+        author: string
+    ): Promise<void> {
+        this.logger.info({ owner, repo, issueNumber, commentId }, "Handling bot mention in issue comment");
+        
+        try {
+            const octokit = this.gitOps["github"].raw;
+            
+            // 1. Fetch issue details
+            const { data: issue } = await octokit.issues.get({
+                owner,
+                repo,
+                issue_number: issueNumber
+            });
+            
+            // 2. Fetch last 20 comments
+            const { data: comments } = await octokit.issues.listComments({
+                owner,
+                repo,
+                issue_number: issueNumber,
+                per_page: 20
+            });
+            
+            // Build conversation history
+            let conversationText = `Issue Title: ${issue.title}\nIssue Body:\n${issue.body || ""}\n\n`;
+            conversationText += "Conversation History:\n";
+            for (const c of comments) {
+                conversationText += `- **${c.user?.login || "anonymous"}**: ${c.body}\n`;
+            }
+            
+            // 3. Extract and fetch images from issue body and comments
+            const allText = (issue.body || "") + "\n" + comments.map(c => c.body || "").join("\n");
+            const images = await this.extractAndFetchImages(allText);
+            
+            // 4. Call LLM to respond to the mention
+            const systemPrompt = `You are Sellio Bot, an advanced AI Coding Assistant built by the engineering team.
+You are helping the developers solve issues in the repository.
+Analyze the issue details, the conversation history, and any attached images (screenshots) to answer the user's questions or address their request.
+Keep your response professional, friendly, clear, and focused on helping the developers.`;
+            
+            const response = await this.ai.generateCompletion({
+                systemPrompt,
+                userPrompt: conversationText,
+                images
+            });
+            
+            // 5. Post comment
+            await this.gitOps.commentOnIssue(owner, repo, issueNumber, response);
+        } catch (err: any) {
+            this.logger.error({ issueNumber, error: err.message }, "Failed to handle comment mention");
+        }
+    }
+
+    async handleReviewComment(
+        owner: string,
+        repo: string,
+        pullNumber: number,
+        commentId: number,
+        commentBody: string,
+        author: string,
+        path: string,
+        line: number | null,
+        diffHunk: string
+    ): Promise<void> {
+        this.logger.info({ owner, repo, pullNumber, commentId, path, line }, "Handling review comment mention");
+        
+        try {
+            const systemPrompt = `You are Sellio Bot, an advanced AI Coding Assistant.
+You have been mentioned in a code review comment on a pull request.
+Analyze the comment, the file path, the line number, and the surrounding diff hunk to address the user's question or request.
+
+If the user wants a code fix or correction, you can output a code suggestion using a markdown suggestion block:
+\`\`\`suggestion
+corrected lines of code
+\`\`\`
+Keep your answer clear, helpful, and concise.`;
+
+            const userPrompt = `File Path: ${path}
+Line: ${line || "unknown"}
+Diff Hunk:
+\`\`\`diff
+${diffHunk}
+\`\`\`
+
+User Comment by @${author}:
+${commentBody}
+`;
+            const response = await this.ai.generateCompletion({
+                systemPrompt,
+                userPrompt
+            });
+            
+            // Reply in the same thread
+            await this.gitOps.replyToReviewComment(owner, repo, pullNumber, commentId, response);
+        } catch (err: any) {
+            this.logger.error({ commentId, error: err.message }, "Failed to handle review comment mention");
+        }
+    }
+
+    private async classifyFailure(logs: string): Promise<"infra" | "code"> {
+        const systemPrompt = `You are a DevOps and CI classification expert.
+Analyze the provided build log output and classify whether the failure is a Code/Test error or an Infrastructure/Environment/Network/Auth/Secrets error.
+
+Classification criteria:
+- "code": Any compiler error, syntax error, unit test failure, code lint violation, import/module not found, type mismatch, or run-time test crash. These are errors that can be fixed by modifying the source code of the application.
+- "infra": Infrastructure/Env issues like missing secrets, environment variables not set, runner out of disk space, API/network timeouts, service/database connection failures during setup, Docker daemon not running, npm/yarn dependency installation timeout, authentication failure, or permission issues. These cannot be resolved by editing application source code.
+
+You MUST respond with a JSON object ONLY:
+{
+  "classification": "code" | "infra",
+  "reason": "Short explanation of why it fits this class"
+}`;
+        const userPrompt = `Build log output:\n\n${logs}`;
+        try {
+            const response = await this.ai.generateCompletion({
+                systemPrompt,
+                userPrompt,
+                jsonMode: true
+            });
+            const parsed = JSON.parse(response);
+            return parsed.classification === "infra" ? "infra" : "code";
+        } catch (err: any) {
+            this.logger.error({ err: err.message }, "Error classifying failure, defaulting to code");
+            return "code";
+        }
+    }
+
+    private async extractAndFetchImages(text: string): Promise<{ mimeType: string; data: string }[]> {
+        if (!text) return [];
+        
+        const imageUrls: string[] = [];
+        
+        // Match Markdown images: ![alt](url)
+        const mdRegex = /!\[.*?\]\((https?:\/\/[^\s\)]+)\)/g;
+        let match;
+        while ((match = mdRegex.exec(text)) !== null) {
+            imageUrls.push(match[1]);
+        }
+        
+        // Match HTML images: <img src="url">
+        const htmlRegex = /<img[^>]+src=["'](https?:\/\/[^"']+)["']/g;
+        while ((match = htmlRegex.exec(text)) !== null) {
+            imageUrls.push(match[1]);
+        }
+        
+        // Deduplicate and limit to first 3 images
+        const uniqueUrls = Array.from(new Set(imageUrls)).slice(0, 3);
+        const results: { mimeType: string; data: string }[] = [];
+        
+        for (const url of uniqueUrls) {
+            try {
+                this.logger.info({ url }, "Fetching ticket image attachment");
+                
+                let base64Data = "";
+                let contentType = "image/png";
+
+                if (url.includes("github")) {
+                    const octokit = this.gitOps["github"].raw;
+                    // Fetch via octokit.request so it uses app installation auth automatically!
+                    const res = await octokit.request({
+                        method: "GET",
+                        url,
+                        responseType: "arraybuffer"
+                    });
+                    
+                    const arrayBuffer = res.data as ArrayBuffer;
+                    const uint8 = new Uint8Array(arrayBuffer);
+                    let binary = "";
+                    const len = uint8.byteLength;
+                    for (let i = 0; i < len; i++) {
+                        binary += String.fromCharCode(uint8[i]);
+                    }
+                    base64Data = btoa(binary);
+                    contentType = res.headers["content-type"] || "image/png";
+                } else {
+                    const res = await fetch(url);
+                    if (!res.ok) {
+                        this.logger.warn({ url, status: res.status }, "Failed to fetch image attachment");
+                        continue;
+                    }
+                    const arrayBuffer = await res.arrayBuffer();
+                    const uint8 = new Uint8Array(arrayBuffer);
+                    let binary = "";
+                    const len = uint8.byteLength;
+                    for (let i = 0; i < len; i++) {
+                        binary += String.fromCharCode(uint8[i]);
+                    }
+                    base64Data = btoa(binary);
+                    contentType = res.headers.get("content-type") || "image/png";
+                }
+                
+                results.push({
+                    mimeType: contentType,
+                    data: base64Data
+                });
+            } catch (err: any) {
+                this.logger.warn({ url, error: err.message }, "Error downloading image attachment");
+            }
+        }
+        
+        return results;
     }
 }

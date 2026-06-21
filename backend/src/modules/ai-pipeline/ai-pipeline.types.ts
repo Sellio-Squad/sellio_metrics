@@ -14,6 +14,7 @@ export interface AiImplementJob {
     fieldId: string;         // Status ProjectV2Field Node ID
     phase: 1 | 2 | 3;
     taskId: string;          // Unique task identifier (e.g. repo-issue-timestamp)
+    retryCount?: number;     // Number of CI failure correction attempts
 }
 
 export interface RepoContext {

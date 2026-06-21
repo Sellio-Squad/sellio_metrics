@@ -120,21 +120,23 @@ export class AiPipelineHub {
             return [];
         }
         try {
-            const indexStr = await this.env.CACHE.get("ai:runs:index");
+            const indexStr = await this.env.CACHE.get("sellio:ai:runs:index");
             if (!indexStr) {
                 return [];
             }
-            const taskIds = JSON.parse(indexStr) as string[];
+            const indexObj = JSON.parse(indexStr) as { data: string[] };
+            const taskIds = indexObj?.data;
             if (!Array.isArray(taskIds) || taskIds.length === 0) {
                 return [];
             }
 
             const records = await Promise.all(
                 taskIds.map(async (taskId) => {
-                    const recordStr = await this.env.CACHE.get(`ai:runs:${taskId}`);
+                    const recordStr = await this.env.CACHE.get(`sellio:ai:runs:${taskId}`);
                     if (!recordStr) return null;
                     try {
-                        return JSON.parse(recordStr) as AiRunRecord;
+                        const recordObj = JSON.parse(recordStr) as { data: AiRunRecord };
+                        return recordObj?.data || null;
                     } catch {
                         return null;
                     }
