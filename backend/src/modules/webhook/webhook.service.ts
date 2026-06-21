@@ -400,8 +400,8 @@ export class WebhookService {
 
         if (!item) return { affectedDevelopers };
         
-        // Supported actions: 'edited' (when moved) and 'converted' (when draft issue is converted to repository issue)
-        if (action !== "edited" && action !== "converted") {
+        // Supported actions: 'edited' (when moved), 'converted' (when draft is converted to repository issue), and 'created' (when added directly to column)
+        if (action !== "edited" && action !== "converted" && action !== "created") {
             return { affectedDevelopers };
         }
 
@@ -422,11 +422,15 @@ export class WebhookService {
         const providedFieldId = fieldValue?.field_id || fieldValue?.field_node_id;
 
         // Handle Draft Issue conversion
-        if (isDraft && action === "edited" && isStatusChange && isAIColumn) {
+        if (isDraft && (action === "edited" || action === "created")) {
+            if (action === "edited" && (!isStatusChange || !isAIColumn)) {
+                return { affectedDevelopers };
+            }
+
             const projectId = item.project_node_id;
             const itemId = item.node_id;
 
-            this.logger.info({ projectId, itemId }, "Draft issue moved to AI Implement column. Finding repository to convert...");
+            this.logger.info({ projectId, itemId, action }, "Draft issue placed/created in column. Finding repository to convert...");
             
             const conversionPromise = (async () => {
                 try {
@@ -436,6 +440,29 @@ export class WebhookService {
                     }
                     const octokit = this.cachedGithubClient.raw;
                     
+                    // If action is created, verify status via GraphQL first
+                    if (action === "created") {
+                        const statusRes: any = await octokit.graphql(
+                            `query GetItemStatus($itemId: ID!) {
+                              node(id: $itemId) {
+                                ... on ProjectV2Item {
+                                  fieldValueByName(name: "Status") {
+                                    ... on ProjectV2ItemFieldSingleSelectValue {
+                                      name
+                                    }
+                                  }
+                                }
+                              }
+                            }`,
+                            { itemId }
+                        );
+                        const currentStatus = statusRes?.node?.fieldValueByName?.name;
+                        if (currentStatus !== aiColumnName) {
+                            this.logger.info({ currentStatus, aiColumnName }, "Draft issue created but not in AI Implement column. Ignoring.");
+                            return;
+                        }
+                    }
+
                     // 1. Query project's linked repositories
                     const projectRes: any = await octokit.graphql(
                         `query GetProjectLinkedRepositories($projectId: ID!) {
@@ -481,6 +508,7 @@ export class WebhookService {
                                 ... on Issue {
                                   number
                                   title
+                                  body
                                   repository {
                                     name
                                     owner {
@@ -528,6 +556,8 @@ export class WebhookService {
             if (action === "edited" && isStatusChange && isAIColumn) {
                 shouldTrigger = true;
             } else if (action === "converted") {
+                shouldTrigger = true;
+            } else if (action === "created") {
                 shouldTrigger = true;
             }
         }
@@ -583,9 +613,9 @@ export class WebhookService {
 
                     this.logger.info({ statusName, fieldId, issueNumber: issue.number }, "GraphQL query completed");
 
-                    // For 'converted' action, verify if the status is actually the AI column
-                    if (action === "converted" && statusName !== aiColumnName) {
-                        this.logger.info({ statusName }, "Converted issue is not in the AI Implement column. Ignoring.");
+                    // For 'converted' or 'created' action, verify if the status is actually the AI column
+                    if ((action === "converted" || action === "created") && statusName !== aiColumnName) {
+                        this.logger.info({ statusName, action }, "Issue is not in the AI Implement column. Ignoring.");
                         return { affectedDevelopers };
                     }
 

@@ -872,6 +872,12 @@ ${context.fileTree.join("\n")}
 
                 if (status === "failed") {
                     record.status = "failed";
+                    // Mark all running events as failed to avoid infinite spinners
+                    for (const ev of record.events) {
+                        if (ev.status === "running") {
+                            ev.status = "failed";
+                        }
+                    }
                 } else if (phase === "ci_poll" && status === "done") {
                     record.status = "completed";
                 } else if (phase === "ci_poll" && status === "running") {

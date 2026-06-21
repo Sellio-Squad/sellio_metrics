@@ -242,6 +242,10 @@ function _createEnv(overrides?: Record<string, string | undefined>) {
         /** Grok (xAI) API Key for second fallback code generation. */
         grokApiKey: optionalEnv("GROK_API_KEY", "", envSrc),
 
+        /** Groq API Key for third fallback code generation. */
+        groqApiKey: optionalEnv("GROQ_API_KEY", "", envSrc),
+
+
         /** Maximum number of files allowed for AI context gathering. */
         maxAiFiles: numericEnv("MAX_AI_FILES", 30, envSrc),
     };
