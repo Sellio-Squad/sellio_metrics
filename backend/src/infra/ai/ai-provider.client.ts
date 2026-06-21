@@ -22,6 +22,8 @@ import type { Logger } from "../../core/logger";
 import type { CacheService } from "../cache/cache.service";
 import { RateLimitError, AppError } from "../../core/errors";
 
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export interface AICompletionParams {
     systemPrompt?: string;
     userPrompt: string;
@@ -273,21 +275,21 @@ export class AiProviderClient {
         // 5. Try Grok (xAI)
         if (this.grokApiKey) {
             try {
-                const cooldownKey = "ai:cooldown:grok:grok-2";
+                const cooldownKey = "ai:cooldown:grok:grok-beta";
                 const cooldown = await this.cache.get<number>(cooldownKey);
                 if (!cooldown?.data || Date.now() >= cooldown.data) {
                     try {
-                        this.logger.info({ tier: "premium" }, "Trying Grok grok-2");
-                        return await this.executeGrok("grok-2", params);
-                    } catch (grok2Err: any) {
-                        failureLogs.push(`Grok (grok-2): ${grok2Err.message}`);
-                        this.logger.warn({ error: grok2Err.message }, "Grok-2 failed, trying grok-2-1212");
-                        return await this.executeGrok("grok-2-1212", params);
+                        this.logger.info({ tier: "premium" }, "Trying Grok grok-beta");
+                        return await this.executeGrok("grok-beta", params);
+                    } catch (grokBetaErr: any) {
+                        failureLogs.push(`Grok (grok-beta): ${grokBetaErr.message}`);
+                        this.logger.warn({ error: grokBetaErr.message }, "Grok-beta failed, trying grok-latest");
+                        return await this.executeGrok("grok-latest", params);
                     }
                 }
                 failureLogs.push("Grok: skipped (cooldown active)");
             } catch (error: any) {
-                failureLogs.push(`Grok (grok-2-1212): ${error.message}`);
+                failureLogs.push(`Grok (grok-latest): ${error.message}`);
                 this.logger.warn({ error: error.message }, "Grok call failed");
             }
         } else {
@@ -381,6 +383,12 @@ export class AiProviderClient {
             response = await fetch(url, fetchOptions);
         }
 
+        if (response.status === 429) {
+            this.logger.warn({ model }, "Gemini model returned HTTP 429. Retrying in 2 seconds...");
+            await sleep(2000);
+            response = await fetch(url, fetchOptions);
+        }
+
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) {
@@ -453,6 +461,12 @@ export class AiProviderClient {
             response = await fetch(url, fetchOptions);
         }
 
+        if (response.status === 429) {
+            this.logger.warn({ model }, "OpenAI model returned HTTP 429. Retrying in 2 seconds...");
+            await sleep(2000);
+            response = await fetch(url, fetchOptions);
+        }
+
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) {
@@ -507,6 +521,12 @@ export class AiProviderClient {
         if (!response.ok && (response.status === 401 || response.status === 404) && url.includes("gateway.ai.cloudflare.com")) {
             this.logger.warn({ model, status: response.status }, "AI Gateway request failed, falling back to direct URL");
             url = this.directUrl("deepseek", "chat/completions");
+            response = await fetch(url, fetchOptions);
+        }
+
+        if (response.status === 429) {
+            this.logger.warn({ model }, "DeepSeek model returned HTTP 429. Retrying in 2 seconds...");
+            await sleep(2000);
             response = await fetch(url, fetchOptions);
         }
 
@@ -583,6 +603,12 @@ export class AiProviderClient {
             response = await fetch(url, fetchOptions);
         }
 
+        if (response.status === 429) {
+            this.logger.warn({ model }, "Groq model returned HTTP 429. Retrying in 2 seconds...");
+            await sleep(2000);
+            response = await fetch(url, fetchOptions);
+        }
+
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) {
@@ -637,6 +663,12 @@ export class AiProviderClient {
         if (!response.ok && (response.status === 401 || response.status === 404) && url.includes("gateway.ai.cloudflare.com")) {
             this.logger.warn({ model, status: response.status }, "AI Gateway request failed, falling back to direct URL");
             url = this.directUrl("x-ai", "v1/chat/completions");
+            response = await fetch(url, fetchOptions);
+        }
+
+        if (response.status === 429) {
+            this.logger.warn({ model }, "Grok model returned HTTP 429. Retrying in 2 seconds...");
+            await sleep(2000);
             response = await fetch(url, fetchOptions);
         }
 
