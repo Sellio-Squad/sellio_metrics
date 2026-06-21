@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/data/datasources/ai_pipeline/ai_runs_websocket_data_source.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
 import 'package:sellio_metrics/domain/entities/ai_run_entity.dart';
 import 'package:sellio_metrics/presentation/pages/ai_pipeline/providers/ai_pipeline_provider.dart';
@@ -47,46 +48,50 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
       builder: (context, provider, _) {
         final active = provider.activeRuns;
         final history = provider.historyRuns;
+        final isInitialLoading = !provider.isLoaded &&
+            provider.connectionStatus != WsConnectionStatus.disconnected;
 
         return Column(
           children: [
             _buildHeader(context, provider.connectionStatus),
             Expanded(
-              child: provider.runs.isEmpty
-                  ? _buildEmptyState(context)
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(AppSpacing.xl),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final isWide = constraints.maxWidth > 900;
-                          if (isWide) {
-                            return Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Expanded(
-                                  flex: 3,
-                                  child: _buildActiveSection(context, active),
-                                ),
-                                const SizedBox(width: AppSpacing.xl),
-                                Expanded(
-                                  flex: 2,
-                                  child: _buildHistorySection(context, history),
-                                ),
-                              ],
-                            );
-                          } else {
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                _buildActiveSection(context, active),
-                                const SizedBox(height: AppSpacing.xl),
-                                _buildHistorySection(context, history),
-                              ],
-                            );
-                          }
-                        },
-                      ),
-                    ),
+              child: isInitialLoading
+                  ? _buildLoadingState(context)
+                  : provider.runs.isEmpty
+                      ? _buildEmptyState(context)
+                      : SingleChildScrollView(
+                          padding: const EdgeInsets.all(AppSpacing.xl),
+                          child: LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isWide = constraints.maxWidth > 900;
+                              if (isWide) {
+                                return Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      flex: 3,
+                                      child: _buildActiveSection(context, active),
+                                    ),
+                                    const SizedBox(width: AppSpacing.xl),
+                                    Expanded(
+                                      flex: 2,
+                                      child: _buildHistorySection(context, history),
+                                    ),
+                                  ],
+                                );
+                              } else {
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildActiveSection(context, active),
+                                    const SizedBox(height: AppSpacing.xl),
+                                    _buildHistorySection(context, history),
+                                  ],
+                                );
+                              }
+                            },
+                          ),
+                        ),
             ),
           ],
         );
@@ -96,7 +101,7 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
 
   // ─── Header ────────────────────────────────────────────────────────────────
 
-  Widget _buildHeader(BuildContext context, ConnectionStateStatus status) {
+  Widget _buildHeader(BuildContext context, WsConnectionStatus status) {
     final scheme = context.colors;
 
     return Container(
@@ -140,11 +145,11 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
     );
   }
 
-  Widget _buildConnectionIndicator(BuildContext context, ConnectionStateStatus status) {
+  Widget _buildConnectionIndicator(BuildContext context, WsConnectionStatus status) {
     switch (status) {
-      case ConnectionStateStatus.connected:
+      case WsConnectionStatus.connected:
         return const _LivePulseIndicator();
-      case ConnectionStateStatus.connecting:
+      case WsConnectionStatus.connecting:
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -163,7 +168,7 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
             ),
           ],
         );
-      case ConnectionStateStatus.disconnected:
+      case WsConnectionStatus.disconnected:
         return Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -177,7 +182,7 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
             ),
             const SizedBox(width: AppSpacing.sm),
             Text(
-              'Disconnected',
+              'Disconnected • retrying…',
               style: AppTypography.caption.copyWith(
                 color: Colors.red,
                 fontWeight: FontWeight.w600,
@@ -625,6 +630,33 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
           ),
         );
     }
+  }
+
+  Widget _buildLoadingState(BuildContext context) {
+    final scheme = context.colors;
+
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 32,
+            height: 32,
+            child: CircularProgressIndicator(
+              strokeWidth: 3,
+              valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Connecting to AI Agent Hub…',
+            style: AppTypography.body.copyWith(
+              color: scheme.hint,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildEmptyState(BuildContext context) {

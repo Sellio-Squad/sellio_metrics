@@ -8,13 +8,18 @@ import 'package:sellio_metrics/domain/repositories/ai_runs_repository.dart';
 @LazySingleton(as: AiRunsRepository)
 class AiRunsRepositoryImpl implements AiRunsRepository {
   final AiRunsWebSocketDataSource _dataSource;
+  bool _hasConnected = false;
 
   AiRunsRepositoryImpl(this._dataSource);
 
   @override
   Stream<AiRunsUpdate> watchAiRuns() {
-    _dataSource.connect();
-    
+    // Only call connect once — the data source handles reconnection internally
+    if (!_hasConnected) {
+      _hasConnected = true;
+      _dataSource.connect();
+    }
+
     return _dataSource.runsStream.transform<AiRunsUpdate>(
       StreamTransformer<Map<String, dynamic>, AiRunsUpdate>.fromHandlers(
         handleData: (json, sink) {
@@ -42,5 +47,6 @@ class AiRunsRepositoryImpl implements AiRunsRepository {
   }
 
   @override
-  Stream<bool> watchConnectionStatus() => _dataSource.connectionStatusStream;
+  Stream<WsConnectionStatus> watchConnectionStatus() =>
+      _dataSource.connectionStatusStream;
 }
