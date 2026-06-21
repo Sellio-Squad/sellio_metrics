@@ -74,6 +74,7 @@ interface WorkerEnv {
     AI_PIPELINE_HUB: CFDurableObjectNamespace;
     GEMINI_API_KEY?: string;
     OPENAI_API_KEY?: string;
+    DEEPSEEK_API_KEY?: string;
     GROK_API_KEY?: string;
     GROQ_API_KEY?: string;
     // Cloudflare AI Services (free tier)
@@ -98,6 +99,7 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.GOOGLE_PUBSUB_TOPIC)   process.env.GOOGLE_PUBSUB_TOPIC  = workerEnv.GOOGLE_PUBSUB_TOPIC;
     if (workerEnv.GEMINI_API_KEY)        process.env.GEMINI_API_KEY       = workerEnv.GEMINI_API_KEY;
     if (workerEnv.OPENAI_API_KEY)        process.env.OPENAI_API_KEY       = workerEnv.OPENAI_API_KEY;
+    if (workerEnv.DEEPSEEK_API_KEY)      process.env.DEEPSEEK_API_KEY     = workerEnv.DEEPSEEK_API_KEY;
     if (workerEnv.GROK_API_KEY)          process.env.GROK_API_KEY         = workerEnv.GROK_API_KEY;
     if (workerEnv.GROQ_API_KEY)          process.env.GROQ_API_KEY         = workerEnv.GROQ_API_KEY;
     if (workerEnv.CF_ACCOUNT_ID)         process.env.CF_ACCOUNT_ID        = workerEnv.CF_ACCOUNT_ID;

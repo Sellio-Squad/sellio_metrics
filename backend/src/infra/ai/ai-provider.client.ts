@@ -45,6 +45,7 @@ export interface CloudflareAI {
 export class AiProviderClient {
     private readonly geminiApiKey: string;
     private readonly openaiApiKey: string;
+    private readonly deepseekApiKey: string;
     private readonly grokApiKey: string;
     private readonly groqApiKey: string;
     private readonly cfAccountId: string;
@@ -61,6 +62,12 @@ export class AiProviderClient {
         "gemini-2.0-flash-lite",
     ];
 
+    // DeepSeek models for premium tier fallback
+    private readonly deepseekModels = [
+        "deepseek-chat",
+        "deepseek-reasoner",
+    ];
+
     // Workers AI models for fast/free tier
     // @cf/qwen/qwen2.5-coder-32b-instruct: specialized for code tasks
     // deepseek-r1-distill-qwen-32b: strong reasoning
@@ -73,6 +80,7 @@ export class AiProviderClient {
     constructor({
         geminiApiKey,
         openaiApiKey,
+        deepseekApiKey,
         grokApiKey,
         groqApiKey,
         cfAccountId,
@@ -83,6 +91,7 @@ export class AiProviderClient {
     }: {
         geminiApiKey: string;
         openaiApiKey: string;
+        deepseekApiKey: string;
         grokApiKey: string;
         groqApiKey: string;
         cfAccountId?: string;
@@ -93,6 +102,7 @@ export class AiProviderClient {
     }) {
         this.geminiApiKey = geminiApiKey;
         this.openaiApiKey = openaiApiKey;
+        this.deepseekApiKey = deepseekApiKey;
         this.grokApiKey = grokApiKey;
         this.groqApiKey = groqApiKey;
         this.cfAccountId = cfAccountId || "";
@@ -108,17 +118,18 @@ export class AiProviderClient {
      *
      * AI Gateway provides: response caching, logging, rate limiting — all FREE.
      */
-    private directUrl(provider: "google-ai-studio" | "openai" | "groq" | "x-ai", path: string): string {
+    private directUrl(provider: "google-ai-studio" | "openai" | "groq" | "x-ai" | "deepseek", path: string): string {
         const directUrls: Record<string, string> = {
             "google-ai-studio": `https://generativelanguage.googleapis.com/${path}`,
             "openai": `https://api.openai.com/${path}`,
             "groq": `https://api.groq.com/openai/${path}`,
             "x-ai": `https://api.x.ai/${path}`,
+            "deepseek": `https://api.deepseek.com/${path}`,
         };
         return directUrls[provider];
     }
 
-    private gatewayUrl(provider: "google-ai-studio" | "openai" | "groq" | "x-ai", path: string): string {
+    private gatewayUrl(provider: "google-ai-studio" | "openai" | "groq" | "x-ai" | "deepseek", path: string): string {
         if (this.cfAccountId && this.aiGatewaySlug) {
             // Route through AI Gateway: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_slug}/{provider}/{path}
             return `https://gateway.ai.cloudflare.com/v1/${this.cfAccountId}/${this.aiGatewaySlug}/${provider}/${path}`;
@@ -157,8 +168,13 @@ export class AiProviderClient {
             // 2. Try Groq (has generous free tier: 14,400 req/day on llama-3.3-70b)
             if (this.groqApiKey) {
                 try {
-                    this.logger.info({ tier: "fast" }, "Trying Groq for fast tier");
-                    return await this.executeGroq(params);
+                    const cooldownKey = "ai:cooldown:groq";
+                    const cooldown = await this.cache.get<number>(cooldownKey);
+                    if (!cooldown?.data || Date.now() >= cooldown.data) {
+                        this.logger.info({ tier: "fast" }, "Trying Groq for fast tier");
+                        return await this.executeGroq(params);
+                    }
+                    failureLogs.push("Groq: skipped (cooldown active)");
                 } catch (error: any) {
                     failureLogs.push(`Groq: ${error.message}`);
                     this.logger.warn({ error: error.message }, "Groq fast-tier call failed");
@@ -169,7 +185,7 @@ export class AiProviderClient {
             this.logger.warn("Fast tier exhausted, falling through to premium");
         }
 
-        // ─── PREMIUM TIER: Gemini → OpenAI ──────────────────────
+        // ─── PREMIUM TIER: Gemini → OpenAI → DeepSeek ──────────────────────
         // Used for: code generation, planning, self-correction
 
         // 1. Try Gemini Models (via AI Gateway for caching)
@@ -214,7 +230,31 @@ export class AiProviderClient {
             failureLogs.push("OpenAI: skipped (key not set)");
         }
 
-        // 3. Try Groq (if not already used in fast tier)
+        // 3. Try DeepSeek Models (via AI Gateway)
+        if (this.deepseekApiKey) {
+            for (const model of this.deepseekModels) {
+                try {
+                    const cooldownKey = `ai:cooldown:deepseek:${model}`;
+                    const cooldown = await this.cache.get<number>(cooldownKey);
+                    if (cooldown?.data && Date.now() < cooldown.data) {
+                        failureLogs.push(`DeepSeek (${model}): skipped (cooldown active)`);
+                        this.logger.info({ model }, "DeepSeek model in cooldown, skipping");
+                        continue;
+                    }
+
+                    this.logger.info({ model, tier: "premium" }, "Trying DeepSeek model");
+                    return await this.executeDeepSeek(model, params);
+                } catch (error: any) {
+                    failureLogs.push(`DeepSeek (${model}): ${error.message}`);
+                    this.logger.warn({ model, error: error.message }, "DeepSeek model call failed");
+                    continue;
+                }
+            }
+        } else {
+            failureLogs.push("DeepSeek: skipped (key not set)");
+        }
+
+        // 4. Try Groq (if not already used in fast tier)
         if (this.groqApiKey && tier !== "fast") {
             try {
                 const cooldownKey = "ai:cooldown:groq";
@@ -230,7 +270,7 @@ export class AiProviderClient {
             }
         }
 
-        // 4. Try Grok (xAI)
+        // 5. Try Grok (xAI)
         if (this.grokApiKey) {
             try {
                 const cooldownKey = "ai:cooldown:grok:grok-2";
@@ -344,7 +384,7 @@ export class AiProviderClient {
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) {
-                const cooldownDuration = 60;
+                const cooldownDuration = 10;
                 await this.cache.set(
                     `ai:cooldown:gemini:${model}`,
                     Date.now() + cooldownDuration * 1000,
@@ -416,7 +456,7 @@ export class AiProviderClient {
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) {
-                const cooldownDuration = 60;
+                const cooldownDuration = 10;
                 await this.cache.set(
                     "ai:cooldown:openai:gpt-4o",
                     Date.now() + cooldownDuration * 1000,
@@ -434,6 +474,63 @@ export class AiProviderClient {
         const result: any = await response.json();
         const text = result?.choices?.[0]?.message?.content;
         if (!text) throw new AppError("OpenAI returned empty response", 500, "OPENAI_EMPTY_RESPONSE");
+        return text;
+    }
+
+    // ─── DeepSeek (via AI Gateway) ─────────────────────────────────
+
+    private async executeDeepSeek(model: string, params: AICompletionParams): Promise<string> {
+        let url = this.gatewayUrl("deepseek", "chat/completions");
+
+        const messages: any[] = [];
+        if (params.systemPrompt) {
+            messages.push({ role: "system", content: params.systemPrompt });
+        }
+        messages.push({ role: "user", content: params.userPrompt });
+
+        const body: any = { model, messages, temperature: 0.2 };
+        if (params.jsonMode) {
+            body.response_format = { type: "json_object" };
+        }
+
+        const fetchOptions = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${this.deepseekApiKey}`,
+            },
+            body: JSON.stringify(body),
+        };
+
+        let response = await fetch(url, fetchOptions);
+
+        if (!response.ok && (response.status === 401 || response.status === 404) && url.includes("gateway.ai.cloudflare.com")) {
+            this.logger.warn({ model, status: response.status }, "AI Gateway request failed, falling back to direct URL");
+            url = this.directUrl("deepseek", "chat/completions");
+            response = await fetch(url, fetchOptions);
+        }
+
+        if (!response.ok) {
+            const errText = await response.text();
+            if (response.status === 429) {
+                const cooldownDuration = 10;
+                await this.cache.set(
+                    `ai:cooldown:deepseek:${model}`,
+                    Date.now() + cooldownDuration * 1000,
+                    cooldownDuration + 10
+                );
+                throw new RateLimitError(`DeepSeek model ${model} rate limited: ${errText}`);
+            }
+            throw new AppError(
+                `DeepSeek model ${model} failed with HTTP ${response.status}: ${errText}`,
+                response.status,
+                "DEEPSEEK_API_ERROR"
+            );
+        }
+
+        const result: any = await response.json();
+        const text = result?.choices?.[0]?.message?.content;
+        if (!text) throw new AppError(`DeepSeek model ${model} returned empty response`, 500, "DEEPSEEK_EMPTY_RESPONSE");
         return text;
     }
 
@@ -489,7 +586,7 @@ export class AiProviderClient {
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) {
-                const cooldownDuration = 60;
+                const cooldownDuration = 10;
                 await this.cache.set(
                     "ai:cooldown:groq",
                     Date.now() + cooldownDuration * 1000,
@@ -546,7 +643,7 @@ export class AiProviderClient {
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) {
-                const cooldownDuration = 60;
+                const cooldownDuration = 10;
                 await this.cache.set(
                     `ai:cooldown:grok:${model}`,
                     Date.now() + cooldownDuration * 1000,

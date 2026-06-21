@@ -239,6 +239,9 @@ function _createEnv(overrides?: Record<string, string | undefined>) {
         /** OpenAI API Key for fallback code generation. */
         openaiApiKey: optionalEnv("OPENAI_API_KEY", "", envSrc),
 
+        /** DeepSeek API Key for fallback code generation. */
+        deepseekApiKey: optionalEnv("DEEPSEEK_API_KEY", "", envSrc),
+
         /** Grok (xAI) API Key for second fallback code generation. */
         grokApiKey: optionalEnv("GROK_API_KEY", "", envSrc),
 
