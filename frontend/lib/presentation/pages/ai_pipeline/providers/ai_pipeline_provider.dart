@@ -60,6 +60,10 @@ class AiPipelineProvider extends ChangeNotifier with WidgetsBindingObserver {
           _runs.insert(0, update.run);
         }
         _isLoaded = true;
+      } else if (update is AiRunDeleteUpdate) {
+        _runs.removeWhere((r) => r.taskId == update.taskId);
+      } else if (update is AiRunsClearedUpdate) {
+        _runs.clear();
       }
       _runs.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
       notifyListeners();
@@ -67,6 +71,18 @@ class AiPipelineProvider extends ChangeNotifier with WidgetsBindingObserver {
       _connectionStatus = WsConnectionStatus.disconnected;
       notifyListeners();
     });
+  }
+
+  Future<void> deleteRun(String taskId) async {
+    try {
+      await _repository.deleteRun(taskId);
+    } catch (_) {}
+  }
+
+  Future<void> clearHistory() async {
+    try {
+      await _repository.clearRuns();
+    } catch (_) {}
   }
 
   @override

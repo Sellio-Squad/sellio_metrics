@@ -139,6 +139,7 @@ export class AiPipelineService {
             `🤖 **Sellio AI Agent** — Plan Generated:\n- **Files to Modify:** ${plan.filesToModify.map(f => `\`${f}\``).join(", ") || "*None*"}\n- **New Files:** ${plan.newFiles.map(f => `\`${f}\``).join(", ") || "*None*"}\n\n*Approach Summary:*\n${plan.summary}`
         );
 
+        await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "done");
         await this.emitEvent(job, "phase1", "Planning Completed", `Generated plan: ${plan.summary}`, "done");
 
         // 6. Save context & plan to KV cache (TTL 1 hour)
@@ -245,6 +246,7 @@ export class AiPipelineService {
             throw new AppError(`LLM self-validation failed after retries: ${feedback}`, 422, "AI_VALIDATION_FAILED");
         }
 
+        await this.emitEvent(job, "phase2", "Generating Code", "Generating code changes file-by-file...", "done");
         await this.emitEvent(job, "phase2", "Code Validation Passed", "Self-validation checks passed successfully.", "done");
 
         // Save generated changes to KV
@@ -334,6 +336,7 @@ Please review the changes and run the build tests.`;
             `🤖 **Sellio AI Agent** — Phase 3 PR Opened!\n- **PR:** [PR #${pr.number}](${prUrl})\n- **Files Changed:**\n${fileList}\n\nMonitoring CI status (polling Checks API for up to 5 minutes)...`
         );
 
+        await this.emitEvent(job, "phase3", "Shipping Changes", "Creating branch and committing files...", "done", { branchName });
         await this.emitEvent(job, "phase3", "PR Opened", `PR #${pr.number} opened successfully.`, "done", {
             prNumber: pr.number,
             prUrl,
@@ -961,6 +964,54 @@ ${context.fileTree.join("\n")}
         }
     }
 
+    async deleteRun(taskId: string): Promise<void> {
+        try {
+            const indexKey = "ai:runs:index";
+            const indexVal = await this.cache.get<string[]>(indexKey);
+            if (indexVal && indexVal.data) {
+                const taskIds = indexVal.data.filter(id => id !== taskId);
+                await this.cache.set(indexKey, taskIds);
+            }
+            await this.cache.del(`ai:runs:${taskId}`);
+            await Promise.all([
+                this.cache.del(`ai:task:${taskId}:context`),
+                this.cache.del(`ai:task:${taskId}:plan`),
+                this.cache.del(`ai:task:${taskId}:code`),
+                this.cache.del(`ai:task:${taskId}:images`),
+            ]);
+            this.logger.info({ taskId }, "Deleted run from KV and index");
+        } catch (err: any) {
+            this.logger.error({ taskId, err: err?.message }, "Failed to delete run");
+            throw err;
+        }
+    }
+
+    async deleteAllRuns(): Promise<void> {
+        try {
+            const indexKey = "ai:runs:index";
+            const indexVal = await this.cache.get<string[]>(indexKey);
+            if (indexVal && indexVal.data) {
+                const taskIds = indexVal.data;
+                await Promise.all(
+                    taskIds.map(async (taskId) => {
+                        await this.cache.del(`ai:runs:${taskId}`);
+                        await Promise.all([
+                            this.cache.del(`ai:task:${taskId}:context`),
+                            this.cache.del(`ai:task:${taskId}:plan`),
+                            this.cache.del(`ai:task:${taskId}:code`),
+                            this.cache.del(`ai:task:${taskId}:images`),
+                        ]);
+                    })
+                );
+            }
+            await this.cache.set(indexKey, []);
+            this.logger.info("Cleared all run history from KV");
+        } catch (err: any) {
+            this.logger.error({ err: err?.message }, "Failed to clear all runs");
+            throw err;
+        }
+    }
+
     async handleCommentMention(
         owner: string,
         repo: string,
@@ -1067,11 +1118,14 @@ ${commentBody}
 
     private async classifyFailure(logs: string): Promise<"infra" | "code"> {
         const systemPrompt = `You are a DevOps and CI classification expert.
-Analyze the provided build log output and classify whether the failure is a Code/Test error or an Infrastructure/Environment/Network/Auth/Secrets error.
+Analyze the provided build log output and classify whether the failure is a Code/Test error or an Infrastructure/Environment/Network/Auth/Secrets/Dependency-Registry error.
 
 Classification criteria:
-- "code": Any compiler error, syntax error, unit test failure, code lint violation, import/module not found, type mismatch, or run-time test crash. These are errors that can be fixed by modifying the source code of the application.
-- "infra": Infrastructure/Env issues like missing secrets, environment variables not set, runner out of disk space, API/network timeouts, service/database connection failures during setup, Docker daemon not running, npm/yarn dependency installation timeout, authentication failure, or permission issues. These cannot be resolved by editing application source code.
+- "code": Any compiler error, syntax error, unit test failure, code lint violation, import/module not found for files in the repo, type mismatch, or run-time test crash. These are errors that can be fixed by modifying the source code of the application.
+- "infra": Infrastructure/Env/Dependency issues like missing secrets, environment variables not set, runner out of disk space, API/network timeouts, service/database connection failures during setup, Docker daemon not running, npm/yarn/pub dependency installation timeout or version solving failures (e.g., package not found in the registry, package "doesn't match any versions", package download failed from pub.dev/npm, melos bootstrap failed to install, registry resolution errors), authentication failure, or permission issues. These cannot be resolved by editing application source code.
+
+Example of "infra":
+- "Because sellio_mobile depends on network_inspector ^0.0.1 which doesn't match any versions, version solving failed." -> This is "infra" because the package version is not available in the public package registry (pub.dev) or the registry itself cannot be reached or resolved.
 
 You MUST respond with a JSON object ONLY:
 {
