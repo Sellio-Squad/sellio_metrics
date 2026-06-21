@@ -358,7 +358,7 @@ class _ErrorBanner extends StatelessWidget {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(LucideIcons.chrome, size: 14),
+                        const Icon(LucideIcons.globe, size: 14),
                         const SizedBox(width: AppSpacing.xs),
                         const Text('Sign in with Google'),
                       ],

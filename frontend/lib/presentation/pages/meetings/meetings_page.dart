@@ -222,7 +222,7 @@ class _MeetingsPageState extends State<MeetingsPage>
                       ),
                     ),
                   ] else ...[
-                    const Icon(LucideIcons.chrome, size: 16),
+                    const Icon(LucideIcons.globe, size: 16),
                   ],
                   const SizedBox(width: AppSpacing.sm),
                   const Text('Sign In with Google'),
@@ -503,7 +503,7 @@ class _UnauthenticatedState extends StatelessWidget {
               child: const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(LucideIcons.chrome, size: 18),
+                  Icon(LucideIcons.globe, size: 18),
                   SizedBox(width: AppSpacing.sm),
                   Text('Sign In with Google'),
                 ],
