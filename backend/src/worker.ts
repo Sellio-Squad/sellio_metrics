@@ -78,6 +78,7 @@ interface WorkerEnv {
     GROQ_API_KEY?: string;
     // Cloudflare AI Services (free tier)
     AI?:            any;          // Workers AI binding — free on-platform GPU inference
+    BROWSER?:       any;          // Cloudflare Browser Rendering binding
     CF_ACCOUNT_ID?: string;       // Cloudflare account ID for AI Gateway
     AI_GATEWAY_SLUG?: string;     // AI Gateway slug for caching + logging
 }
@@ -175,6 +176,7 @@ export default {
                 workerEnv.SYNC_QUEUE    || null,
                 workerEnv.AI_PIPELINE_HUB || null,
                 workerEnv.AI            || null,
+                workerEnv.BROWSER       || null,
             );
 
             const app = buildApp(container.cradle, workerEnv.MEETING_ROOMS, workerEnv.AI_PIPELINE_HUB);
@@ -203,6 +205,7 @@ export default {
                 workerEnv.SYNC_QUEUE    || null,
                 workerEnv.AI_PIPELINE_HUB || null,
                 workerEnv.AI            || null,
+                workerEnv.BROWSER       || null,
             );
             await container.cradle.scoreAggregationService.precomputeSnapshots();
             console.log("Cron: leaderboard snapshots refreshed");
@@ -225,6 +228,7 @@ export default {
                 workerEnv.SYNC_QUEUE    || null,
                 workerEnv.AI_PIPELINE_HUB || null,
                 workerEnv.AI            || null,
+                workerEnv.BROWSER       || null,
             );
 
             for (const msg of batch.messages) {

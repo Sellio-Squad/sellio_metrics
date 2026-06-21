@@ -17,6 +17,7 @@ import type { CodeValidatorService } from "./code-validator.service";
 import type { CloudflareQueue } from "../../core/container";
 import type { AiImplementJob, RepoContext, ImplementationPlan, CodeChange, AiRunRecord } from "./ai-pipeline.types";
 import { AppError } from "../../core/errors";
+import { WebSearchService } from "./web-search.service";
 
 export interface CFDurableObjectNamespace {
     idFromName(name: string): { toString(): string };
@@ -29,6 +30,7 @@ export class AiPipelineService {
     private readonly contextService: ContextService;
     public readonly gitOps: GitOpsService;
     private readonly codeValidator: CodeValidatorService;
+    private readonly webSearch: WebSearchService;
     private readonly syncQueue: CloudflareQueue | null;
     private readonly webhookQueue: CloudflareQueue | null;
     private readonly logger: Logger;
@@ -40,6 +42,7 @@ export class AiPipelineService {
         contextService,
         gitOpsService,
         codeValidatorService,
+        webSearchService,
         syncQueue,
         webhookQueue,
         logger,
@@ -50,6 +53,7 @@ export class AiPipelineService {
         contextService: ContextService;
         gitOpsService: GitOpsService;
         codeValidatorService: CodeValidatorService;
+        webSearchService: WebSearchService;
         syncQueue: CloudflareQueue | null;
         webhookQueue: CloudflareQueue | null;
         logger: Logger;
@@ -60,6 +64,7 @@ export class AiPipelineService {
         this.contextService = contextService;
         this.gitOps = gitOpsService;
         this.codeValidator = codeValidatorService;
+        this.webSearch = webSearchService;
         this.syncQueue = syncQueue;
         this.webhookQueue = webhookQueue;
         this.logger = logger.child({ module: "ai-pipeline" });
@@ -133,8 +138,17 @@ export class AiPipelineService {
             await this.cache.set(`ai:task:${job.taskId}:images`, images, 3600);
         }
 
-        // 5. Generate plan using LLM
-        const plan = await this.generatePlan(context, job.issueTitle, job.issueBody, images);
+        // 5. Perform web search and package version lookup
+        await this.gitOps.commentOnIssue(
+            job.owner,
+            job.repo,
+            job.issueNumber,
+            `🤖 **Sellio AI Agent**\n- *Phase 1:* Performing web search and package registry checks for the implementation...`
+        );
+        const searchContext = await this.searchPackagesAndDocs(job.issueTitle, job.issueBody, context.fileTree);
+
+        // 6. Generate plan using LLM
+        const plan = await this.generatePlan(context, job.issueTitle, job.issueBody, searchContext, images);
 
         // Comment with plan summary
         await this.gitOps.commentOnIssue(
@@ -147,10 +161,11 @@ export class AiPipelineService {
         await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "done");
         await this.emitEvent(job, "phase1", "Planning Completed", `Generated plan: ${plan.summary}`, "done");
 
-        // 6. Save context & plan to KV cache (TTL 1 hour)
+        // 7. Save context, plan, and search context to KV cache (TTL 1 hour)
         await Promise.all([
             this.cache.set(`ai:task:${job.taskId}:context`, context, 3600),
             this.cache.set(`ai:task:${job.taskId}:plan`, plan, 3600),
+            this.cache.set(`ai:task:${job.taskId}:search_context`, searchContext, 3600),
         ]);
 
         // 7. Enqueue Phase 2 in the syncQueue (which has longer budget)
@@ -175,10 +190,11 @@ export class AiPipelineService {
         await this.emitEvent(job, "phase2", "Generating Code", "Generating code changes file-by-file...", "running");
 
         // 1. Retrieve plan, context, and images from KV
-        const [contextVal, planVal, imagesVal] = await Promise.all([
+        const [contextVal, planVal, imagesVal, searchContextVal] = await Promise.all([
             this.cache.get<RepoContext>(`ai:task:${job.taskId}:context`),
             this.cache.get<ImplementationPlan>(`ai:task:${job.taskId}:plan`),
             this.cache.get<{ mimeType: string; data: string }[]>(`ai:task:${job.taskId}:images`),
+            this.cache.get<string>(`ai:task:${job.taskId}:search_context`),
         ]);
 
         if (!contextVal || !planVal) {
@@ -188,6 +204,7 @@ export class AiPipelineService {
         const context = contextVal.data;
         const plan = planVal.data;
         const images = imagesVal?.data || [];
+        const searchContext = searchContextVal?.data || "";
 
         // Comment on issue that code generation has started
         await this.gitOps.commentOnIssue(
@@ -216,6 +233,7 @@ export class AiPipelineService {
                     existingContent,
                     plan,
                     context,
+                    searchContext,
                     feedback,
                     images
                 );
@@ -229,6 +247,7 @@ export class AiPipelineService {
                     "",
                     plan,
                     context,
+                    searchContext,
                     feedback,
                     images
                 );
@@ -713,7 +732,13 @@ New Files originally: ${plan.newFiles.join(", ")}
 
     // ─── Helpers & LLM Calls ──────────────────────────────────
 
-    private async generatePlan(context: RepoContext, title: string, body: string | null, images?: { mimeType: string; data: string }[]): Promise<ImplementationPlan> {
+    private async generatePlan(
+        context: RepoContext,
+        title: string,
+        body: string | null,
+        searchContext: string,
+        images?: { mimeType: string; data: string }[]
+    ): Promise<ImplementationPlan> {
         const systemPrompt = `You are a senior principal developer. Given a repository's context (file tree, docs, dependencies, recent PRs) and a ticket, create a complete implementation plan.
 Analyze the issue and list:
 1. A summary of the approach
@@ -730,7 +755,7 @@ JSON Schema:
   "newFiles": ["path/to/newfile.ts"]
 }`;
 
-        const userPrompt = `Issue:
+        let userPrompt = `Issue:
 Title: ${title}
 Description:
 ${body ?? "No description provided"}
@@ -744,6 +769,10 @@ ${context.architectureDocs.map(d => `--- File: ${d.path} ---\n${d.content}`).joi
 Dependencies:
 ${JSON.stringify(context.dependencies, null, 2)}
 `;
+
+        if (searchContext) {
+            userPrompt += `\n\nWeb Search & Package Registry Info:\n${searchContext}\n`;
+        }
 
         const raw = await this.ai.generateCompletion({
             systemPrompt,
@@ -763,6 +792,7 @@ ${JSON.stringify(context.dependencies, null, 2)}
         existingContent: string,
         plan: ImplementationPlan,
         context: RepoContext,
+        searchContext: string,
         feedback: string,
         images?: { mimeType: string; data: string }[]
     ): Promise<string> {
@@ -790,6 +820,10 @@ New Files List: ${plan.newFiles.join(", ")}
 Repository Structure:
 ${context.fileTree.join("\n")}
 `;
+
+        if (searchContext) {
+            userPrompt += `\n\nWeb Search & Package Registry Info:\n${searchContext}\n`;
+        }
 
         if (feedback) {
             userPrompt += `\n\nValidation Feedback:\n${feedback}`;
@@ -1165,16 +1199,84 @@ ${commentBody}
         }
     }
 
+    /**
+     * Extracts libraries/packages and documentation topics from a ticket title and body,
+     * resolves their latest versions, performs web searches, and returns the aggregated context.
+     */
+    private async searchPackagesAndDocs(title: string, body: string | null, fileTree: string[]): Promise<string> {
+        const isFlutter = fileTree.some(f => f.endsWith("pubspec.yaml") || f.endsWith(".dart"));
+        const isNode = fileTree.some(f => f.endsWith("package.json") || f.endsWith(".ts") || f.endsWith(".js"));
+
+        const systemPrompt = `You are a search query generator for a coding assistant.
+Analyze the ticket title and description, and extract:
+1. Any specific package or library names that need to be added, upgraded, or used.
+2. A list of 1-2 search queries for documentation or setup examples.
+
+Format your output as a JSON object ONLY:
+{
+  "packages": ["package_name1"],
+  "queries": ["how to use package_name1 in flutter"]
+}`;
+
+        const userPrompt = `Ticket:
+Title: ${title}
+Description:
+${body ?? "No description provided"}
+`;
+
+        try {
+            const rawResponse = await this.ai.generateCompletion({
+                systemPrompt,
+                userPrompt,
+                jsonMode: true
+            }, "fast"); // Fast model is sufficient for extracting search terms
+
+            const cleaned = rawResponse.trim().replace(/^```json/, "").replace(/```$/, "").trim();
+            const parsed = JSON.parse(cleaned);
+            const packages: string[] = Array.isArray(parsed?.packages) ? parsed.packages : [];
+            const queries: string[] = Array.isArray(parsed?.queries) ? parsed.queries : [];
+
+            let searchContext = "=== Web Search Context ===\n";
+
+            // 1. Check Package Versions
+            for (const pkg of packages) {
+                if (isFlutter) {
+                    const pubVer = await this.webSearch.getPackageLatestVersion("pub", pkg);
+                    if (pubVer) {
+                        searchContext += `- Dart/Flutter package "${pkg}" latest version: ^${pubVer}\n`;
+                    }
+                }
+                if (isNode) {
+                    const npmVer = await this.webSearch.getPackageLatestVersion("npm", pkg);
+                    if (npmVer) {
+                        searchContext += `- Node/npm package "${pkg}" latest version: ^${npmVer}\n`;
+                    }
+                }
+            }
+
+            // 2. Perform Web Searches
+            for (const query of queries) {
+                const results = await this.webSearch.searchDocs(query);
+                searchContext += `\nResults for "${query}":\n${results}\n`;
+            }
+
+            return searchContext;
+        } catch (err: any) {
+            this.logger.error({ error: err.message }, "Failed to generate search context");
+            return "=== Web Search Context ===\nNo web search context available.\n";
+        }
+    }
+
     private async classifyFailure(logs: string): Promise<"infra" | "code"> {
         const systemPrompt = `You are a DevOps and CI classification expert.
 Analyze the provided build log output and classify whether the failure is a Code/Test error or an Infrastructure/Environment/Network/Auth/Secrets/Dependency-Registry error.
 
 Classification criteria:
-- "code": Any compiler error, syntax error, unit test failure, code lint violation, import/module not found for files in the repo, type mismatch, or run-time test crash. These are errors that can be fixed by modifying the source code of the application.
-- "infra": Infrastructure/Env/Dependency issues like missing secrets, environment variables not set, runner out of disk space, API/network timeouts, service/database connection failures during setup, Docker daemon not running, npm/yarn/pub dependency installation timeout or version solving failures (e.g., package not found in the registry, package "doesn't match any versions", package download failed from pub.dev/npm, melos bootstrap failed to install, registry resolution errors), authentication failure, or permission issues. These cannot be resolved by editing application source code.
+- "code": Any compiler error, syntax error, unit test failure, code lint violation, import/module not found for files in the repo, type mismatch, dependency version-solving errors (e.g. "doesn't match any versions", package not found in registry because of incorrect version written in pubspec.yaml or package.json), or run-time test crash. These are errors that can be fixed by modifying the source code or configuration files of the application.
+- "infra": Infrastructure/Env/Network issues like missing secrets, environment variables not set, runner out of disk space, API/network timeouts, service/database connection failures during setup, Docker daemon not running, npm/yarn/pub registry timeout, authentication failure, or permission issues. These cannot be resolved by editing application source code or configuration.
 
-Example of "infra":
-- "Because sellio_mobile depends on network_inspector ^0.0.1 which doesn't match any versions, version solving failed." -> This is "infra" because the package version is not available in the public package registry (pub.dev) or the registry itself cannot be reached or resolved.
+Example of "code":
+- "Because sellio_mobile depends on network_inspector ^3.0.0 which doesn't match any versions, version solving failed." -> This is "code" because it means the developer/agent wrote an invalid version in pubspec.yaml/package.json, which can be corrected by editing pubspec.yaml/package.json.
 
 You MUST respond with a JSON object ONLY:
 {
