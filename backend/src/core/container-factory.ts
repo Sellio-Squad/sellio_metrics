@@ -169,6 +169,7 @@ async function buildContainer(
                 geminiApiKey: env.geminiApiKey,
                 openaiApiKey: env.openaiApiKey,
                 grokApiKey: env.grokApiKey,
+                groqApiKey: env.groqApiKey,
                 logger,
                 cacheService,
             })).singleton(),

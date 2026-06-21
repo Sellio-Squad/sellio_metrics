@@ -75,6 +75,7 @@ interface WorkerEnv {
     GEMINI_API_KEY?: string;
     OPENAI_API_KEY?: string;
     GROK_API_KEY?: string;
+    GROQ_API_KEY?: string;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.GEMINI_API_KEY)        process.env.GEMINI_API_KEY       = workerEnv.GEMINI_API_KEY;
     if (workerEnv.OPENAI_API_KEY)        process.env.OPENAI_API_KEY       = workerEnv.OPENAI_API_KEY;
     if (workerEnv.GROK_API_KEY)          process.env.GROK_API_KEY         = workerEnv.GROK_API_KEY;
+    if (workerEnv.GROQ_API_KEY)          process.env.GROQ_API_KEY         = workerEnv.GROQ_API_KEY;
 }
 
 function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace, aiPipelineHub: CFDurableObjectNamespace) {
