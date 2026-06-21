@@ -29,9 +29,10 @@ export function getContainer(
     webhookQueue: any | null = null,
     syncQueue: any | null = null,
     aiPipelineHub: any | null = null,
+    workersAI: any | null = null,
 ): Promise<AwilixContainer<Cradle>> {
     if (!containerPromise) {
-        containerPromise = buildContainer(kvNamespace, scoresKv, membersKv, attendanceKv, d1Database, webhookQueue, syncQueue, aiPipelineHub);
+        containerPromise = buildContainer(kvNamespace, scoresKv, membersKv, attendanceKv, d1Database, webhookQueue, syncQueue, aiPipelineHub, workersAI);
     }
     return containerPromise;
 }
@@ -45,6 +46,7 @@ async function buildContainer(
     webhookQueue: any | null = null,
     syncQueue: any | null = null,
     aiPipelineHub: any | null = null,
+    workersAI: any | null = null,
 ): Promise<AwilixContainer<Cradle>> {
     const { createContainer, asFunction, asClass, InjectionMode } = await import("awilix");
     const { env } = await import("../config/env");
@@ -150,6 +152,7 @@ async function buildContainer(
         const { ContextService } = await import("../modules/ai-pipeline/context.service");
         const { GitOpsService } = await import("../modules/ai-pipeline/git-ops.service");
         const { AiPipelineService } = await import("../modules/ai-pipeline/ai-pipeline.service");
+        const { CodeValidatorService } = await import("../modules/ai-pipeline/code-validator.service");
 
         container.register({
             reposService: asClass(ReposService).singleton(),
@@ -164,17 +167,21 @@ async function buildContainer(
             webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env, aiPipelineService }: Cradle) => new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env, aiPipelineService })).singleton(),
             prContextFetcher: asFunction(({ cachedGithubClient, logger }: Cradle) => new PrContextFetcher({ cachedGithubClient, logger })).singleton(),
             reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger }: Cradle) => new ReviewService({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger })).singleton(),
-            
+
             aiProviderClient: asFunction(({ env, logger, cacheService }: Cradle) => new AiProviderClient({
                 geminiApiKey: env.geminiApiKey,
                 openaiApiKey: env.openaiApiKey,
                 grokApiKey: env.grokApiKey,
                 groqApiKey: env.groqApiKey,
+                cfAccountId: env.cfAccountId,
+                aiGatewaySlug: env.aiGatewaySlug,
+                workersAI: workersAI,
                 logger,
                 cacheService,
             })).singleton(),
             contextService: asClass(ContextService).singleton(),
             gitOpsService: asClass(GitOpsService).singleton(),
+            codeValidatorService: asFunction(({ logger }: Cradle) => new CodeValidatorService({ logger })).singleton(),
             aiPipelineService: asClass(AiPipelineService).singleton(),
         });
     }

@@ -245,6 +245,14 @@ function _createEnv(overrides?: Record<string, string | undefined>) {
         /** Groq API Key for third fallback code generation. */
         groqApiKey: optionalEnv("GROQ_API_KEY", "", envSrc),
 
+        /** Cloudflare Account ID — used to construct AI Gateway URLs. */
+        cfAccountId: optionalEnv("CF_ACCOUNT_ID", "", envSrc),
+
+        /** AI Gateway slug — the name of the gateway created in Cloudflare dashboard.
+         *  All LLM calls are proxied through this gateway for: caching, logging, rate limiting.
+         *  Create at: https://dash.cloudflare.com -> AI -> AI Gateway
+         */
+        aiGatewaySlug: optionalEnv("AI_GATEWAY_SLUG", "", envSrc),
 
         /** Maximum number of files allowed for AI context gathering. */
         maxAiFiles: numericEnv("MAX_AI_FILES", 30, envSrc),
