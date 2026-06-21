@@ -346,7 +346,13 @@ export class WebhookService {
 
         if (!item) return { affectedDevelopers };
         
-        if (action !== "edited" || item.content_type !== "Issue") {
+        // Supported actions: 'edited' (when moved) and 'converted' (when draft issue is converted to repository issue)
+        if (action !== "edited" && action !== "converted") {
+            return { affectedDevelopers };
+        }
+
+        // Only process issues. If action is converted, the new content_type is 'Issue'.
+        if (item.content_type !== "Issue") {
             return { affectedDevelopers };
         }
 
@@ -355,21 +361,29 @@ export class WebhookService {
 
         // Check if the status column was changed to the AI Implement column name
         const isStatusChange = fieldValue?.field_name?.toLowerCase() === "status";
-        const isAIColumn = fieldValue?.field_value_name === aiColumnName;
+        const isAIColumn = fieldValue?.field_value_name === aiColumnName || fieldValue?.to?.name === aiColumnName;
 
-        if (isStatusChange && isAIColumn) {
+        let shouldTrigger = false;
+        const providedFieldId = fieldValue?.field_id || fieldValue?.field_node_id;
+
+        if (action === "edited" && isStatusChange && isAIColumn) {
+            shouldTrigger = true;
+        } else if (action === "converted") {
+            shouldTrigger = true;
+        }
+
+        if (shouldTrigger) {
             const issueId = item.content_node_id;
             const projectId = item.project_node_id;
             const itemId = item.node_id;
-            const fieldId = fieldValue.field_id;
 
-            this.logger.info({ issueId, projectId, itemId }, "AI implement trigger detected");
+            this.logger.info({ issueId, projectId, itemId, action }, "AI implement trigger detected. Fetching details via GraphQL...");
 
             if (this.cachedGithubClient) {
                 const octokit = this.cachedGithubClient.raw;
                 const result: any = await octokit.graphql(
-                    `query GetIssueDetails($id: ID!) {
-                      node(id: $id) {
+                    `query GetIssueAndItemDetails($issueId: ID!, $itemId: ID!) {
+                      issueNode: node(id: $issueId) {
                         ... on Issue {
                           number
                           title
@@ -382,12 +396,44 @@ export class WebhookService {
                           }
                         }
                       }
+                      itemNode: node(id: $itemId) {
+                        ... on ProjectV2Item {
+                          fieldValueByName(name: "Status") {
+                            ... on ProjectV2ItemFieldSingleSelectValue {
+                              name
+                              field {
+                                ... on ProjectV2FieldCommon {
+                                  id
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
                     }`,
-                    { id: issueId }
+                    { issueId, itemId }
                 );
 
-                const issue = result?.node;
+                const issue = result?.issueNode;
+                const itemNode = result?.itemNode;
+
                 if (issue && issue.repository) {
+                    const statusName = itemNode?.fieldValueByName?.name;
+                    const fieldId = itemNode?.fieldValueByName?.field?.id || providedFieldId;
+
+                    this.logger.info({ statusName, fieldId, issueNumber: issue.number }, "GraphQL query completed");
+
+                    // For 'converted' action, verify if the status is actually the AI column
+                    if (action === "converted" && statusName !== aiColumnName) {
+                        this.logger.info({ statusName }, "Converted issue is not in the AI Implement column. Ignoring.");
+                        return { affectedDevelopers };
+                    }
+
+                    if (!fieldId) {
+                        this.logger.error("Could not determine Status field ID from webhook payload or GraphQL query");
+                        return { affectedDevelopers };
+                    }
+
                     const owner = issue.repository.owner.login;
                     const repo = issue.repository.name;
                     
@@ -406,7 +452,11 @@ export class WebhookService {
                     };
 
                     return { affectedDevelopers, enqueueJob };
+                } else {
+                    this.logger.warn({ issueId }, "Issue node or repository not found in GraphQL response");
                 }
+            } else {
+                this.logger.error("GitHub client not available to fetch issue details");
             }
         }
 

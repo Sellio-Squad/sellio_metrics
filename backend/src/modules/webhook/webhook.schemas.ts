@@ -156,12 +156,17 @@ export const projectsV2ItemPayloadSchema = z.object({
     }).passthrough(),
     changes: z.object({
         field_value: z.object({
-            field_id:         z.string(),
-            field_name:       z.string(),
-            field_type:       z.string(),
+            field_id:         z.string().optional(),
+            field_node_id:    z.string().optional(),
+            field_name:       z.string().optional(),
+            field_type:       z.string().optional(),
             field_value_id:   z.string().nullable().optional(),
             field_value_name: z.string().nullable().optional(),
             project_number:   z.number().optional(),
+            to: z.object({
+                id: z.string().optional(),
+                name: z.string().optional(),
+            }).passthrough().optional(),
         }).passthrough().optional(),
     }).passthrough().optional(),
 }).passthrough();
