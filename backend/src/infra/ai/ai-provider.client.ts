@@ -284,10 +284,12 @@ export class AiProviderClient {
 
         const result = await this.workersAI.run(model, inputs);
 
-        const text = (result as any)?.response || (result as any)?.result?.response;
-        if (!text) {
+        const rawText = (result as any)?.response ?? (result as any)?.result?.response;
+        if (!rawText && rawText !== 0) {
             throw new AppError(`Workers AI model ${model} returned empty response`, 500, "WORKERS_AI_EMPTY");
         }
+        // Some thinking-mode models return objects instead of strings — coerce to string defensively
+        const text = typeof rawText === "string" ? rawText : JSON.stringify(rawText);
         return text;
     }
 
