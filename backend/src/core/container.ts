@@ -110,6 +110,8 @@ export interface Cradle {
     // AI
     geminiClient: GeminiClient;
     aiProviderClient: import("../infra/ai/ai-provider.client").AiProviderClient;
+    browser: any | null;
+    webSearchService: import("../modules/ai-pipeline/web-search.service").WebSearchService;
 
     // Review
     prContextFetcher: PrContextFetcher;
