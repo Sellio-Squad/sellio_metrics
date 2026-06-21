@@ -48,6 +48,19 @@ class ApiEndpoints {
     return '$base/api/meetings/$id/ws';
   }
 
+  // ─── AI Pipeline Tracing — WebSocket ───
+  /// Returns a ws:// or wss:// URL for the AI Pipeline Durable Object.
+  static String aiPipelineWs() {
+    var base = const String.fromEnvironment('API_BASE_URL', defaultValue: 'wss://sellio-metrics.abdoessam743.workers.dev');
+    if (base.startsWith('https://')) {
+      base = base.replaceFirst('https://', 'wss://');
+    } else if (base.startsWith('http://')) {
+      base = base.replaceFirst('http://', 'ws://');
+    }
+    return '$base/api/ai-pipeline/ws';
+  }
+
+
   // ─── Meet Auth (Google OAuth) ───
   static const meetAuthStatus = '/api/meetings/auth-status';
   static const meetAuthUrl    = '/api/meetings/auth-url';

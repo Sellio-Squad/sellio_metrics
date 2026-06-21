@@ -62,9 +62,18 @@ migrations_dir = "migrations"
 name = "MEETING_ROOMS"
 class_name = "MeetingRoom"
 
+[[durable_objects.bindings]]
+name = "AI_PIPELINE_HUB"
+class_name = "AiPipelineHub"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["MeetingRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["AiPipelineHub"]
+
 
 # ─── Cloudflare Queues ───────────────────────────────────────
 # Queue for offloading heavy webhook background tasks
