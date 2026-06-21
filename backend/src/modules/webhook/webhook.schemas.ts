@@ -84,11 +84,15 @@ export const reviewCommentPayloadSchema = z.object({
         number: z.number(),
     }).passthrough(),
     comment: z.object({
-        id:         z.number(),
-        body:       z.string(),
-        html_url:   z.string(),
-        created_at: z.string(),
-        user:       githubUserSchema.optional(),
+        id:              z.number(),
+        body:            z.string(),
+        html_url:        z.string(),
+        created_at:      z.string(),
+        user:            githubUserSchema.optional(),
+        path:            z.string().optional(),
+        line:            z.number().nullable().optional(),
+        diff_hunk:       z.string().optional(),
+        in_reply_to_id:  z.number().optional(),
     }).passthrough(),
 }).passthrough();
 

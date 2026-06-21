@@ -31,9 +31,11 @@ import type {
     OrgMembershipPayload,
     PushPayload,
 } from "./webhook.schemas";
+import type { AiPipelineService } from "../ai-pipeline/ai-pipeline.service";
 
 export interface WebhookHandlerResult {
     affectedDevelopers: string[];
+    botPromise?: Promise<any>;
 }
 
 interface WebhookServiceDeps {
@@ -47,6 +49,7 @@ interface WebhookServiceDeps {
     cache: CacheRegistry;
     cachedGithubClient?: CachedGitHubClient;
     env: { org: string };
+    aiPipelineService: AiPipelineService;
 }
 
 export class WebhookService {
@@ -60,6 +63,7 @@ export class WebhookService {
     private readonly cache: CacheRegistry;
     private readonly cachedGithubClient?: CachedGitHubClient;
     private readonly org: string;
+    private readonly aiPipelineService: AiPipelineService;
 
     constructor(deps: WebhookServiceDeps) {
         this.logger        = deps.logger.child({ module: "webhook-service" });
@@ -72,6 +76,7 @@ export class WebhookService {
         this.cache         = deps.cache;
         this.cachedGithubClient = deps.cachedGithubClient;
         this.org           = deps.env.org;
+        this.aiPipelineService = deps.aiPipelineService;
     }
 
     // ─── Pull Request (merged) ──────────────────────────────
@@ -187,7 +192,7 @@ export class WebhookService {
     // ─── Comment (issue_comment or review_comment) ──────────
 
     async handleIssueComment(payload: IssueCommentPayload): Promise<WebhookHandlerResult> {
-        return this.processComment(
+        const affected = await this.processComment(
             "issue",
             payload.comment,
             payload.issue.number,
@@ -195,10 +200,33 @@ export class WebhookService {
             payload.repository,
             payload.organization?.login,
         );
+
+        const comment = payload.comment;
+        const author = comment.user?.login;
+        const hasMention = /@sellio/i.test(comment.body);
+
+        if (hasMention && author && !isBot(author, comment.user?.type)) {
+            const owner = payload.repository.owner?.login ?? this.org;
+            const repo = payload.repository.name;
+            const botPromise = this.aiPipelineService.handleCommentMention(
+                owner,
+                repo,
+                payload.issue.number,
+                comment.id,
+                comment.body,
+                author
+            ).catch(err => {
+                this.logger.error({ err: err.message }, "Error in handleCommentMention");
+            });
+
+            return { ...affected, botPromise };
+        }
+
+        return affected;
     }
 
     async handleReviewComment(payload: ReviewCommentPayload): Promise<WebhookHandlerResult> {
-        return this.processComment(
+        const affected = await this.processComment(
             "review",
             payload.comment,
             payload.pull_request.number,
@@ -206,6 +234,32 @@ export class WebhookService {
             payload.repository,
             payload.organization?.login,
         );
+
+        const comment = payload.comment;
+        const author = comment.user?.login;
+        const hasMention = /@sellio/i.test(comment.body);
+
+        if (hasMention && author && !isBot(author, comment.user?.type)) {
+            const owner = payload.repository.owner?.login ?? this.org;
+            const repo = payload.repository.name;
+            const botPromise = this.aiPipelineService.handleReviewComment(
+                owner,
+                repo,
+                payload.pull_request.number,
+                comment.id,
+                comment.body,
+                author,
+                comment.path || "",
+                comment.line ?? null,
+                comment.diff_hunk || ""
+            ).catch(err => {
+                this.logger.error({ err: err.message }, "Error in handleReviewComment");
+            });
+
+            return { ...affected, botPromise };
+        }
+
+        return affected;
     }
 
     private async processComment(
@@ -339,7 +393,7 @@ export class WebhookService {
     async handleProjectItem(
         payload: any,
         aiColumnName: string
-    ): Promise<{ affectedDevelopers: string[]; enqueueJob?: any }> {
+    ): Promise<{ affectedDevelopers: string[]; enqueueJob?: any; botPromise?: Promise<any> }> {
         const affectedDevelopers: string[] = [];
         const action = payload.action;
         const item = payload.projects_v2_item;
@@ -351,8 +405,10 @@ export class WebhookService {
             return { affectedDevelopers };
         }
 
-        // Only process issues. If action is converted, the new content_type is 'Issue'.
-        if (item.content_type !== "Issue") {
+        const isIssue = item.content_type === "Issue";
+        const isDraft = item.content_type === "DraftIssue";
+
+        if (!isIssue && !isDraft) {
             return { affectedDevelopers };
         }
 
@@ -363,13 +419,117 @@ export class WebhookService {
         const isStatusChange = fieldValue?.field_name?.toLowerCase() === "status";
         const isAIColumn = fieldValue?.field_value_name === aiColumnName || fieldValue?.to?.name === aiColumnName;
 
-        let shouldTrigger = false;
         const providedFieldId = fieldValue?.field_id || fieldValue?.field_node_id;
 
-        if (action === "edited" && isStatusChange && isAIColumn) {
-            shouldTrigger = true;
-        } else if (action === "converted") {
-            shouldTrigger = true;
+        // Handle Draft Issue conversion
+        if (isDraft && action === "edited" && isStatusChange && isAIColumn) {
+            const projectId = item.project_node_id;
+            const itemId = item.node_id;
+
+            this.logger.info({ projectId, itemId }, "Draft issue moved to AI Implement column. Finding repository to convert...");
+            
+            const conversionPromise = (async () => {
+                try {
+                    if (!this.cachedGithubClient) {
+                        this.logger.error("GitHub client not available to convert draft issue");
+                        return;
+                    }
+                    const octokit = this.cachedGithubClient.raw;
+                    
+                    // 1. Query project's linked repositories
+                    const projectRes: any = await octokit.graphql(
+                        `query GetProjectLinkedRepositories($projectId: ID!) {
+                          node(id: $projectId) {
+                            ... on ProjectV2 {
+                              repositories(first: 10) {
+                                nodes {
+                                  id
+                                  name
+                                  nameWithOwner
+                                }
+                              }
+                            }
+                          }
+                        }`,
+                        { projectId }
+                    );
+
+                    const repos = projectRes?.node?.repositories?.nodes || [];
+                    if (repos.length === 0) {
+                        this.logger.warn({ projectId }, "No repositories linked to the project. Cannot convert draft issue.");
+                        return;
+                    }
+
+                    // Sort repositories alphabetically by nameWithOwner
+                    const sortedRepos = [...repos].sort((a: any, b: any) =>
+                        a.nameWithOwner.toLowerCase().localeCompare(b.nameWithOwner.toLowerCase())
+                    );
+
+                    const targetRepo = sortedRepos[0];
+                    this.logger.info({ targetRepo: targetRepo.nameWithOwner, totalRepos: repos.length }, "Auto-selected repository for draft conversion");
+
+                    // 2. Perform the conversion mutation
+                    const convertRes: any = await octokit.graphql(
+                        `mutation ConvertDraftToIssue($itemId: ID!, $repositoryId: ID!) {
+                          convertProjectV2DraftIssueItemToIssue(input: {
+                            itemId: $itemId,
+                            repositoryId: $repositoryId
+                          }) {
+                            item {
+                              id
+                              content {
+                                ... on Issue {
+                                  number
+                                  title
+                                  repository {
+                                    name
+                                    owner {
+                                      login
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }`,
+                        { itemId, repositoryId: targetRepo.id }
+                    );
+
+                    const convertedItem = convertRes?.convertProjectV2DraftIssueItemToIssue?.item;
+                    const convertedIssue = convertedItem?.content;
+
+                    if (convertedIssue) {
+                        this.logger.info({ issueNumber: convertedIssue.number, repo: targetRepo.nameWithOwner }, "Draft issue converted successfully");
+                        
+                        // If multiple repositories were linked, post a comment explaining the choice
+                        if (repos.length > 1) {
+                            const commentBody = `This draft issue was moved to the **AI Implement** column. Since multiple repositories are linked to this project, I automatically converted it to an issue in the first repository alphabetically: **${targetRepo.nameWithOwner}**.`;
+                            await this.aiPipelineService.gitOps.commentOnIssue(
+                                convertedIssue.repository.owner.login,
+                                convertedIssue.repository.name,
+                                convertedIssue.number,
+                                commentBody
+                            );
+                        }
+                    } else {
+                        this.logger.error({ itemId }, "Failed to parse converted issue from mutation response");
+                    }
+                } catch (err: any) {
+                    this.logger.error({ itemId, err: err.message }, "Error converting draft issue");
+                }
+            })();
+
+            return { affectedDevelopers, botPromise: conversionPromise };
+        }
+
+        // Handle Issue processing
+        let shouldTrigger = false;
+        if (isIssue) {
+            if (action === "edited" && isStatusChange && isAIColumn) {
+                shouldTrigger = true;
+            } else if (action === "converted") {
+                shouldTrigger = true;
+            }
         }
 
         if (shouldTrigger) {

@@ -335,6 +335,98 @@ export class GitOpsService {
         }
     }
 
+    /**
+     * Replies to a pull request review comment.
+     */
+    async replyToReviewComment(
+        owner: string,
+        repo: string,
+        pullNumber: number,
+        commentId: number,
+        body: string
+    ): Promise<void> {
+        try {
+            const octokit = this.github.raw;
+            await octokit.pulls.createReplyForReviewComment({
+                owner,
+                repo,
+                pull_number: pullNumber,
+                comment_id: commentId,
+                body,
+            });
+            this.logger.info({ pullNumber, commentId }, "Created reply to review comment");
+        } catch (err: any) {
+            this.logger.error({ pullNumber, commentId, error: err.message }, "Failed to reply to review comment");
+            throw new GitHubApiError(`Failed to reply to review comment: ${err.message}`);
+        }
+    }
+
+    /**
+     * Fetches the logs of the failed jobs in a workflow run.
+     */
+    async getWorkflowJobLogs(owner: string, repo: string, runId: number): Promise<string> {
+        try {
+            const octokit = this.github.raw;
+            const { data: jobsResult } = await octokit.actions.listJobsForWorkflowRun({
+                owner,
+                repo,
+                run_id: runId,
+            });
+
+            const failedJobs = jobsResult.jobs.filter(job => job.conclusion === "failure");
+            if (failedJobs.length === 0) {
+                return "No failed jobs found in the workflow run.";
+            }
+
+            const logsParts: string[] = [];
+            for (const job of failedJobs) {
+                try {
+                    this.logger.info({ jobId: job.id, jobName: job.name }, "Downloading logs for failed job");
+                    const { data: logText } = await octokit.actions.downloadJobLogsForWorkflowRun({
+                        owner,
+                        repo,
+                        job_id: job.id,
+                    });
+                    
+                    if (typeof logText === "string") {
+                        const lines = logText.split("\n");
+                        const truncatedLogs = lines.slice(-250).join("\n");
+                        logsParts.push(`Job [${job.name}] (ID: ${job.id}) failed:\n...\n${truncatedLogs}`);
+                    } else {
+                        logsParts.push(`Job [${job.name}] (ID: ${job.id}) failed, but logs couldn't be parsed.`);
+                    }
+                } catch (jobErr: any) {
+                    this.logger.error({ jobId: job.id, error: jobErr.message }, "Failed to download logs for job");
+                    logsParts.push(`Job [${job.name}] (ID: ${job.id}) failed, and downloading logs failed: ${jobErr.message}`);
+                }
+            }
+
+            return logsParts.join("\n\n");
+        } catch (err: any) {
+            this.logger.error({ runId, error: err.message }, "Failed to get workflow job logs");
+            throw new GitHubApiError(`Failed to get workflow job logs: ${err.message}`);
+        }
+    }
+
+    /**
+     * Finds the workflow runs for a branch.
+     */
+    async listWorkflowRunsForBranch(owner: string, repo: string, branch: string): Promise<any[]> {
+        try {
+            const octokit = this.github.raw;
+            const { data } = await octokit.actions.listWorkflowRunsForRepo({
+                owner,
+                repo,
+                branch,
+                per_page: 5,
+            });
+            return data.workflow_runs || [];
+        } catch (err: any) {
+            this.logger.error({ branch, error: err.message }, "Failed to list workflow runs for branch");
+            return [];
+        }
+    }
+
     // ─── Private helpers ────────────────────────────────────
 
     private async getBotUsername(): Promise<string> {

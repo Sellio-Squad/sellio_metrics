@@ -15,6 +15,7 @@ export interface AICompletionParams {
     systemPrompt?: string;
     userPrompt: string;
     jsonMode?: boolean;
+    images?: { mimeType: string; data: string }[];
 }
 
 export class AiProviderClient {
@@ -128,13 +129,20 @@ export class AiProviderClient {
     private async executeGemini(model: string, params: AICompletionParams): Promise<string> {
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
         
-        const contents = [];
-        if (params.systemPrompt) {
-            // Note: System instruction in Gemini is passed in systemInstruction field
+        const parts: any[] = [{ text: params.userPrompt }];
+        if (params.images && params.images.length > 0) {
+            for (const img of params.images) {
+                parts.push({
+                    inlineData: {
+                        mimeType: img.mimeType,
+                        data: img.data
+                    }
+                });
+            }
         }
 
         const body: any = {
-            contents: [{ parts: [{ text: params.userPrompt }] }],
+            contents: [{ parts }],
             generationConfig: {
                 temperature: 0.2,
                 maxOutputTokens: 8192,
@@ -185,7 +193,23 @@ export class AiProviderClient {
         if (params.systemPrompt) {
             messages.push({ role: "system", content: params.systemPrompt });
         }
-        messages.push({ role: "user", content: params.userPrompt });
+
+        let userContent: any;
+        if (params.images && params.images.length > 0) {
+            userContent = [{ type: "text", text: params.userPrompt }];
+            for (const img of params.images) {
+                userContent.push({
+                    type: "image_url",
+                    image_url: {
+                        url: `data:${img.mimeType};base64,${img.data}`
+                    }
+                });
+            }
+        } else {
+            userContent = params.userPrompt;
+        }
+
+        messages.push({ role: "user", content: userContent });
 
         const body: any = {
             model,

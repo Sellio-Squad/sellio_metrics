@@ -99,6 +99,15 @@ webhook.post("/github", async (c) => {
         result = await handler(payload);
     }
 
+    // ─── If a background bot task is returned, run/await it ──────
+    if (result.botPromise) {
+        if (c.executionCtx?.waitUntil) {
+            c.executionCtx.waitUntil(result.botPromise);
+        } else {
+            await result.botPromise;
+        }
+    }
+
     // ─── If AI implement queue job is generated, enqueue it ──────
     if (result.enqueueJob) {
         if (cradle.syncQueue) {

@@ -161,7 +161,7 @@ async function buildContainer(
             scoreAggregationService: asFunction(({ scoresRepo, scoresKvCache, logger }: Cradle) => new ScoreAggregationService({ scoresRepo, scoresKvCache, logger })).singleton(),
             meetingsService: asFunction(({ logger, googleMeetClient, meetingsRepo, env }: Cradle) => new MeetingsService(googleMeetClient, meetingsRepo, env.googlePubsubTopic, logger)).singleton(),
             webhookHandlerService: asFunction(({ logger, googleMeetClient }: Cradle) => new WebhookHandlerService({ logger, googleMeetClient })).singleton(),
-            webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env }: Cradle) => new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env })).singleton(),
+            webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env, aiPipelineService }: Cradle) => new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env, aiPipelineService })).singleton(),
             prContextFetcher: asFunction(({ cachedGithubClient, logger }: Cradle) => new PrContextFetcher({ cachedGithubClient, logger })).singleton(),
             reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger }: Cradle) => new ReviewService({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger })).singleton(),
             
