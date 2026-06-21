@@ -175,6 +175,7 @@ async function buildContainer(
             aiProviderClient: asFunction(({ env, logger, cacheService }: Cradle) => new AiProviderClient({
                 geminiApiKey: env.geminiApiKey,
                 openaiApiKey: env.openaiApiKey,
+                deepseekApiKey: env.deepseekApiKey,
                 grokApiKey: env.grokApiKey,
                 groqApiKey: env.groqApiKey,
                 cfAccountId: env.cfAccountId,

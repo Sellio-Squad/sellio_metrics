@@ -261,11 +261,8 @@ export class AiPipelineService {
                 changes.push({ path: filePath, content, action: "create" });
             }
 
-            // ── Mark code generation as done BEFORE validation starts ──
-            // This ensures the UI timeline shows steps in chronological order:
-            // "Generating Code" done → then "Validating Code Structure" running → done
-            // (Not: "Generating Code" still running while "Validating" shows done)
-            await this.emitEvent(job, "phase2", "Generating Code", `Generated ${changes.length} file change(s). Running validation...`, "done");
+            // ── Keep code generation as running until validation passes ──
+            await this.emitEvent(job, "phase2", "Generating Code", `Generated ${changes.length} file change(s). Running validation...`, "running");
 
             // ── STEP 1: Cloudflare-side structural validation (pre-GitHub CI check) ──
             // This runs INSIDE Workers before any code reaches GitHub.
@@ -284,13 +281,14 @@ export class AiPipelineService {
 
                 this.logger.warn({ taskId: job.taskId, attempt, errors: structuralResult.errors.length }, "Structural validation failed, regenerating");
                 // Reset events for next attempt so the user sees a clean retry in the timeline
-                await this.emitEvent(job, "phase2", "Validating Code Structure", `Attempt ${attempt} failed — retrying code generation...`, "running");
+                await this.emitEvent(job, "phase2", "Validating Code Structure", `Attempt ${attempt} failed structural check — retrying...`, "running");
                 await this.emitEvent(job, "phase2", "Generating Code", `Attempt ${attempt} failed. Regenerating with targeted feedback...`, "running");
                 attempt++;
                 continue;
             }
 
-            await this.emitEvent(job, "phase2", "Validating Code Structure", structuralResult.summary, "done");
+            // Update status to show structural passed and running semantic checks
+            await this.emitEvent(job, "phase2", "Validating Code Structure", "Structural validation passed. Running semantic logic checks...", "running");
 
             // ── STEP 2: LLM semantic validation (logic, types, architecture) ──
             // Only runs after structural checks pass — avoids wasting tokens on broken code.
@@ -313,6 +311,9 @@ export class AiPipelineService {
             throw new AppError(`LLM self-validation failed after retries: ${feedback}`, 422, "AI_VALIDATION_FAILED");
         }
 
+        // On complete success, mark all events done in chronological order
+        await this.emitEvent(job, "phase2", "Generating Code", `Generated ${changes.length} file change(s) successfully.`, "done");
+        await this.emitEvent(job, "phase2", "Validating Code Structure", "All structural/semantic validation checks passed.", "done");
         await this.emitEvent(job, "phase2", "Code Validation Passed", "All validation checks passed successfully.", "done");
 
         // Save generated changes to KV
