@@ -1,3 +1,4 @@
+import 'package:sellio_metrics/data/datasources/ai_pipeline/ai_runs_websocket_data_source.dart';
 import 'package:sellio_metrics/domain/entities/ai_run_entity.dart';
 
 abstract class AiRunsUpdate {}
@@ -14,6 +15,6 @@ class AiRunSingleUpdate extends AiRunsUpdate {
 
 abstract class AiRunsRepository {
   Stream<AiRunsUpdate> watchAiRuns();
-  Stream<bool> watchConnectionStatus();
+  Stream<WsConnectionStatus> watchConnectionStatus();
 }
 
