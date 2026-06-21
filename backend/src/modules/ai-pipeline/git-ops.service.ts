@@ -244,13 +244,20 @@ export class GitOpsService {
     }
 
     /**
-     * Assigns the ticket/issue to the "sellio bot".
+     * Assigns the ticket/issue to the sellio bot.
+     *
+     * NOTE: GitHub Apps can only be assigned as an assignee if their bot user
+     * is a collaborator on the repository with Triage or Write access.
+     * If you see 422 errors, go to: Repo Settings → Collaborators → invite the
+     * app's bot user (e.g. sellio-metrics[bot]) with Write access.
      */
     async assignToBot(owner: string, repo: string, issueNumber: number): Promise<void> {
         try {
             const octokit = this.github.raw;
             const botUser = await this.getBotUsername();
-            
+
+            // GitHub API returns 422 if the assignee is not a collaborator.
+            // We attempt the assignment and surface a clear error message if it fails.
             await octokit.issues.addAssignees({
                 owner,
                 repo,
@@ -259,7 +266,17 @@ export class GitOpsService {
             });
             this.logger.info({ issueNumber, botUser }, "Assigned issue to bot successfully");
         } catch (err: any) {
-            this.logger.error({ issueNumber, error: err.message }, "Failed to assign issue to bot");
+            // 422 = Validation Failed: the bot user is not a collaborator on this repo.
+            if (err.status === 422) {
+                this.logger.warn(
+                    { issueNumber, error: err.message },
+                    "Bot assignment skipped: the GitHub App bot is not a collaborator on this repo. " +
+                    "To fix: go to Repo Settings → Collaborators → invite the app bot user (e.g. sellio-metrics[bot]) with Triage access."
+                );
+            } else {
+                this.logger.error({ issueNumber, error: err.message }, "Failed to assign issue to bot");
+            }
+            // Non-fatal: the pipeline continues without bot assignment
         }
     }
 

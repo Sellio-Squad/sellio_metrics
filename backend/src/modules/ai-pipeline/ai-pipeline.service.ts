@@ -235,6 +235,12 @@ export class AiPipelineService {
                 changes.push({ path: filePath, content, action: "create" });
             }
 
+            // ── Mark code generation as done BEFORE validation starts ──
+            // This ensures the UI timeline shows steps in chronological order:
+            // "Generating Code" done → then "Validating Code Structure" running → done
+            // (Not: "Generating Code" still running while "Validating" shows done)
+            await this.emitEvent(job, "phase2", "Generating Code", `Generated ${changes.length} file change(s). Running validation...`, "done");
+
             // ── STEP 1: Cloudflare-side structural validation (pre-GitHub CI check) ──
             // This runs INSIDE Workers before any code reaches GitHub.
             // Catches real import errors, missing deps, bracket mismatches, etc.
@@ -251,6 +257,9 @@ export class AiPipelineService {
                 feedback = `Your previous attempt failed STRUCTURAL VALIDATION with the following specific errors:\n${errorSummary}\n\nPlease fix EXACTLY these issues. Focus on:\n- Ensuring all imports point to files that actually exist\n- Fixing any bracket/brace mismatches\n- Adding any missing package dependencies you reference`;
 
                 this.logger.warn({ taskId: job.taskId, attempt, errors: structuralResult.errors.length }, "Structural validation failed, regenerating");
+                // Reset events for next attempt so the user sees a clean retry in the timeline
+                await this.emitEvent(job, "phase2", "Validating Code Structure", `Attempt ${attempt} failed — retrying code generation...`, "running");
+                await this.emitEvent(job, "phase2", "Generating Code", `Attempt ${attempt} failed. Regenerating with targeted feedback...`, "running");
                 attempt++;
                 continue;
             }
@@ -267,6 +276,9 @@ export class AiPipelineService {
                 const semanticErrors = semanticResult.errors.join("\n");
                 feedback = `Your previous attempt failed SEMANTIC VALIDATION with logic/type errors:\n${semanticErrors}\nPlease fix these architectural and type-level issues.`;
                 this.logger.warn({ taskId: job.taskId, attempt, errors: semanticResult.errors }, "Semantic validation failed, retrying");
+                // Reset events for the retry so the UI timeline reflects the re-attempt
+                await this.emitEvent(job, "phase2", "Validating Code Structure", `Semantic check failed on attempt ${attempt} — retrying...`, "running");
+                await this.emitEvent(job, "phase2", "Generating Code", `Attempt ${attempt} failed semantic check. Regenerating...`, "running");
                 attempt++;
             }
         }
@@ -275,8 +287,7 @@ export class AiPipelineService {
             throw new AppError(`LLM self-validation failed after retries: ${feedback}`, 422, "AI_VALIDATION_FAILED");
         }
 
-        await this.emitEvent(job, "phase2", "Generating Code", "Generating code changes file-by-file...", "done");
-        await this.emitEvent(job, "phase2", "Code Validation Passed", "Self-validation checks passed successfully.", "done");
+        await this.emitEvent(job, "phase2", "Code Validation Passed", "All validation checks passed successfully.", "done");
 
         // Save generated changes to KV
         await this.cache.set(`ai:task:${job.taskId}:code`, changes, 3600);
@@ -741,7 +752,9 @@ ${JSON.stringify(context.dependencies, null, 2)}
             images,
         }, "premium"); // Planning requires premium LLM for high-quality implementation plans
 
-        const cleaned = raw.trim().replace(/^```json/, "").replace(/```$/, "").trim();
+        // Defensive coercion: some provider edge cases return non-string (e.g. Workers AI thinking models)
+        const rawStr = typeof raw === "string" ? raw : JSON.stringify(raw ?? "");
+        const cleaned = rawStr.trim().replace(/^```json/, "").replace(/```$/, "").trim();
         return JSON.parse(cleaned) as ImplementationPlan;
     }
 
@@ -819,11 +832,18 @@ ${context.fileTree.join("\n")}
             jsonMode: true,
         }, "fast"); // Semantic validation is a structured JSON check — fast tier (Workers AI) is sufficient
 
-        const cleaned = raw.trim().replace(/^```json/, "").replace(/```$/, "").trim();
+        // Defensive coercion: guard against non-string returns from Workers AI edge cases
+        const rawStr = typeof raw === "string" ? raw : JSON.stringify(raw ?? "{}");
+        const cleaned = rawStr.trim().replace(/^```json/, "").replace(/```$/, "").trim();
         return JSON.parse(cleaned);
     }
 
     private cleanCodeContent(raw: string): string {
+        // Defensive coercion: guard against non-string returns from AI providers (e.g. Workers AI thinking models)
+        if (typeof raw !== "string") {
+            this.logger.warn({ rawType: typeof raw }, "generateCodeForFile: AI returned non-string, coercing to string");
+            raw = typeof raw === "object" && raw !== null ? JSON.stringify(raw) : String(raw ?? "");
+        }
         let cleaned = raw.trim();
         if (cleaned.startsWith("```")) {
             const firstNewline = cleaned.indexOf("\n");
