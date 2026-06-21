@@ -76,6 +76,10 @@ interface WorkerEnv {
     OPENAI_API_KEY?: string;
     GROK_API_KEY?: string;
     GROQ_API_KEY?: string;
+    // Cloudflare AI Services (free tier)
+    AI?:            any;          // Workers AI binding — free on-platform GPU inference
+    CF_ACCOUNT_ID?: string;       // Cloudflare account ID for AI Gateway
+    AI_GATEWAY_SLUG?: string;     // AI Gateway slug for caching + logging
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────
@@ -95,6 +99,8 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.OPENAI_API_KEY)        process.env.OPENAI_API_KEY       = workerEnv.OPENAI_API_KEY;
     if (workerEnv.GROK_API_KEY)          process.env.GROK_API_KEY         = workerEnv.GROK_API_KEY;
     if (workerEnv.GROQ_API_KEY)          process.env.GROQ_API_KEY         = workerEnv.GROQ_API_KEY;
+    if (workerEnv.CF_ACCOUNT_ID)         process.env.CF_ACCOUNT_ID        = workerEnv.CF_ACCOUNT_ID;
+    if (workerEnv.AI_GATEWAY_SLUG)       process.env.AI_GATEWAY_SLUG      = workerEnv.AI_GATEWAY_SLUG;
 }
 
 function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace, aiPipelineHub: CFDurableObjectNamespace) {
@@ -168,6 +174,7 @@ export default {
                 workerEnv.WEBHOOK_QUEUE || null,
                 workerEnv.SYNC_QUEUE    || null,
                 workerEnv.AI_PIPELINE_HUB || null,
+                workerEnv.AI            || null,
             );
 
             const app = buildApp(container.cradle, workerEnv.MEETING_ROOMS, workerEnv.AI_PIPELINE_HUB);
@@ -195,6 +202,7 @@ export default {
                 workerEnv.WEBHOOK_QUEUE || null,
                 workerEnv.SYNC_QUEUE    || null,
                 workerEnv.AI_PIPELINE_HUB || null,
+                workerEnv.AI            || null,
             );
             await container.cradle.scoreAggregationService.precomputeSnapshots();
             console.log("Cron: leaderboard snapshots refreshed");
@@ -216,6 +224,7 @@ export default {
                 workerEnv.WEBHOOK_QUEUE || null,
                 workerEnv.SYNC_QUEUE    || null,
                 workerEnv.AI_PIPELINE_HUB || null,
+                workerEnv.AI            || null,
             );
 
             for (const msg of batch.messages) {

@@ -78,6 +78,26 @@ export class AiPipelineHub {
             return new Response("OK", { status: 200 });
         }
 
+        // Path: /event/delete/:taskId — Broadcast run deleted event
+        if (url.pathname.startsWith("/event/delete/") && request.method === "POST") {
+            const taskId = url.pathname.split("/").pop();
+            if (!taskId) {
+                return new Response("Bad Request", { status: 400 });
+            }
+            const payload = JSON.stringify({ type: "run_deleted", taskId });
+            const result = this.connectionManager.broadcast(payload);
+            this.logger.info({ taskId, sent: result.sent, failed: result.failed }, "Broadcasted run_deleted to clients");
+            return new Response("OK", { status: 200 });
+        }
+
+        // Path: /event/clear — Broadcast runs cleared event
+        if (url.pathname === "/event/clear" && request.method === "POST") {
+            const payload = JSON.stringify({ type: "runs_cleared" });
+            const result = this.connectionManager.broadcast(payload);
+            this.logger.info({ sent: result.sent, failed: result.failed }, "Broadcasted runs_cleared to clients");
+            return new Response("OK", { status: 200 });
+        }
+
         return new Response("Not Found", { status: 404 });
     }
 

@@ -1,10 +1,21 @@
 /**
  * Sellio Metrics — Multi-Provider AI Client
  *
- * Implements the fallback chain for code generation:
- *   Gemini 2.5 Pro/Flash → OpenAI GPT-4o → Grok
+ * Implements a TIERED fallback chain for AI completions:
  *
- * Direct REST integration with no heavy SDKs to remain compatible with Cloudflare Workers.
+ *   Tier 1 — Premium (Code generation, Planning, Self-correction):
+ *     Gemini 2.5 Flash → OpenAI GPT-4o
+ *
+ *   Tier 2 — Fast/Free (Classification, File selection, Validation):
+ *     Workers AI (qwen2.5-coder-32b) → Groq (llama-3.3-70b) → Grok
+ *
+ * All external calls are routed through Cloudflare AI Gateway for:
+ *   - Response caching (identical prompts → free cached result)
+ *   - Logging & analytics (token usage, cost, error rates)
+ *   - Rate limiting (no manual cooldown logic needed)
+ *
+ * Workers AI runs FREE on Cloudflare's GPUs (10K neurons/day free tier).
+ * No cold starts, no external API call, no cost for simple tasks.
  */
 
 import type { Logger } from "../../core/logger";
@@ -18,19 +29,45 @@ export interface AICompletionParams {
     images?: { mimeType: string; data: string }[];
 }
 
+export type AITier = "premium" | "fast";
+
+// Cloudflare Workers AI binding interface
+export interface CloudflareAI {
+    run(model: string, inputs: {
+        messages?: { role: string; content: string }[];
+        prompt?: string;
+        max_tokens?: number;
+        temperature?: number;
+        response_format?: { type: string };
+    }): Promise<{ response?: string; result?: { response: string } }>;
+}
+
 export class AiProviderClient {
     private readonly geminiApiKey: string;
     private readonly openaiApiKey: string;
     private readonly grokApiKey: string;
     private readonly groqApiKey: string;
+    private readonly cfAccountId: string;
+    private readonly aiGatewaySlug: string;
+    private readonly workersAI: CloudflareAI | null;
     private readonly logger: Logger;
     private readonly cache: CacheService;
 
+    // Gemini models for premium tier — ordered by quality/cost
     private readonly geminiModels = [
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
         "gemini-2.0-flash",
-        "gemini-2.0-flash-lite"
+        "gemini-2.0-flash-lite",
+    ];
+
+    // Workers AI models for fast/free tier
+    // @cf/qwen/qwen2.5-coder-32b-instruct: specialized for code tasks
+    // deepseek-r1-distill-qwen-32b: strong reasoning
+    private readonly workersAIModels = [
+        "@cf/qwen/qwen2.5-coder-32b-instruct",
+        "@cf/qwen/qwen3-30b-a3b-fp8",
+        "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
     ];
 
     constructor({
@@ -38,6 +75,9 @@ export class AiProviderClient {
         openaiApiKey,
         grokApiKey,
         groqApiKey,
+        cfAccountId,
+        aiGatewaySlug,
+        workersAI,
         logger,
         cacheService,
     }: {
@@ -45,6 +85,9 @@ export class AiProviderClient {
         openaiApiKey: string;
         grokApiKey: string;
         groqApiKey: string;
+        cfAccountId?: string;
+        aiGatewaySlug?: string;
+        workersAI?: CloudflareAI | null;
         logger: Logger;
         cacheService: CacheService;
     }) {
@@ -52,17 +95,81 @@ export class AiProviderClient {
         this.openaiApiKey = openaiApiKey;
         this.grokApiKey = grokApiKey;
         this.groqApiKey = groqApiKey;
+        this.cfAccountId = cfAccountId || "";
+        this.aiGatewaySlug = aiGatewaySlug || "";
+        this.workersAI = workersAI || null;
         this.logger = logger.child({ module: "ai-provider" });
         this.cache = cacheService;
     }
 
     /**
-     * Executes the completion call with the configured fallback chain.
+     * AI Gateway base URL for a given provider.
+     * Returns the proxied URL if AI Gateway is configured, otherwise the direct provider URL.
+     *
+     * AI Gateway provides: response caching, logging, rate limiting — all FREE.
      */
-    async generateCompletion(params: AICompletionParams): Promise<string> {
+    private gatewayUrl(provider: "google-ai-studio" | "openai" | "groq" | "x-ai", path: string): string {
+        if (this.cfAccountId && this.aiGatewaySlug) {
+            // Route through AI Gateway: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_slug}/{provider}/{path}
+            return `https://gateway.ai.cloudflare.com/v1/${this.cfAccountId}/${this.aiGatewaySlug}/${provider}/${path}`;
+        }
+        // Fallback: direct provider URLs
+        const directUrls: Record<string, string> = {
+            "google-ai-studio": `https://generativelanguage.googleapis.com/${path}`,
+            "openai": `https://api.openai.com/${path}`,
+            "groq": `https://api.groq.com/openai/${path}`,
+            "x-ai": `https://api.x.ai/${path}`,
+        };
+        return directUrls[provider];
+    }
+
+    /**
+     * Execute a completion with tiered model routing.
+     *
+     * @param params - The completion parameters
+     * @param tier - "fast" uses Workers AI/Groq (free), "premium" uses Gemini/GPT-4o
+     */
+    async generateCompletion(params: AICompletionParams, tier: AITier = "premium"): Promise<string> {
         const failureLogs: string[] = [];
 
-        // 1. Try Gemini Models
+        // ─── FAST TIER: Workers AI (free) + Groq ────────────────
+        // Used for: file selection, CI classification, code validation, review replies
+        if (tier === "fast") {
+            // 1. Try Workers AI (completely free, runs on Cloudflare GPUs)
+            if (this.workersAI) {
+                for (const model of this.workersAIModels) {
+                    try {
+                        this.logger.info({ model, tier: "fast" }, "Trying Workers AI model");
+                        return await this.executeWorkersAI(model, params);
+                    } catch (error: any) {
+                        failureLogs.push(`WorkersAI (${model}): ${error.message}`);
+                        this.logger.warn({ model, error: error.message }, "Workers AI model failed");
+                        continue;
+                    }
+                }
+            } else {
+                failureLogs.push("Workers AI: skipped (binding not available)");
+            }
+
+            // 2. Try Groq (has generous free tier: 14,400 req/day on llama-3.3-70b)
+            if (this.groqApiKey) {
+                try {
+                    this.logger.info({ tier: "fast" }, "Trying Groq for fast tier");
+                    return await this.executeGroq(params);
+                } catch (error: any) {
+                    failureLogs.push(`Groq: ${error.message}`);
+                    this.logger.warn({ error: error.message }, "Groq fast-tier call failed");
+                }
+            }
+
+            // 3. Fall through to premium if all fast options fail
+            this.logger.warn("Fast tier exhausted, falling through to premium");
+        }
+
+        // ─── PREMIUM TIER: Gemini → OpenAI ──────────────────────
+        // Used for: code generation, planning, self-correction
+
+        // 1. Try Gemini Models (via AI Gateway for caching)
         if (this.geminiApiKey) {
             for (const model of this.geminiModels) {
                 try {
@@ -70,10 +177,11 @@ export class AiProviderClient {
                     const cooldown = await this.cache.get<number>(cooldownKey);
                     if (cooldown?.data && Date.now() < cooldown.data) {
                         failureLogs.push(`Gemini (${model}): skipped (cooldown active)`);
-                        this.logger.info({ model }, "Gemini model is in rate limit cooldown, skipping");
+                        this.logger.info({ model }, "Gemini model in cooldown, skipping");
                         continue;
                     }
 
+                    this.logger.info({ model, tier: "premium" }, "Trying Gemini model");
                     return await this.executeGemini(model, params);
                 } catch (error: any) {
                     failureLogs.push(`Gemini (${model}): ${error.message}`);
@@ -83,45 +191,40 @@ export class AiProviderClient {
             }
         } else {
             failureLogs.push("Gemini: skipped (key not set)");
-            this.logger.info("Gemini API key is not set, skipping Gemini");
         }
 
-        // 2. Try OpenAI GPT-4o
+        // 2. Try OpenAI GPT-4o (via AI Gateway)
         if (this.openaiApiKey) {
             try {
                 const cooldownKey = "ai:cooldown:openai:gpt-4o";
                 const cooldown = await this.cache.get<number>(cooldownKey);
                 if (!cooldown?.data || Date.now() >= cooldown.data) {
+                    this.logger.info({ tier: "premium" }, "Trying OpenAI gpt-4o");
                     return await this.executeOpenAI("gpt-4o", params);
                 }
                 failureLogs.push("OpenAI (gpt-4o): skipped (cooldown active)");
-                this.logger.info("OpenAI gpt-4o is in cooldown, skipping");
             } catch (error: any) {
                 failureLogs.push(`OpenAI (gpt-4o): ${error.message}`);
                 this.logger.warn({ error: error.message }, "OpenAI call failed");
             }
         } else {
             failureLogs.push("OpenAI: skipped (key not set)");
-            this.logger.info("OpenAI API key is not set, skipping OpenAI");
         }
 
-        // 3. Try Groq
-        if (this.groqApiKey) {
+        // 3. Try Groq (if not already used in fast tier)
+        if (this.groqApiKey && tier !== "fast") {
             try {
                 const cooldownKey = "ai:cooldown:groq";
                 const cooldown = await this.cache.get<number>(cooldownKey);
                 if (!cooldown?.data || Date.now() >= cooldown.data) {
+                    this.logger.info({ tier: "premium" }, "Trying Groq as premium fallback");
                     return await this.executeGroq(params);
                 }
                 failureLogs.push("Groq: skipped (cooldown active)");
-                this.logger.info("Groq is in cooldown, skipping");
             } catch (error: any) {
                 failureLogs.push(`Groq: ${error.message}`);
                 this.logger.warn({ error: error.message }, "Groq call failed");
             }
-        } else {
-            failureLogs.push("Groq: skipped (key not set)");
-            this.logger.info("Groq API key is not set, skipping Groq");
         }
 
         // 4. Try Grok (xAI)
@@ -131,6 +234,7 @@ export class AiProviderClient {
                 const cooldown = await this.cache.get<number>(cooldownKey);
                 if (!cooldown?.data || Date.now() >= cooldown.data) {
                     try {
+                        this.logger.info({ tier: "premium" }, "Trying Grok grok-2");
                         return await this.executeGrok("grok-2", params);
                     } catch (grok2Err: any) {
                         failureLogs.push(`Grok (grok-2): ${grok2Err.message}`);
@@ -139,32 +243,64 @@ export class AiProviderClient {
                     }
                 }
                 failureLogs.push("Grok: skipped (cooldown active)");
-                this.logger.info("Grok is in cooldown, skipping");
             } catch (error: any) {
                 failureLogs.push(`Grok (grok-2-1212): ${error.message}`);
                 this.logger.warn({ error: error.message }, "Grok call failed");
             }
         } else {
             failureLogs.push("Grok: skipped (key not set)");
-            this.logger.info("Grok API key is not set, skipping Grok");
         }
 
-        const combinedErrorMsg = `All AI providers failed. Diagnostics:\n` + failureLogs.map(log => ` - ${log}`).join("\n");
+        const combinedErrorMsg =
+            `All AI providers failed.\nDiagnostics:\n` +
+            failureLogs.map(log => ` - ${log}`).join("\n");
         throw new AppError(combinedErrorMsg, 500, "AI_ALL_PROVIDERS_FAILED");
     }
 
+    // ─── Workers AI ─────────────────────────────────────────────
+    // Free: 10,000 neurons/day on Cloudflare's GPU infrastructure.
+    // Uses the AI binding directly — no network call, no API key needed.
+
+    private async executeWorkersAI(model: string, params: AICompletionParams): Promise<string> {
+        if (!this.workersAI) {
+            throw new AppError("Workers AI binding not available", 500, "WORKERS_AI_UNAVAILABLE");
+        }
+
+        const messages: { role: string; content: string }[] = [];
+        if (params.systemPrompt) {
+            messages.push({ role: "system", content: params.systemPrompt });
+        }
+        messages.push({ role: "user", content: params.userPrompt });
+
+        const inputs: any = { messages, max_tokens: 4096, temperature: 0.2 };
+
+        // Note: Workers AI json_mode support varies by model
+        if (params.jsonMode) {
+            inputs.response_format = { type: "json_object" };
+        }
+
+        const result = await this.workersAI.run(model, inputs);
+
+        const text = (result as any)?.response || (result as any)?.result?.response;
+        if (!text) {
+            throw new AppError(`Workers AI model ${model} returned empty response`, 500, "WORKERS_AI_EMPTY");
+        }
+        return text;
+    }
+
+    // ─── Gemini (via AI Gateway) ─────────────────────────────────
+
     private async executeGemini(model: string, params: AICompletionParams): Promise<string> {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
-        
+        // AI Gateway URL: routes through Cloudflare for caching + logging
+        const url = this.gatewayUrl(
+            "google-ai-studio",
+            `v1beta/models/${model}:generateContent`
+        );
+
         const parts: any[] = [{ text: params.userPrompt }];
         if (params.images && params.images.length > 0) {
             for (const img of params.images) {
-                parts.push({
-                    inlineData: {
-                        mimeType: img.mimeType,
-                        data: img.data
-                    }
-                });
+                parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
             }
         }
 
@@ -177,11 +313,8 @@ export class AiProviderClient {
         };
 
         if (params.systemPrompt) {
-            body.systemInstruction = {
-                parts: [{ text: params.systemPrompt }]
-            };
+            body.systemInstruction = { parts: [{ text: params.systemPrompt }] };
         }
-
         if (params.jsonMode) {
             body.generationConfig.responseMimeType = "application/json";
         }
@@ -198,11 +331,19 @@ export class AiProviderClient {
         if (!response.ok) {
             const errText = await response.text();
             if (response.status === 429) {
-                const cooldownDuration = 60; // 60s cooldown
-                await this.cache.set(`ai:cooldown:gemini:${model}`, Date.now() + cooldownDuration * 1000, cooldownDuration + 10);
+                const cooldownDuration = 60;
+                await this.cache.set(
+                    `ai:cooldown:gemini:${model}`,
+                    Date.now() + cooldownDuration * 1000,
+                    cooldownDuration + 10
+                );
                 throw new RateLimitError(`Gemini model ${model} rate limited: ${errText}`);
             }
-            throw new AppError(`Gemini model ${model} failed with HTTP ${response.status}: ${errText}`, response.status, "GEMINI_API_ERROR");
+            throw new AppError(
+                `Gemini model ${model} failed with HTTP ${response.status}: ${errText}`,
+                response.status,
+                "GEMINI_API_ERROR"
+            );
         }
 
         const result: any = await response.json();
@@ -213,9 +354,11 @@ export class AiProviderClient {
         return text;
     }
 
+    // ─── OpenAI (via AI Gateway) ─────────────────────────────────
+
     private async executeOpenAI(model: string, params: AICompletionParams): Promise<string> {
-        const url = "https://api.openai.com/v1/chat/completions";
-        
+        const url = this.gatewayUrl("openai", "v1/chat/completions");
+
         const messages: any[] = [];
         if (params.systemPrompt) {
             messages.push({ role: "system", content: params.systemPrompt });
@@ -227,23 +370,15 @@ export class AiProviderClient {
             for (const img of params.images) {
                 userContent.push({
                     type: "image_url",
-                    image_url: {
-                        url: `data:${img.mimeType};base64,${img.data}`
-                    }
+                    image_url: { url: `data:${img.mimeType};base64,${img.data}` },
                 });
             }
         } else {
             userContent = params.userPrompt;
         }
-
         messages.push({ role: "user", content: userContent });
 
-        const body: any = {
-            model,
-            messages,
-            temperature: 0.2,
-        };
-
+        const body: any = { model, messages, temperature: 0.2 };
         if (params.jsonMode) {
             body.response_format = { type: "json_object" };
         }
@@ -261,22 +396,31 @@ export class AiProviderClient {
             const errText = await response.text();
             if (response.status === 429) {
                 const cooldownDuration = 60;
-                await this.cache.set("ai:cooldown:openai:gpt-4o", Date.now() + cooldownDuration * 1000, cooldownDuration + 10);
+                await this.cache.set(
+                    "ai:cooldown:openai:gpt-4o",
+                    Date.now() + cooldownDuration * 1000,
+                    cooldownDuration + 10
+                );
                 throw new RateLimitError(`OpenAI gpt-4o rate limited: ${errText}`);
             }
-            throw new AppError(`OpenAI failed with HTTP ${response.status}: ${errText}`, response.status, "OPENAI_API_ERROR");
+            throw new AppError(
+                `OpenAI failed with HTTP ${response.status}: ${errText}`,
+                response.status,
+                "OPENAI_API_ERROR"
+            );
         }
 
         const result: any = await response.json();
         const text = result?.choices?.[0]?.message?.content;
-        if (!text) {
-            throw new AppError("OpenAI returned empty response", 500, "OPENAI_EMPTY_RESPONSE");
-        }
+        if (!text) throw new AppError("OpenAI returned empty response", 500, "OPENAI_EMPTY_RESPONSE");
         return text;
     }
 
+    // ─── Groq (via AI Gateway) ───────────────────────────────────
+    // Free tier: 14,400 req/day for llama-3.3-70b-versatile
+
     private async executeGroq(params: AICompletionParams): Promise<string> {
-        const url = "https://api.groq.com/openai/v1/chat/completions";
+        const url = this.gatewayUrl("groq", "v1/chat/completions");
         const hasImages = params.images && params.images.length > 0;
         const model = hasImages ? "llama-3.2-90b-vision-preview" : "llama-3.3-70b-versatile";
 
@@ -291,23 +435,15 @@ export class AiProviderClient {
             for (const img of params.images!) {
                 userContent.push({
                     type: "image_url",
-                    image_url: {
-                        url: `data:${img.mimeType};base64,${img.data}`
-                    }
+                    image_url: { url: `data:${img.mimeType};base64,${img.data}` },
                 });
             }
         } else {
             userContent = params.userPrompt;
         }
-
         messages.push({ role: "user", content: userContent });
 
-        const body: any = {
-            model,
-            messages,
-            temperature: 0.2,
-        };
-
+        const body: any = { model, messages, temperature: 0.2 };
         if (params.jsonMode) {
             body.response_format = { type: "json_object" };
         }
@@ -325,35 +461,38 @@ export class AiProviderClient {
             const errText = await response.text();
             if (response.status === 429) {
                 const cooldownDuration = 60;
-                await this.cache.set("ai:cooldown:groq", Date.now() + cooldownDuration * 1000, cooldownDuration + 10);
+                await this.cache.set(
+                    "ai:cooldown:groq",
+                    Date.now() + cooldownDuration * 1000,
+                    cooldownDuration + 10
+                );
                 throw new RateLimitError(`Groq rate limited: ${errText}`);
             }
-            throw new AppError(`Groq failed with HTTP ${response.status}: ${errText}`, response.status, "GROQ_API_ERROR");
+            throw new AppError(
+                `Groq failed with HTTP ${response.status}: ${errText}`,
+                response.status,
+                "GROQ_API_ERROR"
+            );
         }
 
         const result: any = await response.json();
         const text = result?.choices?.[0]?.message?.content;
-        if (!text) {
-            throw new AppError("Groq returned empty response", 500, "GROQ_EMPTY_RESPONSE");
-        }
+        if (!text) throw new AppError("Groq returned empty response", 500, "GROQ_EMPTY_RESPONSE");
         return text;
     }
 
+    // ─── Grok / xAI (via AI Gateway) ────────────────────────────
+
     private async executeGrok(model: string, params: AICompletionParams): Promise<string> {
-        const url = "https://api.x.ai/v1/chat/completions";
-        
+        const url = this.gatewayUrl("x-ai", "v1/chat/completions");
+
         const messages: any[] = [];
         if (params.systemPrompt) {
             messages.push({ role: "system", content: params.systemPrompt });
         }
         messages.push({ role: "user", content: params.userPrompt });
 
-        const body: any = {
-            model,
-            messages,
-            temperature: 0.2,
-        };
-
+        const body: any = { model, messages, temperature: 0.2 };
         if (params.jsonMode) {
             body.response_format = { type: "json_object" };
         }
@@ -371,17 +510,23 @@ export class AiProviderClient {
             const errText = await response.text();
             if (response.status === 429) {
                 const cooldownDuration = 60;
-                await this.cache.set(`ai:cooldown:grok:${model}`, Date.now() + cooldownDuration * 1000, cooldownDuration + 10);
+                await this.cache.set(
+                    `ai:cooldown:grok:${model}`,
+                    Date.now() + cooldownDuration * 1000,
+                    cooldownDuration + 10
+                );
                 throw new RateLimitError(`Grok model ${model} rate limited: ${errText}`);
             }
-            throw new AppError(`Grok model ${model} failed with HTTP ${response.status}: ${errText}`, response.status, "GROK_API_ERROR");
+            throw new AppError(
+                `Grok model ${model} failed with HTTP ${response.status}: ${errText}`,
+                response.status,
+                "GROK_API_ERROR"
+            );
         }
 
         const result: any = await response.json();
         const text = result?.choices?.[0]?.message?.content;
-        if (!text) {
-            throw new AppError(`Grok model ${model} returned empty response`, 500, "GROK_EMPTY_RESPONSE");
-        }
+        if (!text) throw new AppError(`Grok model ${model} returned empty response`, 500, "GROK_EMPTY_RESPONSE");
         return text;
     }
 }

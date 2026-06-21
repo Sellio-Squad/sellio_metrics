@@ -326,7 +326,7 @@ ${fileTree.join("\n")}
                 systemPrompt,
                 userPrompt,
                 jsonMode: true,
-            });
+            }, "fast"); // File selection is a simple JSON classification — Workers AI handles it for free
 
             // Parse response
             const cleaned = rawResponse.trim().replace(/^```json/, "").replace(/```$/, "").trim();

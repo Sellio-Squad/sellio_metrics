@@ -13,6 +13,7 @@ import type { CacheService } from "../../infra/cache/cache.service";
 import type { AiProviderClient } from "../../infra/ai/ai-provider.client";
 import type { ContextService } from "./context.service";
 import type { GitOpsService } from "./git-ops.service";
+import type { CodeValidatorService } from "./code-validator.service";
 import type { CloudflareQueue } from "../../core/container";
 import type { AiImplementJob, RepoContext, ImplementationPlan, CodeChange, AiRunRecord } from "./ai-pipeline.types";
 import { AppError } from "../../core/errors";
@@ -27,6 +28,7 @@ export class AiPipelineService {
     private readonly ai: AiProviderClient;
     private readonly contextService: ContextService;
     public readonly gitOps: GitOpsService;
+    private readonly codeValidator: CodeValidatorService;
     private readonly syncQueue: CloudflareQueue | null;
     private readonly webhookQueue: CloudflareQueue | null;
     private readonly logger: Logger;
@@ -37,6 +39,7 @@ export class AiPipelineService {
         aiProviderClient,
         contextService,
         gitOpsService,
+        codeValidatorService,
         syncQueue,
         webhookQueue,
         logger,
@@ -46,6 +49,7 @@ export class AiPipelineService {
         aiProviderClient: AiProviderClient;
         contextService: ContextService;
         gitOpsService: GitOpsService;
+        codeValidatorService: CodeValidatorService;
         syncQueue: CloudflareQueue | null;
         webhookQueue: CloudflareQueue | null;
         logger: Logger;
@@ -55,6 +59,7 @@ export class AiPipelineService {
         this.ai = aiProviderClient;
         this.contextService = contextService;
         this.gitOps = gitOpsService;
+        this.codeValidator = codeValidatorService;
         this.syncQueue = syncQueue;
         this.webhookQueue = webhookQueue;
         this.logger = logger.child({ module: "ai-pipeline" });
@@ -139,6 +144,7 @@ export class AiPipelineService {
             `🤖 **Sellio AI Agent** — Plan Generated:\n- **Files to Modify:** ${plan.filesToModify.map(f => `\`${f}\``).join(", ") || "*None*"}\n- **New Files:** ${plan.newFiles.map(f => `\`${f}\``).join(", ") || "*None*"}\n\n*Approach Summary:*\n${plan.summary}`
         );
 
+        await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "done");
         await this.emitEvent(job, "phase1", "Planning Completed", `Generated plan: ${plan.summary}`, "done");
 
         // 6. Save context & plan to KV cache (TTL 1 hour)
@@ -196,7 +202,7 @@ export class AiPipelineService {
         let attempt = 1;
         let feedback = "";
 
-        while (attempt <= 2 && !validated) {
+        while (attempt <= 3 && !validated) {
             this.logger.info({ taskId: job.taskId, attempt }, "Code generation attempt");
             changes = [];
 
@@ -229,14 +235,38 @@ export class AiPipelineService {
                 changes.push({ path: filePath, content, action: "create" });
             }
 
-            // Self-validate changes
-            const validationResult = await this.selfValidateChanges(changes, context);
-            if (validationResult.success) {
+            // ── STEP 1: Cloudflare-side structural validation (pre-GitHub CI check) ──
+            // This runs INSIDE Workers before any code reaches GitHub.
+            // Catches real import errors, missing deps, bracket mismatches, etc.
+            await this.emitEvent(job, "phase2", "Validating Code Structure", "Running pre-GitHub structural checks (imports, deps, syntax)...", "running");
+
+            const structuralResult = await this.codeValidator.validate(changes, context, plan);
+
+            if (!structuralResult.success) {
+                // Build targeted feedback from real errors — not a vague "try again"
+                const errorSummary = structuralResult.errors
+                    .map(e => `- [${e.type}] ${e.file}${e.line ? ` (line ${e.line})` : ""}: ${e.message}`)
+                    .join("\n");
+
+                feedback = `Your previous attempt failed STRUCTURAL VALIDATION with the following specific errors:\n${errorSummary}\n\nPlease fix EXACTLY these issues. Focus on:\n- Ensuring all imports point to files that actually exist\n- Fixing any bracket/brace mismatches\n- Adding any missing package dependencies you reference`;
+
+                this.logger.warn({ taskId: job.taskId, attempt, errors: structuralResult.errors.length }, "Structural validation failed, regenerating");
+                attempt++;
+                continue;
+            }
+
+            await this.emitEvent(job, "phase2", "Validating Code Structure", structuralResult.summary, "done");
+
+            // ── STEP 2: LLM semantic validation (logic, types, architecture) ──
+            // Only runs after structural checks pass — avoids wasting tokens on broken code.
+            const semanticResult = await this.selfValidateChanges(changes, context);
+            if (semanticResult.success) {
                 validated = true;
-                this.logger.info({ taskId: job.taskId }, "Self-validation passed");
+                this.logger.info({ taskId: job.taskId, attempt }, "All validation checks passed");
             } else {
-                feedback = `Your previous attempt failed validation with the following errors:\n${validationResult.errors.join("\n")}\nPlease correct these errors.`;
-                this.logger.warn({ taskId: job.taskId, errors: validationResult.errors }, "Self-validation failed, retrying");
+                const semanticErrors = semanticResult.errors.join("\n");
+                feedback = `Your previous attempt failed SEMANTIC VALIDATION with logic/type errors:\n${semanticErrors}\nPlease fix these architectural and type-level issues.`;
+                this.logger.warn({ taskId: job.taskId, attempt, errors: semanticResult.errors }, "Semantic validation failed, retrying");
                 attempt++;
             }
         }
@@ -245,6 +275,7 @@ export class AiPipelineService {
             throw new AppError(`LLM self-validation failed after retries: ${feedback}`, 422, "AI_VALIDATION_FAILED");
         }
 
+        await this.emitEvent(job, "phase2", "Generating Code", "Generating code changes file-by-file...", "done");
         await this.emitEvent(job, "phase2", "Code Validation Passed", "Self-validation checks passed successfully.", "done");
 
         // Save generated changes to KV
@@ -334,6 +365,7 @@ Please review the changes and run the build tests.`;
             `🤖 **Sellio AI Agent** — Phase 3 PR Opened!\n- **PR:** [PR #${pr.number}](${prUrl})\n- **Files Changed:**\n${fileList}\n\nMonitoring CI status (polling Checks API for up to 5 minutes)...`
         );
 
+        await this.emitEvent(job, "phase3", "Shipping Changes", "Creating branch and committing files...", "done", { branchName });
         await this.emitEvent(job, "phase3", "PR Opened", `PR #${pr.number} opened successfully.`, "done", {
             prNumber: pr.number,
             prUrl,
@@ -545,7 +577,7 @@ New Files originally: ${plan.newFiles.join(", ")}
                         userPrompt,
                         jsonMode: true,
                         images
-                    });
+                    }, "premium"); // Self-correction requires premium LLM to generate accurate code fixes
                     
                     const parsed = JSON.parse(response);
                     const fixedFiles: CodeChange[] = parsed.files || [];
@@ -707,7 +739,7 @@ ${JSON.stringify(context.dependencies, null, 2)}
             userPrompt,
             jsonMode: true,
             images,
-        });
+        }, "premium"); // Planning requires premium LLM for high-quality implementation plans
 
         const cleaned = raw.trim().replace(/^```json/, "").replace(/```$/, "").trim();
         return JSON.parse(cleaned) as ImplementationPlan;
@@ -755,7 +787,7 @@ ${context.fileTree.join("\n")}
             userPrompt,
             jsonMode: false,
             images,
-        });
+        }, "premium"); // Code generation requires premium LLM for accurate, production-grade code
 
         return this.cleanCodeContent(raw);
     }
@@ -785,7 +817,7 @@ ${context.fileTree.join("\n")}
             systemPrompt,
             userPrompt,
             jsonMode: true,
-        });
+        }, "fast"); // Semantic validation is a structured JSON check — fast tier (Workers AI) is sufficient
 
         const cleaned = raw.trim().replace(/^```json/, "").replace(/```$/, "").trim();
         return JSON.parse(cleaned);
@@ -961,6 +993,54 @@ ${context.fileTree.join("\n")}
         }
     }
 
+    async deleteRun(taskId: string): Promise<void> {
+        try {
+            const indexKey = "ai:runs:index";
+            const indexVal = await this.cache.get<string[]>(indexKey);
+            if (indexVal && indexVal.data) {
+                const taskIds = indexVal.data.filter(id => id !== taskId);
+                await this.cache.set(indexKey, taskIds);
+            }
+            await this.cache.del(`ai:runs:${taskId}`);
+            await Promise.all([
+                this.cache.del(`ai:task:${taskId}:context`),
+                this.cache.del(`ai:task:${taskId}:plan`),
+                this.cache.del(`ai:task:${taskId}:code`),
+                this.cache.del(`ai:task:${taskId}:images`),
+            ]);
+            this.logger.info({ taskId }, "Deleted run from KV and index");
+        } catch (err: any) {
+            this.logger.error({ taskId, err: err?.message }, "Failed to delete run");
+            throw err;
+        }
+    }
+
+    async deleteAllRuns(): Promise<void> {
+        try {
+            const indexKey = "ai:runs:index";
+            const indexVal = await this.cache.get<string[]>(indexKey);
+            if (indexVal && indexVal.data) {
+                const taskIds = indexVal.data;
+                await Promise.all(
+                    taskIds.map(async (taskId) => {
+                        await this.cache.del(`ai:runs:${taskId}`);
+                        await Promise.all([
+                            this.cache.del(`ai:task:${taskId}:context`),
+                            this.cache.del(`ai:task:${taskId}:plan`),
+                            this.cache.del(`ai:task:${taskId}:code`),
+                            this.cache.del(`ai:task:${taskId}:images`),
+                        ]);
+                    })
+                );
+            }
+            await this.cache.set(indexKey, []);
+            this.logger.info("Cleared all run history from KV");
+        } catch (err: any) {
+            this.logger.error({ err: err?.message }, "Failed to clear all runs");
+            throw err;
+        }
+    }
+
     async handleCommentMention(
         owner: string,
         repo: string,
@@ -1010,7 +1090,7 @@ Keep your response professional, friendly, clear, and focused on helping the dev
                 systemPrompt,
                 userPrompt: conversationText,
                 images
-            });
+            }, "fast"); // Bot reply is conversational — Workers AI / Groq handles it for free
             
             // 5. Post comment
             await this.gitOps.commentOnIssue(owner, repo, issueNumber, response);
@@ -1056,7 +1136,7 @@ ${commentBody}
             const response = await this.ai.generateCompletion({
                 systemPrompt,
                 userPrompt
-            });
+            }, "fast"); // Code review reply is conversational — Workers AI handles it for free
             
             // Reply in the same thread
             await this.gitOps.replyToReviewComment(owner, repo, pullNumber, commentId, response);
@@ -1067,11 +1147,14 @@ ${commentBody}
 
     private async classifyFailure(logs: string): Promise<"infra" | "code"> {
         const systemPrompt = `You are a DevOps and CI classification expert.
-Analyze the provided build log output and classify whether the failure is a Code/Test error or an Infrastructure/Environment/Network/Auth/Secrets error.
+Analyze the provided build log output and classify whether the failure is a Code/Test error or an Infrastructure/Environment/Network/Auth/Secrets/Dependency-Registry error.
 
 Classification criteria:
-- "code": Any compiler error, syntax error, unit test failure, code lint violation, import/module not found, type mismatch, or run-time test crash. These are errors that can be fixed by modifying the source code of the application.
-- "infra": Infrastructure/Env issues like missing secrets, environment variables not set, runner out of disk space, API/network timeouts, service/database connection failures during setup, Docker daemon not running, npm/yarn dependency installation timeout, authentication failure, or permission issues. These cannot be resolved by editing application source code.
+- "code": Any compiler error, syntax error, unit test failure, code lint violation, import/module not found for files in the repo, type mismatch, or run-time test crash. These are errors that can be fixed by modifying the source code of the application.
+- "infra": Infrastructure/Env/Dependency issues like missing secrets, environment variables not set, runner out of disk space, API/network timeouts, service/database connection failures during setup, Docker daemon not running, npm/yarn/pub dependency installation timeout or version solving failures (e.g., package not found in the registry, package "doesn't match any versions", package download failed from pub.dev/npm, melos bootstrap failed to install, registry resolution errors), authentication failure, or permission issues. These cannot be resolved by editing application source code.
+
+Example of "infra":
+- "Because sellio_mobile depends on network_inspector ^0.0.1 which doesn't match any versions, version solving failed." -> This is "infra" because the package version is not available in the public package registry (pub.dev) or the registry itself cannot be reached or resolved.
 
 You MUST respond with a JSON object ONLY:
 {
@@ -1084,7 +1167,7 @@ You MUST respond with a JSON object ONLY:
                 systemPrompt,
                 userPrompt,
                 jsonMode: true
-            });
+            }, "fast"); // CI classification is a simple JSON task — Workers AI handles it for free
             const parsed = JSON.parse(response);
             return parsed.classification === "infra" ? "infra" : "code";
         } catch (err: any) {

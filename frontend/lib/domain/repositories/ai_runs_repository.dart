@@ -13,8 +13,19 @@ class AiRunSingleUpdate extends AiRunsUpdate {
   AiRunSingleUpdate(this.run);
 }
 
+class AiRunDeleteUpdate extends AiRunsUpdate {
+  final String taskId;
+  AiRunDeleteUpdate(this.taskId);
+}
+
+class AiRunsClearedUpdate extends AiRunsUpdate {
+  AiRunsClearedUpdate();
+}
+
 abstract class AiRunsRepository {
   Stream<AiRunsUpdate> watchAiRuns();
   Stream<WsConnectionStatus> watchConnectionStatus();
+  Future<void> deleteRun(String taskId);
+  Future<void> clearRuns();
 }
 

@@ -118,6 +118,7 @@ export interface Cradle {
     // AI Implement Pipeline
     contextService: import("../modules/ai-pipeline/context.service").ContextService;
     gitOpsService: import("../modules/ai-pipeline/git-ops.service").GitOpsService;
+    codeValidatorService: import("../modules/ai-pipeline/code-validator.service").CodeValidatorService;
     aiPipelineService: import("../modules/ai-pipeline/ai-pipeline.service").AiPipelineService;
     aiPipelineHub: any | null;
 }

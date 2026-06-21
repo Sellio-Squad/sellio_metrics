@@ -42,6 +42,80 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
     }
   }
 
+  Future<void> _showClearHistoryDialog(BuildContext context) async {
+    final scheme = context.colors;
+    final provider = context.read<AiPipelineProvider>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: scheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+        title: Text(
+          'Clear History?',
+          style: AppTypography.title.copyWith(color: scheme.title),
+        ),
+        content: Text(
+          'This will remove all completed and failed runs from your history. This action cannot be undone.',
+          style: AppTypography.body.copyWith(color: scheme.hint),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          SButton(
+            variant: SButtonVariant.primary,
+            primaryColor: SellioColors.red,
+            size: SButtonSize.small,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await provider.clearHistory();
+    }
+  }
+
+  Future<void> _showDeleteRunDialog(BuildContext context, String taskId) async {
+    final scheme = context.colors;
+    final provider = context.read<AiPipelineProvider>();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: scheme.surface,
+        shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
+        title: Text(
+          'Delete Run?',
+          style: AppTypography.title.copyWith(color: scheme.title),
+        ),
+        content: Text(
+          'This will delete this run record. This action cannot be undone.',
+          style: AppTypography.body.copyWith(color: scheme.hint),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          SButton(
+            variant: SButtonVariant.primary,
+            primaryColor: SellioColors.red,
+            size: SButtonSize.small,
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && mounted) {
+      await provider.deleteRun(taskId);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AiPipelineProvider>(
@@ -317,6 +391,23 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
                 ),
               ),
             ),
+            if (history.isNotEmpty) ...[
+              const Spacer(),
+              TextButton.icon(
+                onPressed: () => _showClearHistoryDialog(context),
+                icon: Icon(LucideIcons.trash2, size: 14, color: scheme.red),
+                label: Text(
+                  'Clear All',
+                  style: AppTypography.caption.copyWith(
+                    color: scheme.red,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+                ),
+              ),
+            ],
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -388,6 +479,21 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
                             ),
                             const SizedBox(width: AppSpacing.md),
                             _buildStatusBadge(run.status),
+                            const SizedBox(width: AppSpacing.sm),
+                            GestureDetector(
+                              onTap: () => _showDeleteRunDialog(context, run.taskId),
+                              child: MouseRegion(
+                                cursor: SystemMouseCursors.click,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+                                  child: Icon(
+                                    LucideIcons.trash2,
+                                    size: 16,
+                                    color: scheme.red,
+                                  ),
+                                ),
+                              ),
+                            ),
                             const SizedBox(width: AppSpacing.sm),
                             Icon(
                               isExpanded ? LucideIcons.chevronUp : LucideIcons.chevronDown,

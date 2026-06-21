@@ -44,5 +44,38 @@ export function aiPipelineRoutes(aiPipelineHub: CFDurableObjectNamespace) {
         }
     });
 
+    app.delete("/runs", async (c) => {
+        const { aiPipelineService, logger } = c.get("cradle");
+        try {
+            await aiPipelineService.deleteAllRuns();
+            
+            const doId = aiPipelineHub.idFromName("global");
+            const doStub = aiPipelineHub.get(doId);
+            await doStub.fetch(new Request("http://do/event/clear", { method: "POST" }));
+
+            return c.json({ success: true });
+        } catch (err: any) {
+            logger.error({ err: err?.message }, "Failed to clear runs history");
+            return c.json({ error: "Failed to clear runs history" }, 500);
+        }
+    });
+
+    app.delete("/runs/:taskId", async (c) => {
+        const taskId = c.req.param("taskId");
+        const { aiPipelineService, logger } = c.get("cradle");
+        try {
+            await aiPipelineService.deleteRun(taskId);
+            
+            const doId = aiPipelineHub.idFromName("global");
+            const doStub = aiPipelineHub.get(doId);
+            await doStub.fetch(new Request(`http://do/event/delete/${taskId}`, { method: "POST" }));
+
+            return c.json({ success: true });
+        } catch (err: any) {
+            logger.error({ taskId, err: err?.message }, "Failed to delete run");
+            return c.json({ error: "Failed to delete run" }, 500);
+        }
+    });
+
     return app;
 }
