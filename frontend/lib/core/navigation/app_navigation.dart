@@ -28,6 +28,8 @@ import 'package:sellio_metrics/presentation/pages/review/providers/review_provid
 import 'package:sellio_metrics/presentation/pages/app_preview/app_preview_page.dart';
 import 'package:sellio_metrics/presentation/pages/open_tickets/open_tickets_page.dart';
 import 'package:sellio_metrics/presentation/pages/open_tickets/providers/tickets_provider.dart';
+import 'package:sellio_metrics/presentation/pages/ai_pipeline/ai_pipeline_page.dart';
+import 'package:sellio_metrics/presentation/pages/ai_pipeline/providers/ai_pipeline_provider.dart';
 
 // ─── Route Groups ────────────────────────────────────────────
 enum NavGroup { team, product, system }
@@ -220,6 +222,18 @@ class AppNavigation {
       pageBuilder: (_) => ChangeNotifierProvider.value(
         value: getIt<SyncProvider>(),
         child: const SyncPage(),
+      ),
+    ),
+    AppRoute(
+      id: 'ai_pipeline',
+      path: '/ai-agent',
+      icon: LucideIcons.bot,
+      group: NavGroup.system,
+      primaryNav: false,
+      labelBuilder: (_) => 'AI Agent',
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: getIt<AiPipelineProvider>(),
+        child: const AiPipelinePage(),
       ),
     ),
   ];

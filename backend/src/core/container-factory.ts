@@ -28,9 +28,10 @@ export function getContainer(
     d1Database: D1Database | null,
     webhookQueue: any | null = null,
     syncQueue: any | null = null,
+    aiPipelineHub: any | null = null,
 ): Promise<AwilixContainer<Cradle>> {
     if (!containerPromise) {
-        containerPromise = buildContainer(kvNamespace, scoresKv, membersKv, attendanceKv, d1Database, webhookQueue, syncQueue);
+        containerPromise = buildContainer(kvNamespace, scoresKv, membersKv, attendanceKv, d1Database, webhookQueue, syncQueue, aiPipelineHub);
     }
     return containerPromise;
 }
@@ -43,6 +44,7 @@ async function buildContainer(
     d1Database: D1Database | null,
     webhookQueue: any | null = null,
     syncQueue: any | null = null,
+    aiPipelineHub: any | null = null,
 ): Promise<AwilixContainer<Cradle>> {
     const { createContainer, asFunction, asClass, InjectionMode } = await import("awilix");
     const { env } = await import("../config/env");
@@ -124,6 +126,7 @@ async function buildContainer(
             cachedGithubClient: asFunction(({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger }: Cradle) => new CachedGitHubClient({ githubClient, cacheService, membersKvCache, rateLimitGuard, logger })).singleton(),
             webhookQueue: asFunction(() => webhookQueue).singleton(),
             syncQueue: asFunction(() => syncQueue).singleton(),
+            aiPipelineHub: asFunction(() => aiPipelineHub).singleton(),
             geminiClient: asFunction(({ env, logger, cacheService }: Cradle) => new GeminiClient({ geminiApiKey: env.geminiApiKey, logger, cacheService })).singleton(),
             googleMeetClient: asFunction(({ logger, env, cacheService }: Cradle) => new GoogleMeetClient({ logger, clientId: env.googleClientId, clientSecret: env.googleClientSecret, redirectUri: env.googleRedirectUri, cacheService })).singleton(),
         });

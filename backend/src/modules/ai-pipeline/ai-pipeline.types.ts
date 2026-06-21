@@ -49,3 +49,28 @@ export interface CodeChange {
     content: string;
     action: "create" | "modify" | "delete";
 }
+
+export interface AiRunRecord {
+    taskId: string;
+    owner: string;
+    repo: string;
+    issueNumber: number;
+    issueTitle: string;
+    issueUrl: string;
+    status: "in_progress" | "completed" | "failed" | "ci_polling";
+    prNumber?: number;
+    prUrl?: string;
+    branchName?: string;
+    startedAt: string;        // ISO-8601
+    updatedAt: string;
+    events: AiRunEvent[];
+}
+
+export interface AiRunEvent {
+    phase: "phase1" | "phase2" | "phase3" | "ci_poll" | "failed";
+    label: string;
+    detail?: string;
+    timestamp: string;
+    status: "running" | "done" | "failed";
+}
+

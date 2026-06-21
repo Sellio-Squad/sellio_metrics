@@ -14,8 +14,13 @@ import type { AiProviderClient } from "../../infra/ai/ai-provider.client";
 import type { ContextService } from "./context.service";
 import type { GitOpsService } from "./git-ops.service";
 import type { CloudflareQueue } from "../../core/container";
-import type { AiImplementJob, RepoContext, ImplementationPlan, CodeChange } from "./ai-pipeline.types";
+import type { AiImplementJob, RepoContext, ImplementationPlan, CodeChange, AiRunRecord } from "./ai-pipeline.types";
 import { AppError } from "../../core/errors";
+
+export interface CFDurableObjectNamespace {
+    idFromName(name: string): { toString(): string };
+    get(id: { toString(): string }): { fetch(req: Request): Promise<Response> };
+}
 
 export class AiPipelineService {
     private readonly cache: CacheService;
@@ -25,6 +30,7 @@ export class AiPipelineService {
     private readonly syncQueue: CloudflareQueue | null;
     private readonly webhookQueue: CloudflareQueue | null;
     private readonly logger: Logger;
+    private readonly aiPipelineHub: CFDurableObjectNamespace | null;
 
     constructor({
         cacheService,
@@ -34,6 +40,7 @@ export class AiPipelineService {
         syncQueue,
         webhookQueue,
         logger,
+        aiPipelineHub,
     }: {
         cacheService: CacheService;
         aiProviderClient: AiProviderClient;
@@ -42,6 +49,7 @@ export class AiPipelineService {
         syncQueue: CloudflareQueue | null;
         webhookQueue: CloudflareQueue | null;
         logger: Logger;
+        aiPipelineHub?: CFDurableObjectNamespace | null;
     }) {
         this.cache = cacheService;
         this.ai = aiProviderClient;
@@ -50,6 +58,7 @@ export class AiPipelineService {
         this.syncQueue = syncQueue;
         this.webhookQueue = webhookQueue;
         this.logger = logger.child({ module: "ai-pipeline" });
+        this.aiPipelineHub = aiPipelineHub ?? null;
     }
 
     /**
@@ -88,6 +97,8 @@ export class AiPipelineService {
     private async executePhase1(job: AiImplementJob): Promise<void> {
         this.logger.info({ taskId: job.taskId }, "Running Phase 1: Gathering context and planning");
 
+        await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "running");
+
         // 1. Move card to In Progress column
         await this.gitOps.moveProjectCardByName(job.projectId, job.itemId, job.fieldId, "In Progress");
 
@@ -114,6 +125,16 @@ export class AiPipelineService {
         // 5. Generate plan using LLM
         const plan = await this.generatePlan(context, job.issueTitle, job.issueBody);
 
+        // Comment with plan summary
+        await this.gitOps.commentOnIssue(
+            job.owner,
+            job.repo,
+            job.issueNumber,
+            `🤖 **Sellio AI Agent** — Plan Generated:\n- **Files to Modify:** ${plan.filesToModify.map(f => `\`${f}\``).join(", ") || "*None*"}\n- **New Files:** ${plan.newFiles.map(f => `\`${f}\``).join(", ") || "*None*"}\n\n*Approach Summary:*\n${plan.summary}`
+        );
+
+        await this.emitEvent(job, "phase1", "Planning Completed", `Generated plan: ${plan.summary}`, "done");
+
         // 6. Save context & plan to KV cache (TTL 1 hour)
         await Promise.all([
             this.cache.set(`ai:task:${job.taskId}:context`, context, 3600),
@@ -138,6 +159,8 @@ export class AiPipelineService {
 
     private async executePhase2(job: AiImplementJob): Promise<void> {
         this.logger.info({ taskId: job.taskId }, "Running Phase 2: Code Generation and Self-Validation");
+
+        await this.emitEvent(job, "phase2", "Generating Code", "Generating code changes file-by-file...", "running");
 
         // 1. Retrieve plan and context from KV
         const [contextVal, planVal] = await Promise.all([
@@ -212,6 +235,8 @@ export class AiPipelineService {
             throw new AppError(`LLM self-validation failed after retries: ${feedback}`, 422, "AI_VALIDATION_FAILED");
         }
 
+        await this.emitEvent(job, "phase2", "Code Validation Passed", "Self-validation checks passed successfully.", "done");
+
         // Save generated changes to KV
         await this.cache.set(`ai:task:${job.taskId}:code`, changes, 3600);
 
@@ -234,6 +259,15 @@ export class AiPipelineService {
     private async executePhase3(job: AiImplementJob): Promise<void> {
         this.logger.info({ taskId: job.taskId }, "Running Phase 3: Commit and Pull Request");
 
+        const slug = job.issueTitle
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "")
+            .slice(0, 40);
+        const branchName = `ai/${job.issueNumber}-${slug}`;
+
+        await this.emitEvent(job, "phase3", "Shipping Changes", "Creating branch and committing files...", "running", { branchName });
+
         // 1. Retrieve generated changes from KV
         const codeVal = await this.cache.get<CodeChange[]>(`ai:task:${job.taskId}:code`);
         if (!codeVal) {
@@ -244,14 +278,6 @@ export class AiPipelineService {
 
         // 2. Perform git ops
         const { branch: defaultBranch, sha: baseSha } = await this.gitOps.getDefaultBranchHead(job.owner, job.repo);
-        
-        // Branch format: ai/{issueNumber}-{slugified-title}
-        const slug = job.issueTitle
-            .toLowerCase()
-            .replace(/[^a-z0-9]+/g, "-")
-            .replace(/(^-|-$)/g, "")
-            .slice(0, 40);
-        const branchName = `ai/${job.issueNumber}-${slug}`;
 
         // Create branch
         await this.gitOps.createBranch(job.owner, job.repo, baseSha, branchName);
@@ -273,6 +299,8 @@ export class AiPipelineService {
 
 This Pull Request was automatically generated by the Sellio Metrics AI Agent.
 
+Fixes #${job.issueNumber}
+
 ### Changes Implemented:
 ${changes.map((c: CodeChange) => `- **${c.action === "create" ? "[NEW]" : "[MOD]"}** \`${c.path}\``).join("\n")}
 
@@ -285,13 +313,22 @@ Please review the changes and run the build tests.`;
             base: defaultBranch,
         });
 
+        const prUrl = `https://github.com/${job.owner}/${job.repo}/pull/${pr.number}`;
+
         // Comment on issue that PR is opened
+        const fileList = changes.map((c: CodeChange) => `- \`${c.path}\` (${c.action})`).join("\n");
         await this.gitOps.commentOnIssue(
             job.owner,
             job.repo,
             job.issueNumber,
-            `🤖 **Sellio AI Agent**\n- *Phase 3:* PR opened successfully: [PR #${pr.number}](${pr.url})\n- Monitoring CI status (polling Checks API for up to 5 minutes)...`
+            `🤖 **Sellio AI Agent** — Phase 3 PR Opened!\n- **PR:** [PR #${pr.number}](${prUrl})\n- **Files Changed:**\n${fileList}\n\nMonitoring CI status (polling Checks API for up to 5 minutes)...`
         );
+
+        await this.emitEvent(job, "phase3", "PR Opened", `PR #${pr.number} opened successfully.`, "done", {
+            prNumber: pr.number,
+            prUrl,
+            branchName
+        });
 
         // Enqueue CI polling
         if (this.syncQueue) {
@@ -300,6 +337,7 @@ Please review the changes and run the build tests.`;
                 owner: job.owner,
                 repo: job.repo,
                 issueNumber: job.issueNumber,
+                issueTitle: job.issueTitle,
                 prNumber: pr.number,
                 prHeadSha: commitSha,
                 projectId: job.projectId,
@@ -330,8 +368,21 @@ Please review the changes and run the build tests.`;
         fieldId: string;
         pollAttempt: number;
         taskId: string;
+        issueTitle?: string;
     }): Promise<void> {
         this.logger.info({ prNumber: job.prNumber, attempt: job.pollAttempt }, "Polling CI status");
+
+        const prUrl = `https://github.com/${job.owner}/${job.repo}/pull/${job.prNumber}`;
+        const issueTitle = job.issueTitle || `Issue #${job.issueNumber}`;
+        
+        await this.emitEvent(
+            { ...job, issueTitle },
+            "ci_poll",
+            "Polling CI Status",
+            `Attempt ${job.pollAttempt}: checking check-runs for SHA: ${job.prHeadSha.slice(0, 7)}...`,
+            "running",
+            { prNumber: job.prNumber, prUrl }
+        );
 
         let checks: any;
 
@@ -369,6 +420,13 @@ Please review the changes and run the build tests.`;
         if (failedRun) {
             // Build failed!
             const logsUrl = failedRun.html_url || "";
+            await this.emitEvent(
+                { ...job, issueTitle },
+                "ci_poll",
+                "CI Failed",
+                `CI build failed. Logs: ${logsUrl}`,
+                "failed"
+            );
             await this.gitOps.commentOnIssue(
                 job.owner,
                 job.repo,
@@ -379,6 +437,13 @@ Please review the changes and run the build tests.`;
             await this.cleanupTask(job.taskId);
         } else {
             // Build passed!
+            await this.emitEvent(
+                { ...job, issueTitle },
+                "ci_poll",
+                "CI Passed",
+                "All check-runs passed successfully.",
+                "done"
+            );
             await this.gitOps.commentOnIssue(
                 job.owner,
                 job.repo,
@@ -391,8 +456,16 @@ Please review the changes and run the build tests.`;
     }
 
     private async requeueCI(job: any): Promise<void> {
+        const issueTitle = job.issueTitle || `Issue #${job.issueNumber}`;
         if (job.pollAttempt >= 10) {
             // Timed out (5 minutes)
+            await this.emitEvent(
+                { ...job, issueTitle },
+                "ci_poll",
+                "CI Polling Timeout",
+                "CI check-runs timed out after 5 minutes.",
+                "failed"
+            );
             await this.gitOps.commentOnIssue(
                 job.owner,
                 job.repo,
@@ -548,6 +621,8 @@ ${context.fileTree.join("\n")}
 
     private async handleFailure(job: any, errorMessage: string): Promise<void> {
         try {
+            const issueTitle = job.issueTitle || `Issue #${job.issueNumber}`;
+            await this.emitEvent({ ...job, issueTitle }, "failed", "Execution Failed", errorMessage, "failed");
             await this.gitOps.commentOnIssue(
                 job.owner,
                 job.repo,
@@ -568,5 +643,129 @@ ${context.fileTree.join("\n")}
             this.cache.del(`ai:task:${taskId}:plan`),
             this.cache.del(`ai:task:${taskId}:code`),
         ]);
+    }
+
+    private async emitEvent(
+        job: { taskId: string; owner: string; repo: string; issueNumber: number; issueTitle: string },
+        phase: "phase1" | "phase2" | "phase3" | "ci_poll" | "failed",
+        label: string,
+        detail?: string,
+        status: "running" | "done" | "failed" = "running",
+        extra?: { prNumber?: number; prUrl?: string; branchName?: string }
+    ): Promise<void> {
+        try {
+            const taskId = job.taskId;
+            this.logger.info({ taskId, phase, label, status }, "Emitting pipeline trace event");
+
+            const recordKey = `ai:runs:${taskId}`;
+            const existingVal = await this.cache.get<AiRunRecord>(recordKey);
+            
+            let record: AiRunRecord;
+            const nowStr = new Date().toISOString();
+
+            if (existingVal && existingVal.data) {
+                record = existingVal.data;
+                record.updatedAt = nowStr;
+                
+                const existingEventIndex = record.events.findIndex(e => e.phase === phase && e.label === label);
+                if (existingEventIndex !== -1) {
+                    record.events[existingEventIndex].status = status;
+                    record.events[existingEventIndex].timestamp = nowStr;
+                    if (detail !== undefined) {
+                        record.events[existingEventIndex].detail = detail;
+                    }
+                } else {
+                    record.events.push({
+                        phase,
+                        label,
+                        detail,
+                        timestamp: nowStr,
+                        status
+                    });
+                }
+
+                if (status === "failed") {
+                    record.status = "failed";
+                } else if (phase === "ci_poll" && status === "done") {
+                    record.status = "completed";
+                } else if (phase === "ci_poll" && status === "running") {
+                    record.status = "ci_polling";
+                } else {
+                    record.status = "in_progress";
+                }
+            } else {
+                const issueUrl = `https://github.com/${job.owner}/${job.repo}/issues/${job.issueNumber}`;
+                record = {
+                    taskId,
+                    owner: job.owner,
+                    repo: job.repo,
+                    issueNumber: job.issueNumber,
+                    issueTitle: job.issueTitle,
+                    issueUrl,
+                    status: status === "failed" ? "failed" : "in_progress",
+                    startedAt: nowStr,
+                    updatedAt: nowStr,
+                    events: [{
+                        phase,
+                        label,
+                        detail,
+                        timestamp: nowStr,
+                        status
+                    }]
+                };
+
+                await this.updateRunsIndex(taskId);
+            }
+
+            if (extra) {
+                if (extra.prNumber !== undefined) record.prNumber = extra.prNumber;
+                if (extra.prUrl !== undefined) record.prUrl = extra.prUrl;
+                if (extra.branchName !== undefined) record.branchName = extra.branchName;
+            }
+
+            await this.cache.set(recordKey, record, 7 * 24 * 3600);
+
+            if (this.aiPipelineHub) {
+                try {
+                    const doId = this.aiPipelineHub.idFromName("global");
+                    const doStub = this.aiPipelineHub.get(doId);
+                    
+                    const req = new Request("https://ai-pipeline-hub/event", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(record)
+                    });
+                    const res = await doStub.fetch(req);
+                    if (!res.ok) {
+                        this.logger.warn({ status: res.status }, "Durable Object returned non-OK status for /event");
+                    }
+                } catch (doErr: any) {
+                    this.logger.error({ err: doErr?.message }, "Failed to POST event to Durable Object stub");
+                }
+            }
+        } catch (err: any) {
+            this.logger.error({ err: err?.message }, "Failed to emit event");
+        }
+    }
+
+    private async updateRunsIndex(newTaskId: string): Promise<void> {
+        try {
+            const indexKey = "ai:runs:index";
+            const indexVal = await this.cache.get<string[]>(indexKey);
+            let taskIds: string[] = [];
+            if (indexVal && indexVal.data) {
+                taskIds = indexVal.data;
+            }
+            
+            if (!taskIds.includes(newTaskId)) {
+                taskIds.unshift(newTaskId);
+                if (taskIds.length > 50) {
+                    taskIds = taskIds.slice(0, 50);
+                }
+                await this.cache.set(indexKey, taskIds);
+            }
+        } catch (err: any) {
+            this.logger.error({ err: err?.message }, "Failed to update runs index in KV");
+        }
     }
 }

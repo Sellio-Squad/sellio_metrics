@@ -44,10 +44,12 @@ import { regularSchedulesRoutes } from "./modules/meetings/regular-schedules.rou
 import debugRoutes      from "./modules/debug/debug.routes";
 import logsRoutes       from "./modules/logs/logs.routes";
 import reviewRoutes     from "./modules/review/review.routes";
+import { aiPipelineRoutes } from "./modules/ai-pipeline/ai-pipeline.routes";
 import type { SyncRepoJob, CommitSyncJob } from "./modules/sync/sync-job.types";
 
 // ─── Durable Object export (required by Cloudflare runtime) ────────────────
 export { MeetingRoom } from "./modules/meetings/meeting-room.do";
+export { AiPipelineHub } from "./modules/ai-pipeline/ai-pipeline-hub.do";
 
 // ─── Cloudflare Worker bindings ────────────────────────────────────────
 
@@ -69,6 +71,7 @@ interface WorkerEnv {
     WEBHOOK_QUEUE?: any;
     SYNC_QUEUE?:    any;          // Long-running sync jobs queue
     MEETING_ROOMS:  CFDurableObjectNamespace;
+    AI_PIPELINE_HUB: CFDurableObjectNamespace;
     GEMINI_API_KEY?: string;
     OPENAI_API_KEY?: string;
     GROK_API_KEY?: string;
@@ -92,7 +95,7 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.GROK_API_KEY)          process.env.GROK_API_KEY         = workerEnv.GROK_API_KEY;
 }
 
-function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
+function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace, aiPipelineHub: CFDurableObjectNamespace) {
     const app = new Hono<HonoEnv>();
 
     // 1. CORS — must be first
@@ -137,6 +140,7 @@ function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace) {
         cradle.webhookHandlerService,
         meetingRooms,
     ));
+    app.route("/api/ai-pipeline", aiPipelineRoutes(aiPipelineHub));
     app.route("/api/debug",       debugRoutes);
     app.route("/api/logs",        logsRoutes);
     app.route("/api/review",      reviewRoutes);
@@ -161,9 +165,10 @@ export default {
                 workerEnv.DB           || null,
                 workerEnv.WEBHOOK_QUEUE || null,
                 workerEnv.SYNC_QUEUE    || null,
+                workerEnv.AI_PIPELINE_HUB || null,
             );
 
-            const app = buildApp(container.cradle, workerEnv.MEETING_ROOMS);
+            const app = buildApp(container.cradle, workerEnv.MEETING_ROOMS, workerEnv.AI_PIPELINE_HUB);
 
             return app.fetch(request, workerEnv as any, ctx);
         } catch (e: any) {
@@ -187,6 +192,7 @@ export default {
                 workerEnv.DB           || null,
                 workerEnv.WEBHOOK_QUEUE || null,
                 workerEnv.SYNC_QUEUE    || null,
+                workerEnv.AI_PIPELINE_HUB || null,
             );
             await container.cradle.scoreAggregationService.precomputeSnapshots();
             console.log("Cron: leaderboard snapshots refreshed");
@@ -207,6 +213,7 @@ export default {
                 workerEnv.DB           || null,
                 workerEnv.WEBHOOK_QUEUE || null,
                 workerEnv.SYNC_QUEUE    || null,
+                workerEnv.AI_PIPELINE_HUB || null,
             );
 
             for (const msg of batch.messages) {
