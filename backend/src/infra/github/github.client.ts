@@ -27,6 +27,11 @@ export type GitHubClient = Octokit;
  * 3. Caches the token and auto-refreshes before expiry (~1 hour)
  */
 export function createGitHubClient({ env }: { env: Env }): GitHubClient {
+    if (env.githubToken) {
+        return new Octokit({
+            auth: env.githubToken,
+        });
+    }
     return new Octokit({
         authStrategy: createAppAuth,
         auth: {

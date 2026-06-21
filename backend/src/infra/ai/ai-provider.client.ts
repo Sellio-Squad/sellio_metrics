@@ -108,12 +108,7 @@ export class AiProviderClient {
      *
      * AI Gateway provides: response caching, logging, rate limiting — all FREE.
      */
-    private gatewayUrl(provider: "google-ai-studio" | "openai" | "groq" | "x-ai", path: string): string {
-        if (this.cfAccountId && this.aiGatewaySlug) {
-            // Route through AI Gateway: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_slug}/{provider}/{path}
-            return `https://gateway.ai.cloudflare.com/v1/${this.cfAccountId}/${this.aiGatewaySlug}/${provider}/${path}`;
-        }
-        // Fallback: direct provider URLs
+    private directUrl(provider: "google-ai-studio" | "openai" | "groq" | "x-ai", path: string): string {
         const directUrls: Record<string, string> = {
             "google-ai-studio": `https://generativelanguage.googleapis.com/${path}`,
             "openai": `https://api.openai.com/${path}`,
@@ -121,6 +116,14 @@ export class AiProviderClient {
             "x-ai": `https://api.x.ai/${path}`,
         };
         return directUrls[provider];
+    }
+
+    private gatewayUrl(provider: "google-ai-studio" | "openai" | "groq" | "x-ai", path: string): string {
+        if (this.cfAccountId && this.aiGatewaySlug) {
+            // Route through AI Gateway: https://gateway.ai.cloudflare.com/v1/{account_id}/{gateway_slug}/{provider}/{path}
+            return `https://gateway.ai.cloudflare.com/v1/${this.cfAccountId}/${this.aiGatewaySlug}/${provider}/${path}`;
+        }
+        return this.directUrl(provider, path);
     }
 
     /**
@@ -292,7 +295,7 @@ export class AiProviderClient {
 
     private async executeGemini(model: string, params: AICompletionParams): Promise<string> {
         // AI Gateway URL: routes through Cloudflare for caching + logging
-        const url = this.gatewayUrl(
+        let url = this.gatewayUrl(
             "google-ai-studio",
             `v1beta/models/${model}:generateContent`
         );
@@ -319,14 +322,22 @@ export class AiProviderClient {
             body.generationConfig.responseMimeType = "application/json";
         }
 
-        const response = await fetch(url, {
+        const fetchOptions = {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "x-goog-api-key": this.geminiApiKey,
             },
             body: JSON.stringify(body),
-        });
+        };
+
+        let response = await fetch(url, fetchOptions);
+
+        if (!response.ok && (response.status === 401 || response.status === 404) && url.includes("gateway.ai.cloudflare.com")) {
+            this.logger.warn({ model, status: response.status }, "AI Gateway request failed, falling back to direct URL");
+            url = this.directUrl("google-ai-studio", `v1beta/models/${model}:generateContent`);
+            response = await fetch(url, fetchOptions);
+        }
 
         if (!response.ok) {
             const errText = await response.text();
@@ -357,7 +368,7 @@ export class AiProviderClient {
     // ─── OpenAI (via AI Gateway) ─────────────────────────────────
 
     private async executeOpenAI(model: string, params: AICompletionParams): Promise<string> {
-        const url = this.gatewayUrl("openai", "v1/chat/completions");
+        let url = this.gatewayUrl("openai", "v1/chat/completions");
 
         const messages: any[] = [];
         if (params.systemPrompt) {
@@ -383,14 +394,22 @@ export class AiProviderClient {
             body.response_format = { type: "json_object" };
         }
 
-        const response = await fetch(url, {
+        const fetchOptions = {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${this.openaiApiKey}`,
             },
             body: JSON.stringify(body),
-        });
+        };
+
+        let response = await fetch(url, fetchOptions);
+
+        if (!response.ok && (response.status === 401 || response.status === 404) && url.includes("gateway.ai.cloudflare.com")) {
+            this.logger.warn({ model, status: response.status }, "AI Gateway request failed, falling back to direct URL");
+            url = this.directUrl("openai", "v1/chat/completions");
+            response = await fetch(url, fetchOptions);
+        }
 
         if (!response.ok) {
             const errText = await response.text();
@@ -420,7 +439,7 @@ export class AiProviderClient {
     // Free tier: 14,400 req/day for llama-3.3-70b-versatile
 
     private async executeGroq(params: AICompletionParams): Promise<string> {
-        const url = this.gatewayUrl("groq", "v1/chat/completions");
+        let url = this.gatewayUrl("groq", "v1/chat/completions");
         const hasImages = params.images && params.images.length > 0;
         const model = hasImages ? "llama-3.2-90b-vision-preview" : "llama-3.3-70b-versatile";
 
@@ -448,14 +467,22 @@ export class AiProviderClient {
             body.response_format = { type: "json_object" };
         }
 
-        const response = await fetch(url, {
+        const fetchOptions = {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${this.groqApiKey}`,
             },
             body: JSON.stringify(body),
-        });
+        };
+
+        let response = await fetch(url, fetchOptions);
+
+        if (!response.ok && (response.status === 401 || response.status === 404) && url.includes("gateway.ai.cloudflare.com")) {
+            this.logger.warn({ model, status: response.status }, "AI Gateway request failed, falling back to direct URL");
+            url = this.directUrl("groq", "v1/chat/completions");
+            response = await fetch(url, fetchOptions);
+        }
 
         if (!response.ok) {
             const errText = await response.text();
@@ -484,7 +511,7 @@ export class AiProviderClient {
     // ─── Grok / xAI (via AI Gateway) ────────────────────────────
 
     private async executeGrok(model: string, params: AICompletionParams): Promise<string> {
-        const url = this.gatewayUrl("x-ai", "v1/chat/completions");
+        let url = this.gatewayUrl("x-ai", "v1/chat/completions");
 
         const messages: any[] = [];
         if (params.systemPrompt) {
@@ -497,14 +524,22 @@ export class AiProviderClient {
             body.response_format = { type: "json_object" };
         }
 
-        const response = await fetch(url, {
+        const fetchOptions = {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
                 "Authorization": `Bearer ${this.grokApiKey}`,
             },
             body: JSON.stringify(body),
-        });
+        };
+
+        let response = await fetch(url, fetchOptions);
+
+        if (!response.ok && (response.status === 401 || response.status === 404) && url.includes("gateway.ai.cloudflare.com")) {
+            this.logger.warn({ model, status: response.status }, "AI Gateway request failed, falling back to direct URL");
+            url = this.directUrl("x-ai", "v1/chat/completions");
+            response = await fetch(url, fetchOptions);
+        }
 
         if (!response.ok) {
             const errText = await response.text();

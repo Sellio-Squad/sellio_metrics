@@ -16,14 +16,18 @@ import { AppError, GitHubApiError } from "../../core/errors";
 import type { CodeChange } from "./ai-pipeline.types";
 
 const FIELD_OPTIONS_QUERY = `
-  query GetProjectFieldOptions($projectId: ID!, $fieldId: ID!) {
+  query GetProjectFieldOptions($projectId: ID!) {
     node(id: $projectId) {
       ... on ProjectV2 {
-        field(id: $fieldId) {
-          ... on ProjectV2SingleSelectField {
-            options {
+        fields(first: 50) {
+          nodes {
+            ... on ProjectV2SingleSelectField {
               id
               name
+              options {
+                id
+                name
+              }
             }
           }
         }
@@ -267,10 +271,12 @@ export class GitOpsService {
             const octokit = this.github.raw;
             const result: any = await octokit.graphql(FIELD_OPTIONS_QUERY, {
                 projectId,
-                fieldId,
             });
 
-            const options = result?.node?.field?.options || [];
+            const fields = result?.node?.fields?.nodes || [];
+            const targetField = fields.find((f: any) => f.id === fieldId);
+            const options = targetField?.options || [];
+            
             const mapping: Record<string, string> = {};
             for (const opt of options) {
                 if (opt.name && opt.id) {
