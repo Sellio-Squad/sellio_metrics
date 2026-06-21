@@ -51,10 +51,60 @@ export class WebSearchService {
     }
 
     /**
+     * Navigate directly to a specific URL and extract its text content for context.
+     * Cleans up scripts/styles and truncates content to avoid token overflow.
+     */
+    async scrapeUrl(url: string): Promise<string> {
+        this.logger.info({ url }, "Directly scraping URL content");
+        if (!this.browserBinding) {
+            this.logger.warn("Browser Rendering binding 'BROWSER' is not configured. Web scraping skipped.");
+            return `Web scraping is unavailable for: ${url} (BROWSER binding missing).`;
+        }
+
+        let browser;
+        try {
+            browser = await puppeteer.launch(this.browserBinding);
+            const page = await browser.newPage();
+            
+            // Navigate to URL
+            await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+
+            // Extract and clean content
+            const content = await page.evaluate(() => {
+                const scripts = document.querySelectorAll("script, style, iframe, noscript, svg, nav, footer");
+                scripts.forEach(s => s.remove());
+                
+                const text = document.body.innerText || "";
+                return text.replace(/\s+/g, " ").trim();
+            });
+
+            this.logger.info({ url, contentLength: content.length }, "Scraped URL content successfully");
+            // Truncate to first 4000 characters to prevent prompt bloat
+            return `=== Scraped from ${url} ===\n${content.substring(0, 4000)}\n`;
+        } catch (err: any) {
+            this.logger.error({ url, error: err.message }, "Error during direct scraping session");
+            return `Scraping failed for URL "${url}": ${err.message}`;
+        } finally {
+            if (browser) {
+                try {
+                    await browser.close();
+                } catch (e: any) {
+                    this.logger.error({ error: e.message }, "Failed to close browser session");
+                }
+            }
+        }
+    }
+
+    /**
      * Search the web for documentation or answers using Cloudflare Browser Rendering.
-     * Uses DuckDuckGo HTML (lite/no-js version) for fast and reliable scraping.
+     * If query is an absolute http/https URL, it scrapes that URL directly.
+     * Otherwise, uses DuckDuckGo HTML (lite/no-js version) for general searching.
      */
     async searchDocs(query: string): Promise<string> {
+        if (/^https?:\/\//i.test(query.trim())) {
+            return this.scrapeUrl(query.trim());
+        }
+
         this.logger.info({ query }, "Initiating headless browser web search");
         if (!this.browserBinding) {
             this.logger.warn("Browser Rendering binding 'BROWSER' is not configured. Web search skipped.");

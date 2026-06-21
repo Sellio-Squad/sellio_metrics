@@ -138,14 +138,21 @@ export class AiPipelineService {
             await this.cache.set(`ai:task:${job.taskId}:images`, images, 3600);
         }
 
-        // 5. Perform web search and package version lookup
-        await this.gitOps.commentOnIssue(
-            job.owner,
-            job.repo,
-            job.issueNumber,
-            `🤖 **Sellio AI Agent**\n- *Phase 1:* Performing web search and package registry checks for the implementation...`
-        );
-        const searchContext = await this.searchPackagesAndDocs(job.issueTitle, job.issueBody, context.fileTree);
+        // 5. Determine if web search is needed dynamically based on the task
+        const searchDecision = await this.determineSearchNeeds(job.issueTitle, job.issueBody);
+        let searchContext = "";
+
+        if (searchDecision.needsSearch) {
+            await this.gitOps.commentOnIssue(
+                job.owner,
+                job.repo,
+                job.issueNumber,
+                `🤖 **Sellio AI Agent**\n- *Phase 1:* Performing web search and package registry checks for the implementation...`
+            );
+            searchContext = await this.searchPackagesAndDocs(searchDecision.packages, searchDecision.queries, context.fileTree);
+        } else {
+            this.logger.info({ taskId: job.taskId }, "Skipping web search: Task classified as local and does not need external references.");
+        }
 
         // 6. Generate plan using LLM
         const plan = await this.generatePlan(context, job.issueTitle, job.issueBody, searchContext, images);
@@ -573,6 +580,21 @@ Please review the changes and run the build tests.`;
                     if (!context || !plan) {
                         throw new Error("Context or plan not found in KV cache during self-correction.");
                     }
+
+                    // Dynamically determine if the CI error logs need a web search
+                    const errorSearchDecision = await this.determineSearchNeeds(
+                        `Resolve CI Error for: ${job.issueTitle || issueTitle}`,
+                        `The build failed with the following logs. Find compatible package versions or solutions to this conflict:\n\n${logs.substring(0, 1500)}`
+                    );
+                    let errorSearchContext = "";
+                    if (errorSearchDecision.needsSearch) {
+                        this.logger.info({ taskId: job.taskId }, "CI error requires web search for solutions");
+                        errorSearchContext = await this.searchPackagesAndDocs(
+                            errorSearchDecision.packages,
+                            errorSearchDecision.queries,
+                            context.fileTree
+                        );
+                    }
                     
                     // Ask LLM to generate patched/fixed code changes
                     const systemPrompt = `You are a principal engineer. A pull request was generated but failed the CI checks.
@@ -589,7 +611,7 @@ You MUST respond with a valid JSON object matching this schema:
     }
   ]
 }`;
-                    const userPrompt = `Issue Title: ${job.issueTitle || issueTitle}
+                    let userPrompt = `Issue Title: ${job.issueTitle || issueTitle}
 Issue Body: ${context.recentPrs[0]?.body || ""}
 
 Failed CI Logs:
@@ -602,6 +624,10 @@ Approach: ${plan.approach}
 Files Modified originally: ${plan.filesToModify.join(", ")}
 New Files originally: ${plan.newFiles.join(", ")}
 `;
+
+                    if (errorSearchContext) {
+                        userPrompt += `\n\nWeb Search & Dependency Resolution Context:\n${errorSearchContext}\n`;
+                    }
                     const response = await this.ai.generateCompletion({
                         systemPrompt,
                         userPrompt,
@@ -1200,22 +1226,33 @@ ${commentBody}
     }
 
     /**
-     * Extracts libraries/packages and documentation topics from a ticket title and body,
-     * resolves their latest versions, performs web searches, and returns the aggregated context.
+     * Dynamically determines if the ticket requires web searches and returns the package list and queries.
      */
-    private async searchPackagesAndDocs(title: string, body: string | null, fileTree: string[]): Promise<string> {
-        const isFlutter = fileTree.some(f => f.endsWith("pubspec.yaml") || f.endsWith(".dart"));
-        const isNode = fileTree.some(f => f.endsWith("package.json") || f.endsWith(".ts") || f.endsWith(".js"));
+    private async determineSearchNeeds(title: string, body: string | null): Promise<{ needsSearch: boolean; packages: string[]; queries: string[] }> {
+        const systemPrompt = `You are a search query router for a coding assistant.
+Analyze the ticket title and description, and determine:
+1. Does solving this ticket require external web searches (e.g. finding documentation, getting latest package versions, or looking up API usage guidelines for external libraries)?
+2. If yes, extract:
+   - Any package/library names to lookup (e.g. ["dio", "network_inspector"]).
+   - Any queries (general setup queries or specific URLs to scrape, e.g. ["https://pub.dev/packages/network_inspector", "network_inspector setup in flutter"]).
 
-        const systemPrompt = `You are a search query generator for a coding assistant.
-Analyze the ticket title and description, and extract:
-1. Any specific package or library names that need to be added, upgraded, or used.
-2. A list of 1-2 search queries for documentation or setup examples.
+Classification guidelines:
+- Set "needsSearch": true if the task involves:
+  - Adding a new package, dependency, or library.
+  - Upgrading/downgrading packages.
+  - Using an external API, service, or library that is not a standard built-in.
+  - Resolving a dependency conflict or version-solving error.
+  - Refactoring complex third-party library calls.
+- Set "needsSearch": false for tasks that can be solved locally without external documentation, such as:
+  - Modifying internal business logic, UI layouts, styling, button colors, text formatting.
+  - Adding a simple unit test for an existing local class.
+  - Trivial fixes (syntax errors, null pointer checks, simple refactors of local code).
 
 Format your output as a JSON object ONLY:
 {
+  "needsSearch": boolean,
   "packages": ["package_name1"],
-  "queries": ["how to use package_name1 in flutter"]
+  "queries": ["how to use package_name1 in flutter" or "https://pub.dev/packages/package_name1"]
 }`;
 
         const userPrompt = `Ticket:
@@ -1233,38 +1270,49 @@ ${body ?? "No description provided"}
 
             const cleaned = rawResponse.trim().replace(/^```json/, "").replace(/```$/, "").trim();
             const parsed = JSON.parse(cleaned);
-            const packages: string[] = Array.isArray(parsed?.packages) ? parsed.packages : [];
-            const queries: string[] = Array.isArray(parsed?.queries) ? parsed.queries : [];
-
-            let searchContext = "=== Web Search Context ===\n";
-
-            // 1. Check Package Versions
-            for (const pkg of packages) {
-                if (isFlutter) {
-                    const pubVer = await this.webSearch.getPackageLatestVersion("pub", pkg);
-                    if (pubVer) {
-                        searchContext += `- Dart/Flutter package "${pkg}" latest version: ^${pubVer}\n`;
-                    }
-                }
-                if (isNode) {
-                    const npmVer = await this.webSearch.getPackageLatestVersion("npm", pkg);
-                    if (npmVer) {
-                        searchContext += `- Node/npm package "${pkg}" latest version: ^${npmVer}\n`;
-                    }
-                }
-            }
-
-            // 2. Perform Web Searches
-            for (const query of queries) {
-                const results = await this.webSearch.searchDocs(query);
-                searchContext += `\nResults for "${query}":\n${results}\n`;
-            }
-
-            return searchContext;
+            return {
+                needsSearch: !!parsed?.needsSearch,
+                packages: Array.isArray(parsed?.packages) ? parsed.packages : [],
+                queries: Array.isArray(parsed?.queries) ? parsed.queries : [],
+            };
         } catch (err: any) {
-            this.logger.error({ error: err.message }, "Failed to generate search context");
-            return "=== Web Search Context ===\nNo web search context available.\n";
+            this.logger.error({ error: err.message }, "Failed to classify search needs, defaulting to false");
+            return { needsSearch: false, packages: [], queries: [] };
         }
+    }
+
+    /**
+     * Resolves latest package versions from registries and performs web searches or URL scraping.
+     */
+    private async searchPackagesAndDocs(packages: string[], queries: string[], fileTree: string[]): Promise<string> {
+        const isFlutter = fileTree.some(f => f.endsWith("pubspec.yaml") || f.endsWith(".dart"));
+        const isNode = fileTree.some(f => f.endsWith("package.json") || f.endsWith(".ts") || f.endsWith(".js"));
+
+        let searchContext = "=== Web Search Context ===\n";
+
+        // 1. Check Package Versions
+        for (const pkg of packages) {
+            if (isFlutter) {
+                const pubVer = await this.webSearch.getPackageLatestVersion("pub", pkg);
+                if (pubVer) {
+                    searchContext += `- Dart/Flutter package "${pkg}" latest version: ^${pubVer}\n`;
+                }
+            }
+            if (isNode) {
+                const npmVer = await this.webSearch.getPackageLatestVersion("npm", pkg);
+                if (npmVer) {
+                    searchContext += `- Node/npm package "${pkg}" latest version: ^${npmVer}\n`;
+                }
+            }
+        }
+
+        // 2. Perform Web Searches
+        for (const query of queries) {
+            const results = await this.webSearch.searchDocs(query);
+            searchContext += `\nResults for "${query}":\n${results}\n`;
+        }
+
+        return searchContext;
     }
 
     private async classifyFailure(logs: string): Promise<"infra" | "code"> {
