@@ -50,6 +50,21 @@ ${archDocsText || "(No architecture docs found)"}
 You have these tools available:
 ${toolSummary}
 
+## How to call a tool
+To execute a tool, you MUST output a JSON block in EXACTLY this format:
+\`\`\`json
+{
+  "tool": "tool_name",
+  "args": {
+    "arg_name": "value"
+  }
+}
+\`\`\`
+IMPORTANT: 
+- Do NOT hallucinate that a tool was successful without executing it.
+- You must output the JSON block, and the system will pause your execution, run the tool, and give you the result.
+- Only confirm success to the user AFTER you receive the tool result.
+
 ## Rules
 - Always use tools to take real actions (create issues, review PRs, etc.) rather than just talking about them.
 - If the user asks to create multiple tickets, use \`bulk_create_issues\` in a single call.
