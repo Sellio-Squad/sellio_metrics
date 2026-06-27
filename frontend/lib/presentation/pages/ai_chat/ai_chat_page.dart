@@ -1,0 +1,333 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:lucide_icons/lucide_icons.dart';
+import 'package:provider/provider.dart';
+import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
+import 'package:sellio_metrics/design_system/design_system.dart';
+import 'package:sellio_metrics/domain/entities/chat_message_entity.dart';
+import 'package:sellio_metrics/domain/entities/repo_info.dart';
+import 'package:sellio_metrics/presentation/pages/ai_chat/providers/ai_chat_provider.dart';
+
+class AiChatPage extends StatefulWidget {
+  const AiChatPage({super.key});
+
+  @override
+  State<AiChatPage> createState() => _AiChatPageState();
+}
+
+class _AiChatPageState extends State<AiChatPage> {
+  final TextEditingController _textController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _scrollToBottom() {
+    if (_scrollController.hasClients) {
+      Future.delayed(const Duration(milliseconds: 100), () {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
+
+  void _handleSubmitted(String text) {
+    if (text.trim().isEmpty) return;
+    context.read<AiChatProvider>().sendMessage(text);
+    _textController.clear();
+    _scrollToBottom();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final provider = context.watch<AiChatProvider>();
+
+    return Column(
+      children: [
+        // Header
+        Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xl,
+            vertical: AppSpacing.md,
+          ),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(bottom: BorderSide(color: scheme.border)),
+          ),
+          child: Row(
+            children: [
+              Icon(LucideIcons.bot, color: scheme.primary),
+              const SizedBox(width: AppSpacing.md),
+              Text(
+                'Sellio Bot',
+                style: AppTypography.title.copyWith(color: scheme.title),
+              ),
+              const Spacer(),
+              if (provider.availableRepos.isNotEmpty)
+                _buildRepoSelector(context, provider),
+              const SizedBox(width: AppSpacing.md),
+              AppIconButton(
+                icon: LucideIcons.trash2,
+                tooltip: 'Clear Chat',
+                onPressed: provider.messages.isEmpty
+                    ? null
+                    : () {
+                        provider.clearChat();
+                      },
+              ),
+            ],
+          ),
+        ),
+
+        // Chat List
+        Expanded(
+          child: provider.messages.isEmpty
+              ? _buildEmptyState(context, provider)
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  itemCount: provider.messages.length + (provider.isLoading ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == provider.messages.length) {
+                      return _buildTypingIndicator(context);
+                    }
+                    return _buildMessage(context, provider.messages[index]);
+                  },
+                ),
+        ),
+
+        // Error message if any
+        if (provider.error != null)
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            color: scheme.error.withOpacity(0.1),
+            width: double.infinity,
+            child: Text(
+              provider.error!,
+              style: AppTypography.bodySmall.copyWith(color: scheme.error),
+              textAlign: TextAlign.center,
+            ),
+          ),
+
+        // Input Area
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            border: Border(top: BorderSide(color: scheme.border)),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: AppTextField(
+                  controller: _textController,
+                  hintText: 'Ask anything about your repo or give me a task...',
+                  onSubmitted: _handleSubmitted,
+                  enabled: !provider.isLoading,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              AppButton.primary(
+                text: 'Send',
+                icon: LucideIcons.send,
+                isLoading: provider.isLoading,
+                onPressed: provider.isLoading
+                    ? null
+                    : () => _handleSubmitted(_textController.text),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRepoSelector(BuildContext context, AiChatProvider provider) {
+    return DropdownButtonHideUnderline(
+      child: DropdownButton<RepoInfo>(
+        value: provider.selectedRepo,
+        items: provider.availableRepos.map((repo) {
+          return DropdownMenuItem<RepoInfo>(
+            value: repo,
+            child: Text(repo.name),
+          );
+        }).toList(),
+        onChanged: (repo) {
+          if (repo != null) {
+            provider.selectRepo(repo);
+          }
+        },
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, AiChatProvider provider) {
+    final scheme = context.colors;
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(LucideIcons.messageSquareCode, size: 64, color: scheme.border),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'How can I help you today?',
+            style: AppTypography.headline.copyWith(color: scheme.title),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            alignment: WrapAlignment.center,
+            children: [
+              _buildSuggestionChip('Explain the architecture'),
+              _buildSuggestionChip('List open tickets'),
+              _buildSuggestionChip('Create 3 auth tickets'),
+              _buildSuggestionChip('Review PR #42'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSuggestionChip(String text) {
+    return ActionChip(
+      label: Text(text),
+      onPressed: () {
+        _textController.text = text;
+        _handleSubmitted(text);
+      },
+    );
+  }
+
+  Widget _buildMessage(BuildContext context, ChatMessageEntity message) {
+    final isUser = message.role == MessageRole.user;
+    final scheme = context.colors;
+
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.7,
+        ),
+        decoration: BoxDecoration(
+          color: isUser ? scheme.primary.withOpacity(0.1) : scheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(12).copyWith(
+            bottomRight: isUser ? Radius.zero : const Radius.circular(12),
+            bottomLeft: !isUser ? Radius.zero : const Radius.circular(12),
+          ),
+          border: Border.all(
+            color: isUser ? scheme.primary.withOpacity(0.2) : scheme.border,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isUser ? LucideIcons.user : LucideIcons.bot,
+                  size: 16,
+                  color: scheme.textDim,
+                ),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  isUser ? 'You' : 'Sellio Bot',
+                  style: AppTypography.label.copyWith(color: scheme.textDim),
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            MarkdownBody(
+              data: message.content,
+              selectable: true,
+              styleSheet: MarkdownStyleSheet(
+                p: AppTypography.body.copyWith(color: scheme.text),
+                code: AppTypography.code.copyWith(
+                  backgroundColor: scheme.background,
+                ),
+                codeblockDecoration: BoxDecoration(
+                  color: scheme.background,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: scheme.border),
+                ),
+              ),
+            ),
+            if (message.toolCallsMade.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.md),
+              _buildToolCalls(context, message.toolCallsMade),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildToolCalls(BuildContext context, List<ToolCallRecord> toolCalls) {
+    final scheme = context.colors;
+    return Theme(
+      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        title: Text(
+          '🔧 Actions taken (${toolCalls.length})',
+          style: AppTypography.label.copyWith(color: scheme.textDim),
+        ),
+        childrenPadding: EdgeInsets.zero,
+        tilePadding: EdgeInsets.zero,
+        children: toolCalls.map((t) => Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.xs, left: AppSpacing.lg),
+          child: Row(
+            children: [
+              Icon(LucideIcons.checkCircle, size: 14, color: scheme.success),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                t.name,
+                style: AppTypography.code.copyWith(color: scheme.textDim, fontSize: 12),
+              ),
+            ],
+          ),
+        )).toList(),
+      ),
+    );
+  }
+
+  Widget _buildTypingIndicator(BuildContext context) {
+    final scheme = context.colors;
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: scheme.surfaceVariant,
+          borderRadius: BorderRadius.circular(12).copyWith(
+            bottomLeft: Radius.zero,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Text('Thinking...', style: AppTypography.bodySmall),
+          ],
+        ),
+      ),
+    );
+  }
+}

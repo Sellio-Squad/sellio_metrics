@@ -34,6 +34,8 @@ import type { GeminiClient } from "../infra/ai/gemini.client";
 import type { PrContextFetcher } from "../modules/review/pr-context-fetcher";
 import type { ReviewService } from "../modules/review/review.service";
 import type { Logger } from "./logger";
+import type { AiChatService } from "../modules/ai-chat/ai-chat.service";
+import type { OrgMemberGuard } from "../modules/ai-chat/org-member-guard";
 import type { GitHubClient } from "../infra/github/github.client";
 
 export interface CloudflareQueue<Body = unknown> {
@@ -123,5 +125,9 @@ export interface Cradle {
     codeValidatorService: import("../modules/ai-pipeline/code-validator.service").CodeValidatorService;
     aiPipelineService: import("../modules/ai-pipeline/ai-pipeline.service").AiPipelineService;
     aiPipelineHub: any | null;
+
+    // AI Chat Agent
+    orgMemberGuard: OrgMemberGuard;
+    aiChatService: AiChatService;
 }
 

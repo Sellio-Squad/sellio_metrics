@@ -157,6 +157,8 @@ async function buildContainer(
         const { AiPipelineService } = await import("../modules/ai-pipeline/ai-pipeline.service");
         const { CodeValidatorService } = await import("../modules/ai-pipeline/code-validator.service");
         const { WebSearchService } = await import("../modules/ai-pipeline/web-search.service");
+        const { AiChatService } = await import("../modules/ai-chat/ai-chat.service");
+        const { OrgMemberGuard } = await import("../modules/ai-chat/org-member-guard");
  
         container.register({
             reposService: asClass(ReposService).singleton(),
@@ -168,7 +170,7 @@ async function buildContainer(
             scoreAggregationService: asFunction(({ scoresRepo, scoresKvCache, logger }: Cradle) => new ScoreAggregationService({ scoresRepo, scoresKvCache, logger })).singleton(),
             meetingsService: asFunction(({ logger, googleMeetClient, meetingsRepo, env }: Cradle) => new MeetingsService(googleMeetClient, meetingsRepo, env.googlePubsubTopic, logger)).singleton(),
             webhookHandlerService: asFunction(({ logger, googleMeetClient }: Cradle) => new WebhookHandlerService({ logger, googleMeetClient })).singleton(),
-            webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env, aiPipelineService }: Cradle) => new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env, aiPipelineService })).singleton(),
+            webhookService: asFunction(({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env, aiPipelineService, aiChatService, orgMemberGuard }: Cradle) => new WebhookService({ logger, reposRepo, developerRepo, prsRepo, commentsRepo, commitsRepo, openPrsService, cache, cachedGithubClient, env, aiPipelineService, aiChatService, orgMemberGuard })).singleton(),
             prContextFetcher: asFunction(({ cachedGithubClient, logger }: Cradle) => new PrContextFetcher({ cachedGithubClient, logger })).singleton(),
             reviewService: asFunction(({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger }: Cradle) => new ReviewService({ prContextFetcher, geminiClient, cacheService, cachedGithubClient, logger })).singleton(),
  
@@ -189,6 +191,10 @@ async function buildContainer(
             codeValidatorService: asFunction(({ logger }: Cradle) => new CodeValidatorService({ logger })).singleton(),
             webSearchService: asClass(WebSearchService).singleton(),
             aiPipelineService: asClass(AiPipelineService).singleton(),
+
+            // AI Chat Agent
+            orgMemberGuard: asFunction(({ cacheService, cachedGithubClient, logger }: Cradle) => new OrgMemberGuard({ cacheService, cachedGithubClient, logger })).singleton(),
+            aiChatService: asFunction(({ aiProviderClient, cacheService, orgMemberGuard, contextService, openTicketsService, reviewService, scoreAggregationService, gitOpsService, cachedGithubClient, syncQueue, env, logger }: Cradle) => new AiChatService({ aiProviderClient, cacheService, orgMemberGuard, contextService, openTicketsService, reviewService, scoreAggregationService, gitOpsService, cachedGithubClient, syncQueue, env, logger })).singleton(),
         });
     }
 
