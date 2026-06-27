@@ -221,7 +221,7 @@ class _AiChatPageState extends State<AiChatPage> {
           maxWidth: MediaQuery.of(context).size.width * 0.7,
         ),
         decoration: BoxDecoration(
-          color: isUser ? scheme.primary.withOpacity(0.1) : scheme.surfaceHigh,
+          color: isUser ? scheme.primary.withOpacity(0.1) : scheme.surfaceVariant,
           borderRadius: BorderRadius.circular(12).copyWith(
             bottomRight: isUser ? Radius.zero : const Radius.circular(12),
             bottomLeft: !isUser ? Radius.zero : const Radius.circular(12),
@@ -239,12 +239,12 @@ class _AiChatPageState extends State<AiChatPage> {
                 Icon(
                   isUser ? LucideIcons.user : LucideIcons.bot,
                   size: 16,
-                  color: scheme.hint,
+                  color: scheme.textDim,
                 ),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   isUser ? 'You' : 'Sellio Bot',
-                  style: AppTypography.label.copyWith(color: scheme.hint),
+                  style: AppTypography.label.copyWith(color: scheme.textDim),
                 ),
               ],
             ),
@@ -253,15 +253,14 @@ class _AiChatPageState extends State<AiChatPage> {
               data: message.content,
               selectable: true,
               styleSheet: MarkdownStyleSheet(
-                p: AppTypography.body.copyWith(color: scheme.title),
-                code: AppTypography.caption.copyWith(
-                  backgroundColor: scheme.surface,
-                  fontFamily: 'monospace',
+                p: AppTypography.body.copyWith(color: scheme.text),
+                code: AppTypography.code.copyWith(
+                  backgroundColor: scheme.background,
                 ),
                 codeblockDecoration: BoxDecoration(
-                  color: scheme.surface,
+                  color: scheme.background,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: scheme.stroke),
+                  border: Border.all(color: scheme.border),
                 ),
               ),
             ),
@@ -282,7 +281,7 @@ class _AiChatPageState extends State<AiChatPage> {
       child: ExpansionTile(
         title: Text(
           '🔧 Actions taken (${toolCalls.length})',
-          style: AppTypography.label.copyWith(color: scheme.hint),
+          style: AppTypography.label.copyWith(color: scheme.textDim),
         ),
         childrenPadding: EdgeInsets.zero,
         tilePadding: EdgeInsets.zero,
@@ -290,11 +289,11 @@ class _AiChatPageState extends State<AiChatPage> {
           padding: const EdgeInsets.only(bottom: AppSpacing.xs, left: AppSpacing.lg),
           child: Row(
             children: [
-              Icon(LucideIcons.checkCircle, size: 14, color: scheme.green),
+              Icon(LucideIcons.checkCircle, size: 14, color: scheme.success),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 t.name,
-                style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 12, fontFamily: 'monospace'),
+                style: AppTypography.code.copyWith(color: scheme.textDim, fontSize: 12),
               ),
             ],
           ),
@@ -311,7 +310,7 @@ class _AiChatPageState extends State<AiChatPage> {
         margin: const EdgeInsets.only(bottom: AppSpacing.lg),
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: scheme.surfaceHigh,
+          color: scheme.surfaceVariant,
           borderRadius: BorderRadius.circular(12).copyWith(
             bottomLeft: Radius.zero,
           ),
@@ -325,7 +324,7 @@ class _AiChatPageState extends State<AiChatPage> {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
             const SizedBox(width: AppSpacing.md),
-            Text('Thinking...', style: AppTypography.caption),
+            Text('Thinking...', style: AppTypography.bodySmall),
           ],
         ),
       ),
