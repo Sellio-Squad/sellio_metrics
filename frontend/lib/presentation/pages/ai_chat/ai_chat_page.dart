@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
@@ -294,8 +295,14 @@ class _AiChatPageState extends State<AiChatPage> {
             MarkdownBody(
               data: message.content,
               selectable: true,
+              onTapLink: (text, href, title) {
+                if (href != null) {
+                  launchUrl(Uri.parse(href));
+                }
+              },
               styleSheet: MarkdownStyleSheet(
                 p: AppTypography.body.copyWith(color: scheme.title, height: 1.5),
+                a: AppTypography.body.copyWith(color: scheme.primary, decoration: TextDecoration.underline),
                 code: AppTypography.caption.copyWith(
                   backgroundColor: scheme.surface,
                   color: scheme.green,
