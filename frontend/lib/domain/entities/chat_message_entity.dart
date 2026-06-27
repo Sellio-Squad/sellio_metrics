@@ -18,6 +18,14 @@ class ToolCallRecord {
       result: json['result'],
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'args': args,
+      'result': result,
+    };
+  }
 }
 
 class ChatMessageEntity {
@@ -57,5 +65,17 @@ class ChatMessageEntity {
               .toList() ??
           [],
     );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'role': role.name,
+      'content': content,
+      'toolName': toolName,
+      'toolArgs': toolArgs,
+      'toolResult': toolResult,
+      'timestamp': timestamp.toIso8601String(),
+      'toolCallsMade': toolCallsMade.map((e) => e.toJson()).toList(),
+    };
   }
 }

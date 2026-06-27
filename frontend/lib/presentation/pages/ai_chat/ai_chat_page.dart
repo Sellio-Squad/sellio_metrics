@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:hux/hux.dart';
 import 'package:provider/provider.dart';
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
@@ -129,7 +130,9 @@ class _AiChatPageState extends State<AiChatPage> {
                 child: TextField(
                   controller: _textController,
                   enabled: !provider.isLoading,
-                  onSubmitted: _handleSubmitted,
+                  minLines: 1,
+                  maxLines: 5,
+                  keyboardType: TextInputType.multiline,
                   decoration: InputDecoration(
                     hintText: 'Ask anything about your repo or give me a task...',
                     filled: true,
@@ -172,7 +175,24 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Widget _buildRepoSelector(BuildContext context, AiChatProvider provider) {
-    return const _AiChatRepoDropdown();
+    if (provider.availableRepos.isEmpty) return const SizedBox.shrink();
+    return HuxDropdown<String>(
+      items: provider.availableRepos.map((repo) {
+        return HuxDropdownItem<String>(
+          value: repo.id.toString(),
+          child: Text(repo.name),
+        );
+      }).toList(),
+      value: provider.selectedRepo?.id.toString(),
+      onChanged: (value) {
+        if (value != null) {
+          final repo = provider.availableRepos.firstWhere((r) => r.id.toString() == value);
+          provider.selectRepo(repo);
+        }
+      },
+      placeholder: 'Select a repo',
+      variant: HuxButtonVariant.ghost,
+    );
   }
 
   Widget _buildEmptyState(BuildContext context, AiChatProvider provider) {
@@ -205,32 +225,45 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Widget _buildSuggestionChip(String text) {
-    return ActionChip(
-      label: Text(text),
-      onPressed: () {
+    final scheme = context.colors;
+    return InkWell(
+      onTap: () {
         _textController.text = text;
-        _handleSubmitted(text);
       },
+      borderRadius: BorderRadius.circular(AppRadius.full),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.lg,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: scheme.surfaceHigh,
+          borderRadius: BorderRadius.circular(AppRadius.full),
+          border: Border.all(color: scheme.stroke),
+        ),
+        child: Text(
+          text,
+          style: AppTypography.body.copyWith(color: scheme.title),
+        ),
+      ),
     );
   }
 
   Widget _buildMessage(BuildContext context, ChatMessageEntity message) {
-    final isUser = message.role == MessageRole.user;
     final scheme = context.colors;
+    final isUser = message.role == MessageRole.user;
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+        constraints: const BoxConstraints(maxWidth: 800),
         padding: const EdgeInsets.all(AppSpacing.lg),
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.of(context).size.width * 0.7,
-        ),
         decoration: BoxDecoration(
           color: isUser ? scheme.primary.withOpacity(0.1) : scheme.surfaceHigh,
           borderRadius: BorderRadius.circular(12).copyWith(
             bottomRight: isUser ? Radius.zero : const Radius.circular(12),
-            bottomLeft: !isUser ? Radius.zero : const Radius.circular(12),
+            bottomLeft: isUser ? const Radius.circular(12) : Radius.zero,
           ),
           border: Border.all(
             color: isUser ? scheme.primary.withOpacity(0.2) : scheme.stroke,
@@ -245,34 +278,39 @@ class _AiChatPageState extends State<AiChatPage> {
                 Icon(
                   isUser ? LucideIcons.user : LucideIcons.bot,
                   size: 16,
-                  color: scheme.hint,
+                  color: isUser ? scheme.primary : scheme.hint,
                 ),
-                const SizedBox(width: AppSpacing.xs),
+                const SizedBox(width: AppSpacing.sm),
                 Text(
                   isUser ? 'You' : 'Sellio Bot',
-                  style: AppTypography.subtitle.copyWith(color: scheme.hint),
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: isUser ? scheme.primary : scheme.hint,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.sm),
+            const SizedBox(height: AppSpacing.md),
             MarkdownBody(
               data: message.content,
               selectable: true,
               styleSheet: MarkdownStyleSheet(
-                p: AppTypography.body.copyWith(color: scheme.title),
+                p: AppTypography.body.copyWith(color: scheme.title, height: 1.5),
                 code: AppTypography.caption.copyWith(
-                  backgroundColor: scheme.surfaceLow,
+                  backgroundColor: scheme.surface,
+                  color: scheme.green,
+                  fontFamily: 'monospace',
                 ),
                 codeblockDecoration: BoxDecoration(
-                  color: scheme.surfaceLow,
-                  borderRadius: BorderRadius.circular(8),
+                  color: scheme.surface,
+                  borderRadius: AppRadius.mdAll,
                   border: Border.all(color: scheme.stroke),
                 ),
               ),
             ),
             if (message.toolCallsMade.isNotEmpty) ...[
-              const SizedBox(height: AppSpacing.md),
-              _buildToolCalls(context, message.toolCallsMade),
+              const SizedBox(height: AppSpacing.lg),
+              _buildToolCallsIndicator(context, message.toolCallsMade),
             ],
           ],
         ),
@@ -280,7 +318,7 @@ class _AiChatPageState extends State<AiChatPage> {
     );
   }
 
-  Widget _buildToolCalls(BuildContext context, List<ToolCallRecord> toolCalls) {
+  Widget _buildToolCallsIndicator(BuildContext context, List<ToolCallRecord> toolCalls) {
     final scheme = context.colors;
     return Theme(
       data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
