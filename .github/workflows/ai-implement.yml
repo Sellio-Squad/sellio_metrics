@@ -105,12 +105,13 @@ jobs:
           cache: npm
           cache-dependency-path: target_repo/package-lock.json
 
-      # ── 5. Setup Python for agent script ────────────────────────────
+      # ── 5. Setup Python for agent script ──────────────────────────
       - name: "Setup Python 3.11"
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
+          # No cache: pip here — there is no requirements.txt in the runner root.
+          # Dependencies are minimal (one package) so install time is negligible.
 
       - name: "Install Python dependencies"
         run: pip install google-generativeai
@@ -154,7 +155,7 @@ jobs:
             '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum}')
 
           curl -sf --retry 3 -X POST \
-            "${{ secrets.SELLIO_WORKER_URL }}/api/webhooks/ai-pipeline-result" \
+            "${{ secrets.SELLIO_WORKER_URL }}/api/ai-pipeline/result" \
             -H "Content-Type: application/json" \
             -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
             -d "$PAYLOAD"
@@ -175,7 +176,7 @@ jobs:
             '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum, error: $error}')
 
           curl -sf --retry 3 -X POST \
-            "${{ secrets.SELLIO_WORKER_URL }}/api/webhooks/ai-pipeline-result" \
+            "${{ secrets.SELLIO_WORKER_URL }}/api/ai-pipeline/result" \
             -H "Content-Type: application/json" \
             -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
             -d "$PAYLOAD" || echo "Cloudflare notification failed"
