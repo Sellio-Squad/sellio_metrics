@@ -172,22 +172,7 @@ class _AiChatPageState extends State<AiChatPage> {
   }
 
   Widget _buildRepoSelector(BuildContext context, AiChatProvider provider) {
-    return DropdownButtonHideUnderline(
-      child: DropdownButton<RepoInfo>(
-        value: provider.selectedRepo,
-        items: provider.availableRepos.map((repo) {
-          return DropdownMenuItem<RepoInfo>(
-            value: repo,
-            child: Text(repo.name),
-          );
-        }).toList(),
-        onChanged: (repo) {
-          if (repo != null) {
-            provider.selectRepo(repo);
-          }
-        },
-      ),
-    );
+    return const _AiChatRepoDropdown();
   }
 
   Widget _buildEmptyState(BuildContext context, AiChatProvider provider) {
@@ -353,6 +338,266 @@ class _AiChatPageState extends State<AiChatPage> {
           ],
         ),
       ),
+    );
+  }
+}
+
+// ─── AI Chat Repo Dropdown ───────────────────────────────────────────────────
+
+class _AiChatRepoDropdown extends StatefulWidget {
+  const _AiChatRepoDropdown();
+
+  @override
+  State<_AiChatRepoDropdown> createState() => _AiChatRepoDropdownState();
+}
+
+class _AiChatRepoDropdownState extends State<_AiChatRepoDropdown> {
+  final _layerLink = LayerLink();
+  OverlayEntry? _overlay;
+
+  void _open(BuildContext context) {
+    if (_overlay != null) {
+      _close();
+      return;
+    }
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+    final provider = context.read<AiChatProvider>();
+
+    _overlay = OverlayEntry(
+      builder: (_) => ChangeNotifierProvider<AiChatProvider>.value(
+        value: provider,
+        child: _AiChatRepoDropdownOverlay(
+          layerLink: _layerLink,
+          anchorSize: size,
+          onClose: _close,
+        ),
+      ),
+    );
+    Overlay.of(context).insert(_overlay!);
+  }
+
+  void _close() {
+    _overlay?.remove();
+    _overlay = null;
+  }
+
+  @override
+  void dispose() {
+    _close();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final provider = context.watch<AiChatProvider>();
+    final label = provider.selectedRepo?.name ?? 'All Repos';
+
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: GestureDetector(
+        onTap: () {
+          _open(context);
+        },
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: 8),
+          decoration: BoxDecoration(
+            color: scheme.surfaceHigh,
+            borderRadius: AppRadius.smAll,
+            border: Border.all(color: scheme.stroke),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(LucideIcons.gitBranch, size: 14, color: scheme.hint),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                label,
+                style: AppTypography.caption.copyWith(
+                  color: scheme.title,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Icon(LucideIcons.chevronDown, size: 14, color: scheme.hint),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AiChatRepoDropdownOverlay extends StatelessWidget {
+  final LayerLink layerLink;
+  final Size anchorSize;
+  final VoidCallback onClose;
+
+  const _AiChatRepoDropdownOverlay({
+    required this.layerLink,
+    required this.anchorSize,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: onClose,
+            behavior: HitTestBehavior.translucent,
+            child: const SizedBox.expand(),
+          ),
+        ),
+        CompositedTransformFollower(
+          link: layerLink,
+          offset: Offset(0, anchorSize.height + 6),
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: Consumer<AiChatProvider>(
+              builder: (context, provider, _) {
+                final scheme = context.colors;
+                return Material(
+                  color: Colors.transparent,
+                  child: Container(
+                    width: 240,
+                    constraints: const BoxConstraints(maxHeight: 280),
+                    decoration: BoxDecoration(
+                      color: scheme.surface,
+                      borderRadius: AppRadius.mdAll,
+                      border: Border.all(color: scheme.stroke),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withAlpha(40),
+                          blurRadius: 16,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                            AppSpacing.md, AppSpacing.sm, AppSpacing.sm, AppSpacing.xs,
+                          ),
+                          child: Text(
+                            'Filter by Repo',
+                            style: AppTypography.caption.copyWith(
+                              color: scheme.hint,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 11,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                        Divider(color: scheme.stroke, height: 1),
+                        if (provider.availableRepos.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(AppSpacing.lg),
+                            child: Text(
+                              'No synced repos found',
+                              style: AppTypography.caption.copyWith(color: scheme.hint),
+                              textAlign: TextAlign.center,
+                            ),
+                          )
+                        else
+                          Flexible(
+                            child: SingleChildScrollView(
+                              child: Column(
+                                children: provider.availableRepos
+                                    .map((repo) => _AiChatRepoCheckboxTile(
+                                          repo: repo,
+                                          onClose: onClose,
+                                        ))
+                                    .toList(),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AiChatRepoCheckboxTile extends StatelessWidget {
+  final RepoInfo repo;
+  final VoidCallback onClose;
+  const _AiChatRepoCheckboxTile({required this.repo, required this.onClose});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    return Consumer<AiChatProvider>(
+      builder: (context, provider, _) {
+        final selected = provider.selectedRepo?.id == repo.id;
+        return InkWell(
+          onTap: () {
+            provider.selectRepo(repo);
+            onClose();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 16,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: selected ? scheme.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: selected ? scheme.primary : scheme.stroke,
+                      width: 1.5,
+                    ),
+                  ),
+                  child: selected
+                      ? Icon(Icons.check, size: 11, color: scheme.onPrimary)
+                      : null,
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        repo.name,
+                        style: AppTypography.body.copyWith(
+                          color: scheme.title,
+                          fontSize: 13,
+                          fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        'ID: ${repo.id}',
+                        style: AppTypography.caption.copyWith(
+                          color: scheme.hint,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

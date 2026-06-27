@@ -18,15 +18,14 @@ aiChat.post("/message", safe(async (c) => {
     const { aiChatService, env } = useCradle(c);
     const body = await c.req.json().catch(() => null);
 
-    if (!body?.owner || !body?.repo || !body?.message || !body?.githubLogin) {
-        throw new AppError("Missing required fields: owner, repo, message, githubLogin", 400, "VALIDATION_ERROR");
+    if (!body?.owner || !body?.repo || !body?.message) {
+        throw new AppError("Missing required fields: owner, repo, message", 400, "VALIDATION_ERROR");
     }
 
     const result = await aiChatService.chat(
         body.owner,
         body.repo,
         body.message,
-        body.githubLogin,
         body.sessionId,
     );
 

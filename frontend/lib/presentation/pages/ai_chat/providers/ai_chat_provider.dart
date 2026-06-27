@@ -68,7 +68,6 @@ class AiChatProvider extends ChangeNotifier {
         owner: repoParts[0],
         repo: repoParts[1],
         message: text,
-        githubLogin: 'abdoessam', // Hardcoded for dashboard usage
         sessionId: _sessionId,
       );
 

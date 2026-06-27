@@ -29,7 +29,6 @@ class AiChatDataSourceImpl implements AiChatDataSource {
     required String owner,
     required String repo,
     required String message,
-    required String githubLogin,
     String? sessionId,
   }) async {
     final res = await _apiClient.post<Map<String, dynamic>>(
@@ -39,7 +38,6 @@ class AiChatDataSourceImpl implements AiChatDataSource {
         'owner': owner,
         'repo': repo,
         'message': message,
-        'githubLogin': githubLogin,
         if (sessionId != null) 'sessionId': sessionId,
       },
     );
