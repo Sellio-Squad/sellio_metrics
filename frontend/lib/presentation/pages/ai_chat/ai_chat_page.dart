@@ -176,22 +176,22 @@ class _AiChatPageState extends State<AiChatPage> {
 
   Widget _buildRepoSelector(BuildContext context, AiChatProvider provider) {
     if (provider.availableRepos.isEmpty) return const SizedBox.shrink();
-    return HuxDropdown<String>(
+    return SDropdown<String>(
       items: provider.availableRepos.map((repo) {
-        return HuxDropdownItem<String>(
-          value: repo.id.toString(),
+        return SDropdownItem<String>(
+          value: repo.fullName,
           child: Text(repo.name),
         );
       }).toList(),
-      value: provider.selectedRepo?.id.toString(),
+      value: provider.selectedRepo?.fullName,
       onChanged: (value) {
         if (value != null) {
-          final repo = provider.availableRepos.firstWhere((r) => r.id.toString() == value);
+          final repo = provider.availableRepos.firstWhere((r) => r.fullName == value);
           provider.selectRepo(repo);
         }
       },
       placeholder: 'Select a repo',
-      variant: HuxButtonVariant.ghost,
+      variant: SButtonVariant.ghost,
     );
   }
 

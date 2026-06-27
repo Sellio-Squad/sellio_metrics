@@ -31,8 +31,9 @@ class AiChatProvider extends ChangeNotifier {
     if (_selectedRepo == null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
-      final historyStr = prefs.getString('ai_chat_history_${_selectedRepo!.id}');
-      final sessionIdStr = prefs.getString('ai_chat_session_${_selectedRepo!.id}');
+      final safeName = _selectedRepo!.fullName.replaceAll('/', '_');
+      final historyStr = prefs.getString('ai_chat_history_$safeName');
+      final sessionIdStr = prefs.getString('ai_chat_session_$safeName');
       
       if (historyStr != null) {
         final List<dynamic> decoded = jsonDecode(historyStr);
@@ -53,13 +54,14 @@ class AiChatProvider extends ChangeNotifier {
     if (_selectedRepo == null) return;
     try {
       final prefs = await SharedPreferences.getInstance();
+      final safeName = _selectedRepo!.fullName.replaceAll('/', '_');
       final historyStr = jsonEncode(_messages.map((e) => e.toJson()).toList());
-      await prefs.setString('ai_chat_history_${_selectedRepo!.id}', historyStr);
+      await prefs.setString('ai_chat_history_$safeName', historyStr);
       
       if (_sessionId != null) {
-        await prefs.setString('ai_chat_session_${_selectedRepo!.id}', _sessionId!);
+        await prefs.setString('ai_chat_session_$safeName', _sessionId!);
       } else {
-        await prefs.remove('ai_chat_session_${_selectedRepo!.id}');
+        await prefs.remove('ai_chat_session_$safeName');
       }
     } catch (_) {}
   }
