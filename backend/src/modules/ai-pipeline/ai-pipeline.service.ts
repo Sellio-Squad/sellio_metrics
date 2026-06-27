@@ -238,7 +238,10 @@ export class AiPipelineService {
 
         // 5. Dispatch workflow_dispatch via GitHub REST API using the App installation token.
         //    Requires the GitHub App to have "Actions: Read & Write" permission.
+        //    The workflow file must exist on the ref branch — using "develop" since that's
+        //    where .github/workflows/ai-implement.yml was committed. Merge to main when ready.
         const octokit = this.gitOps.getOctokit();
+        const workflowRef = "develop";
         try {
             await octokit.request(
                 "POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
@@ -246,7 +249,7 @@ export class AiPipelineService {
                     owner:       "Sellio-Squad",
                     repo:        "sellio_metrics",
                     workflow_id: "ai-implement.yml",
-                    ref:         "main",
+                    ref:         workflowRef,
                     inputs: {
                         owner:        job.owner,
                         repo:         job.repo,
