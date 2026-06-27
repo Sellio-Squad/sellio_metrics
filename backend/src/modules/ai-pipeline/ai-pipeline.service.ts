@@ -236,42 +236,33 @@ export class AiPipelineService {
             phase: 3,
         }, 7200); // 2h TTL (workflow has 30 min timeout)
 
-        // 5. Dispatch workflow_dispatch via GitHub REST API
-        const token = process.env.GITHUB_TOKEN || process.env.APP_PRIVATE_KEY;
-        const workflowRef = "main"; // branch where the workflow file lives
-
-        // We always dispatch to sellio_metrics (where the workflow is defined)
-        const dispatchUrl =
-            `https://api.github.com/repos/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml/dispatches`;
-
-        const workerUrl = process.env.WORKER_URL || "https://sellio-metrics.abdoessam743.workers.dev";
-
-        const dispatchBody = {
-            ref: workflowRef,
-            inputs: {
-                owner:        job.owner,
-                repo:         job.repo,
-                issue_number: String(job.issueNumber),
-                task_id:      job.taskId,
-                plan_json:    planJson,
-                branch_name:  branchName,
-            },
-        };
-
-        // Use Octokit if available, otherwise fall back to raw fetch
+        // 5. Dispatch workflow_dispatch via GitHub REST API using the App installation token.
+        //    Requires the GitHub App to have "Actions: Read & Write" permission.
+        const octokit = this.gitOps.getOctokit();
         try {
-            const octokit = this.gitOps["github"].raw;
-            await octokit.request("POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches", {
-                owner:       "Sellio-Squad",
-                repo:        "sellio_metrics",
-                workflow_id: "ai-implement.yml",
-                ref:         workflowRef,
-                inputs:      dispatchBody.inputs,
-            });
+            await octokit.request(
+                "POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
+                {
+                    owner:       "Sellio-Squad",
+                    repo:        "sellio_metrics",
+                    workflow_id: "ai-implement.yml",
+                    ref:         "main",
+                    inputs: {
+                        owner:        job.owner,
+                        repo:         job.repo,
+                        issue_number: String(job.issueNumber),
+                        task_id:      job.taskId,
+                        plan_json:    planJson,
+                        branch_name:  branchName,
+                    },
+                }
+            );
         } catch (err: any) {
             this.logger.error({ err: err.message }, "Failed to dispatch GitHub Actions workflow");
             throw new AppError(`Failed to dispatch agent workflow: ${err.message}`, 502, "GH_DISPATCH_FAILED");
         }
+
+
 
         // 6. Comment on issue that the agent has been dispatched
         await this.gitOps.commentOnIssue(

@@ -69,6 +69,14 @@ export class GitOpsService {
     }
 
     /**
+     * Exposes the raw Octokit instance for operations not covered by this service
+     * (e.g. workflow_dispatch requires Actions:Read&Write on the GitHub App).
+     */
+    getOctokit() {
+        return this.github.raw;
+    }
+
+    /**
      * Resolves default branch and gets its HEAD commit SHA.
      */
     async getDefaultBranchHead(owner: string, repo: string): Promise<{ branch: string; sha: string }> {
