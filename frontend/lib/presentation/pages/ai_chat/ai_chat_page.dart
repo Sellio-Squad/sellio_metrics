@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
-import 'package:lucide_icons/lucide_icons.dart';
 import 'package:provider/provider.dart';
 import 'package:sellio_metrics/core/extensions/theme_extensions.dart';
 import 'package:sellio_metrics/design_system/design_system.dart';
@@ -60,7 +59,7 @@ class _AiChatPageState extends State<AiChatPage> {
           ),
           decoration: BoxDecoration(
             color: scheme.surface,
-            border: Border(bottom: BorderSide(color: scheme.border)),
+            border: Border(bottom: BorderSide(color: scheme.stroke)),
           ),
           child: Row(
             children: [
@@ -74,8 +73,8 @@ class _AiChatPageState extends State<AiChatPage> {
               if (provider.availableRepos.isNotEmpty)
                 _buildRepoSelector(context, provider),
               const SizedBox(width: AppSpacing.md),
-              AppIconButton(
-                icon: LucideIcons.trash2,
+              IconButton(
+                icon: Icon(LucideIcons.trash2, color: scheme.hint),
                 tooltip: 'Clear Chat',
                 onPressed: provider.messages.isEmpty
                     ? null
@@ -108,11 +107,11 @@ class _AiChatPageState extends State<AiChatPage> {
         if (provider.error != null)
           Container(
             padding: const EdgeInsets.all(AppSpacing.sm),
-            color: scheme.error.withOpacity(0.1),
+            color: scheme.red.withOpacity(0.1),
             width: double.infinity,
             child: Text(
               provider.error!,
-              style: AppTypography.bodySmall.copyWith(color: scheme.error),
+              style: AppTypography.caption.copyWith(color: scheme.red),
               textAlign: TextAlign.center,
             ),
           ),
@@ -122,26 +121,48 @@ class _AiChatPageState extends State<AiChatPage> {
           padding: const EdgeInsets.all(AppSpacing.lg),
           decoration: BoxDecoration(
             color: scheme.surface,
-            border: Border(top: BorderSide(color: scheme.border)),
+            border: Border(top: BorderSide(color: scheme.stroke)),
           ),
           child: Row(
             children: [
               Expanded(
-                child: AppTextField(
+                child: TextField(
                   controller: _textController,
-                  hintText: 'Ask anything about your repo or give me a task...',
-                  onSubmitted: _handleSubmitted,
                   enabled: !provider.isLoading,
+                  onSubmitted: _handleSubmitted,
+                  decoration: InputDecoration(
+                    hintText: 'Ask anything about your repo or give me a task...',
+                    filled: true,
+                    fillColor: scheme.surfaceLow,
+                    border: OutlineInputBorder(
+                      borderRadius: AppRadius.mdAll,
+                      borderSide: BorderSide(color: scheme.stroke),
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(width: AppSpacing.md),
-              AppButton.primary(
-                text: 'Send',
-                icon: LucideIcons.send,
-                isLoading: provider.isLoading,
+              SButton(
+                variant: SButtonVariant.primary,
                 onPressed: provider.isLoading
                     ? null
                     : () => _handleSubmitted(_textController.text),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (provider.isLoading)
+                      const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                      )
+                    else ...[
+                      const Icon(LucideIcons.send, size: 16),
+                      const SizedBox(width: AppSpacing.xs),
+                      const Text('Send'),
+                    ]
+                  ],
+                ),
               ),
             ],
           ),
@@ -175,7 +196,7 @@ class _AiChatPageState extends State<AiChatPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.messageSquareCode, size: 64, color: scheme.border),
+          Icon(LucideIcons.messageSquareCode, size: 64, color: scheme.stroke),
           const SizedBox(height: AppSpacing.lg),
           Text(
             'How can I help you today?',
@@ -221,13 +242,13 @@ class _AiChatPageState extends State<AiChatPage> {
           maxWidth: MediaQuery.of(context).size.width * 0.7,
         ),
         decoration: BoxDecoration(
-          color: isUser ? scheme.primary.withOpacity(0.1) : scheme.surfaceVariant,
+          color: isUser ? scheme.primary.withOpacity(0.1) : scheme.surfaceHigh,
           borderRadius: BorderRadius.circular(12).copyWith(
             bottomRight: isUser ? Radius.zero : const Radius.circular(12),
             bottomLeft: !isUser ? Radius.zero : const Radius.circular(12),
           ),
           border: Border.all(
-            color: isUser ? scheme.primary.withOpacity(0.2) : scheme.border,
+            color: isUser ? scheme.primary.withOpacity(0.2) : scheme.stroke,
           ),
         ),
         child: Column(
@@ -239,12 +260,12 @@ class _AiChatPageState extends State<AiChatPage> {
                 Icon(
                   isUser ? LucideIcons.user : LucideIcons.bot,
                   size: 16,
-                  color: scheme.textDim,
+                  color: scheme.hint,
                 ),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   isUser ? 'You' : 'Sellio Bot',
-                  style: AppTypography.label.copyWith(color: scheme.textDim),
+                  style: AppTypography.subtitle.copyWith(color: scheme.hint),
                 ),
               ],
             ),
@@ -253,14 +274,14 @@ class _AiChatPageState extends State<AiChatPage> {
               data: message.content,
               selectable: true,
               styleSheet: MarkdownStyleSheet(
-                p: AppTypography.body.copyWith(color: scheme.text),
-                code: AppTypography.code.copyWith(
-                  backgroundColor: scheme.background,
+                p: AppTypography.body.copyWith(color: scheme.title),
+                code: AppTypography.caption.copyWith(
+                  backgroundColor: scheme.surfaceLow,
                 ),
                 codeblockDecoration: BoxDecoration(
-                  color: scheme.background,
+                  color: scheme.surfaceLow,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: scheme.border),
+                  border: Border.all(color: scheme.stroke),
                 ),
               ),
             ),
@@ -281,7 +302,7 @@ class _AiChatPageState extends State<AiChatPage> {
       child: ExpansionTile(
         title: Text(
           '🔧 Actions taken (${toolCalls.length})',
-          style: AppTypography.label.copyWith(color: scheme.textDim),
+          style: AppTypography.subtitle.copyWith(color: scheme.hint),
         ),
         childrenPadding: EdgeInsets.zero,
         tilePadding: EdgeInsets.zero,
@@ -289,11 +310,15 @@ class _AiChatPageState extends State<AiChatPage> {
           padding: const EdgeInsets.only(bottom: AppSpacing.xs, left: AppSpacing.lg),
           child: Row(
             children: [
-              Icon(LucideIcons.checkCircle, size: 14, color: scheme.success),
+              Icon(LucideIcons.checkCircle, size: 14, color: scheme.green),
               const SizedBox(width: AppSpacing.sm),
               Text(
                 t.name,
-                style: AppTypography.code.copyWith(color: scheme.textDim, fontSize: 12),
+                style: AppTypography.caption.copyWith(
+                  color: scheme.hint,
+                  fontSize: 12,
+                  fontFamily: 'monospace',
+                ),
               ),
             ],
           ),
@@ -310,7 +335,7 @@ class _AiChatPageState extends State<AiChatPage> {
         margin: const EdgeInsets.only(bottom: AppSpacing.lg),
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: scheme.surfaceVariant,
+          color: scheme.surfaceHigh,
           borderRadius: BorderRadius.circular(12).copyWith(
             bottomLeft: Radius.zero,
           ),
@@ -324,7 +349,7 @@ class _AiChatPageState extends State<AiChatPage> {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
             const SizedBox(width: AppSpacing.md),
-            Text('Thinking...', style: AppTypography.bodySmall),
+            Text('Thinking...', style: AppTypography.caption),
           ],
         ),
       ),

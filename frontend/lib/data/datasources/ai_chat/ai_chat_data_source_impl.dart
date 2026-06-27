@@ -1,4 +1,6 @@
 import 'package:injectable/injectable.dart';
+import 'package:sellio_metrics/data/models/repo/repo_model.dart';
+import 'package:sellio_metrics/data/mappers/repo/repo_mappers.dart';
 import 'package:sellio_metrics/core/network/api_client.dart';
 import 'package:sellio_metrics/core/network/api_endpoints.dart';
 import 'package:sellio_metrics/data/datasources/ai_chat/ai_chat_data_source.dart';
@@ -18,7 +20,7 @@ class AiChatDataSourceImpl implements AiChatDataSource {
     );
     final reposList = (res['repos'] as List<dynamic>?) ?? [];
     return reposList
-        .map((r) => RepoInfo.fromJson(r as Map<String, dynamic>))
+        .map((r) => RepoModel.fromJson(r as Map<String, dynamic>).toEntity())
         .toList();
   }
 
