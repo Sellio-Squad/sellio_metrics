@@ -76,6 +76,11 @@ class ApiEndpoints {
   static const syncGithubCache = '/api/sync/github/cache';
   static String syncJobStatus(String jobId) => '/api/sync/status/$jobId';
 
+  // ─── AI Chat ───
+  static const aiChatMessage = '/api/ai-chat/message';
+  static String aiChatSession(String id) => '/api/ai-chat/session/$id';
+  static const aiChatRepos = '/api/ai-chat/repos';
+
   // ─── Review ───
   static const reviewPr    = '/api/review/pr';
   static const reviewUsage = '/api/review/usage';

@@ -22,6 +22,8 @@ import 'package:sellio_metrics/presentation/pages/meetings/providers/meetings_pr
 import 'package:sellio_metrics/presentation/pages/observability/providers/health_status_provider.dart';
 import 'package:sellio_metrics/presentation/pages/logs/providers/logs_provider.dart';
 import 'package:sellio_metrics/presentation/pages/sync/sync_page.dart';
+import 'package:sellio_metrics/presentation/pages/ai_chat/ai_chat_page.dart';
+import 'package:sellio_metrics/presentation/pages/ai_chat/providers/ai_chat_provider.dart';
 import 'package:sellio_metrics/presentation/pages/sync/providers/sync_provider.dart';
 import 'package:sellio_metrics/presentation/pages/review/code_review_page.dart';
 import 'package:sellio_metrics/presentation/pages/review/providers/review_provider.dart';
@@ -234,6 +236,18 @@ class AppNavigation {
       pageBuilder: (_) => ChangeNotifierProvider.value(
         value: getIt<AiPipelineProvider>(),
         child: const AiPipelinePage(),
+      ),
+    ),
+    AppRoute(
+      id: 'ai_chat',
+      path: '/ai-chat',
+      icon: LucideIcons.messageSquareCode,
+      group: NavGroup.system,
+      primaryNav: false,
+      labelBuilder: (_) => 'AI Chat',
+      pageBuilder: (_) => ChangeNotifierProvider.value(
+        value: getIt<AiChatProvider>(),
+        child: const AiChatPage(),
       ),
     ),
   ];

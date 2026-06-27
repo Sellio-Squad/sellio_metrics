@@ -1,0 +1,491 @@
+/**
+ * Sellio Metrics — Agent Tool Registry
+ *
+ * Defines all tools the AI agent can call.
+ * Each tool maps to an existing backend service method.
+ *
+ * To add a new capability: append one entry to TOOLS array.
+ * The AI discovers and uses tools automatically via the tool schemas.
+ */
+
+import type { AgentTool, ToolDeps } from "./ai-chat.types";
+
+// ─── Helper: wrap execute() with structured error handling ───
+
+function withErrorHandling(
+    name: string,
+    fn: (args: any, deps: ToolDeps) => Promise<unknown>
+): (args: any, deps: ToolDeps) => Promise<unknown> {
+    return async (args, deps) => {
+        try {
+            return await fn(args, deps);
+        } catch (err: any) {
+            const status = err.status ?? err.statusCode;
+            let hint = err.message;
+            if (status === 403) hint = `Permission denied. The GitHub App may need 'issues: write' or 'projects: write' permission on this repo.`;
+            if (status === 404) hint = `Resource not found. Check that the repo '${deps.repo}' exists and the GitHub App is installed there.`;
+            if (status === 422) hint = `Validation failed: ${err.message}`;
+            deps.logger.warn({ tool: name, err: err.message, status }, "Tool execution error");
+            return { error: true, message: hint };
+        }
+    };
+}
+
+// ─── Project name resolver (shared by create tools) ─────────
+
+async function resolveProjectNodeId(
+    org: string,
+    repoName: string,
+    gqlClient: any,
+    logger: any
+): Promise<string | null> {
+    try {
+        const projects = await gqlClient.listOrgProjectsSlim(org);
+        // fuzzy match: "sellio_mobile" matches "Sellio Mobile" or "sellio_mobile"
+        const normalized = repoName.toLowerCase().replace(/[_\-]/g, " ");
+        const match = projects.find((p: any) => {
+            const title = (p.title ?? "").toLowerCase().replace(/[_\-]/g, " ");
+            return title.includes(normalized) || normalized.includes(title);
+        });
+        if (match) {
+            logger.info({ project: match.title, nodeId: match.id }, "Resolved project for repo");
+            return match.id;
+        }
+        logger.warn({ repoName, available: projects.map((p: any) => p.title) }, "No matching project found for repo");
+        return null;
+    } catch (err: any) {
+        logger.warn({ err: err.message }, "Failed to resolve project node ID");
+        return null;
+    }
+}
+
+// ─── Tool definitions ────────────────────────────────────────
+
+export const TOOLS: AgentTool[] = [
+    // ── 1. Create a single GitHub issue ──────────────────────
+    {
+        name: "create_github_issue",
+        description: "Create a single GitHub issue in the current repo and auto-add it to the matching project board.",
+        parameters: {
+            type: "object",
+            properties: {
+                title: { type: "string", description: "Issue title" },
+                body:  { type: "string", description: "Issue description in markdown" },
+                labels: { type: "array", items: { type: "string" }, description: "Optional label names" },
+            },
+            required: ["title", "body"],
+        },
+        execute: withErrorHandling("create_github_issue", async (args, deps) => {
+            const { octokit, owner, repo, org, gqlClient, logger } = deps;
+            const { data: issue } = await octokit.issues.create({
+                owner,
+                repo,
+                title: args.title,
+                body: args.body ?? "",
+                labels: args.labels ?? [],
+            });
+
+            // Auto-add to project if we can resolve the project node ID
+            const projectId = await resolveProjectNodeId(org, repo, gqlClient, logger);
+            let addedToProject = false;
+            if (projectId) {
+                try {
+                    await gqlClient.addProjectV2Item(projectId, issue.node_id);
+                    addedToProject = true;
+                } catch (err: any) {
+                    logger.warn({ err: err.message }, "Could not add issue to project — continuing");
+                }
+            }
+
+            return {
+                issueNumber: issue.number,
+                issueUrl: issue.html_url,
+                title: issue.title,
+                addedToProject,
+                projectId: projectId ?? null,
+            };
+        }),
+    },
+
+    // ── 2. Bulk create multiple GitHub issues ─────────────────
+    {
+        name: "bulk_create_issues",
+        description: "Create multiple GitHub issues at once from a list. Use when the user asks for several tickets in one request.",
+        parameters: {
+            type: "object",
+            properties: {
+                issues: {
+                    type: "array",
+                    description: "List of issues to create",
+                    items: {
+                        type: "object",
+                        properties: {
+                            title:  { type: "string" },
+                            body:   { type: "string" },
+                            labels: { type: "array", items: { type: "string" } },
+                        },
+                        required: ["title", "body"],
+                    },
+                },
+            },
+            required: ["issues"],
+        },
+        execute: withErrorHandling("bulk_create_issues", async (args, deps) => {
+            const { octokit, owner, repo, org, gqlClient, logger } = deps;
+            const projectId = await resolveProjectNodeId(org, repo, gqlClient, logger);
+
+            const created: any[] = [];
+            for (const issueArgs of args.issues) {
+                const { data: issue } = await octokit.issues.create({
+                    owner,
+                    repo,
+                    title: issueArgs.title,
+                    body: issueArgs.body ?? "",
+                    labels: issueArgs.labels ?? [],
+                });
+
+                let addedToProject = false;
+                if (projectId) {
+                    try {
+                        await gqlClient.addProjectV2Item(projectId, issue.node_id);
+                        addedToProject = true;
+                    } catch (err: any) {
+                        logger.warn({ issueNumber: issue.number, err: err.message }, "Could not add issue to project");
+                    }
+                }
+
+                created.push({
+                    issueNumber: issue.number,
+                    issueUrl: issue.html_url,
+                    title: issue.title,
+                    addedToProject,
+                });
+            }
+
+            return { created, total: created.length, projectId: projectId ?? null };
+        }),
+    },
+
+    // ── 3. Move a project card to a column ────────────────────
+    {
+        name: "move_project_card",
+        description: "Move a GitHub Projects V2 card to a different status column (e.g. 'In Progress', 'Done', 'Backlog').",
+        parameters: {
+            type: "object",
+            properties: {
+                projectId:  { type: "string", description: "Project node ID" },
+                itemId:     { type: "string", description: "Project item node ID" },
+                fieldId:    { type: "string", description: "Status field node ID" },
+                columnName: { type: "string", description: "Target column name, e.g. 'In Progress'" },
+            },
+            required: ["projectId", "itemId", "fieldId", "columnName"],
+        },
+        execute: withErrorHandling("move_project_card", async (args, deps) => {
+            await deps.gitOpsService.moveProjectCardByName(
+                args.projectId, args.itemId, args.fieldId, args.columnName
+            );
+            return { moved: true, column: args.columnName };
+        }),
+    },
+
+    // ── 4. Comment on an issue or PR ──────────────────────────
+    {
+        name: "comment_on_issue",
+        description: "Post a comment on a GitHub issue or pull request.",
+        parameters: {
+            type: "object",
+            properties: {
+                issueNumber: { type: "number", description: "Issue or PR number" },
+                body:        { type: "string", description: "Comment body in markdown" },
+            },
+            required: ["issueNumber", "body"],
+        },
+        execute: withErrorHandling("comment_on_issue", async (args, deps) => {
+            await deps.gitOpsService.commentOnIssue(deps.owner, deps.repo, args.issueNumber, args.body);
+            return { commented: true, issueNumber: args.issueNumber };
+        }),
+    },
+
+    // ── 5. Close an issue ────────────────────────────────────
+    {
+        name: "close_issue",
+        description: "Close a GitHub issue by its number.",
+        parameters: {
+            type: "object",
+            properties: {
+                issueNumber: { type: "number" },
+                reason:      { type: "string", enum: ["completed", "not_planned"], description: "Close reason" },
+            },
+            required: ["issueNumber"],
+        },
+        execute: withErrorHandling("close_issue", async (args, deps) => {
+            const { octokit, owner, repo } = deps;
+            const { data } = await octokit.issues.update({
+                owner, repo,
+                issue_number: args.issueNumber,
+                state: "closed",
+                state_reason: args.reason ?? "completed",
+            });
+            return { closed: true, issueNumber: data.number, url: data.html_url };
+        }),
+    },
+
+    // ── 6. Read a file from the repo ─────────────────────────
+    {
+        name: "read_file",
+        description: "Read the content of a specific file from the repo. Use to inspect code, config, or docs.",
+        parameters: {
+            type: "object",
+            properties: {
+                path: { type: "string", description: "File path relative to the repo root, e.g. 'lib/main.dart'" },
+            },
+            required: ["path"],
+        },
+        execute: withErrorHandling("read_file", async (args, deps) => {
+            const contents = await deps.contextService.readFileContents(deps.owner, deps.repo, [args.path]);
+            const file = contents.find((f: any) => f.path === args.path);
+            if (!file) return { error: true, message: `File '${args.path}' not found in the repo.` };
+            return { path: file.path, content: file.content };
+        }),
+    },
+
+    // ── 7. Search file tree ──────────────────────────────────
+    {
+        name: "search_repo_files",
+        description: "Search the repo file tree by keyword or extension. Returns matching file paths.",
+        parameters: {
+            type: "object",
+            properties: {
+                query: { type: "string", description: "Keyword to search for in file paths, e.g. 'auth', '.service.ts'" },
+            },
+            required: ["query"],
+        },
+        execute: withErrorHandling("search_repo_files", async (args, deps) => {
+            const tree: string[] = await deps.contextService.getRepoTree(deps.owner, deps.repo);
+            const q = args.query.toLowerCase();
+            const matches = tree.filter((p: string) => p.toLowerCase().includes(q));
+            return { query: args.query, matches: matches.slice(0, 50), total: matches.length };
+        }),
+    },
+
+    // ── 8. List open tickets ──────────────────────────────────
+    {
+        name: "list_open_tickets",
+        description: "List open GitHub issues and project tickets for the org.",
+        parameters: {
+            type: "object",
+            properties: {
+                repo: { type: "string", description: "Optional: filter by repo name" },
+            },
+        },
+        execute: withErrorHandling("list_open_tickets", async (args, deps) => {
+            const tickets = await deps.openTicketsService.fetchOpenTickets(deps.org);
+            const filtered = args.repo
+                ? tickets.filter((t: any) => t.repo?.toLowerCase() === args.repo.toLowerCase())
+                : tickets;
+            return { tickets: filtered.slice(0, 30), total: filtered.length };
+        }),
+    },
+
+    // ── 9. List open PRs ─────────────────────────────────────
+    {
+        name: "list_open_prs",
+        description: "List open pull requests in the current repo.",
+        parameters: {
+            type: "object",
+            properties: {
+                state: { type: "string", enum: ["open", "closed", "all"], description: "PR state filter (default: open)" },
+            },
+        },
+        execute: withErrorHandling("list_open_prs", async (args, deps) => {
+            const { octokit, owner, repo } = deps;
+            const { data } = await octokit.pulls.list({
+                owner, repo,
+                state: args.state ?? "open",
+                per_page: 20,
+            });
+            return {
+                prs: data.map((pr: any) => ({
+                    number: pr.number,
+                    title: pr.title,
+                    author: pr.user?.login,
+                    url: pr.html_url,
+                    state: pr.state,
+                    draft: pr.draft,
+                    createdAt: pr.created_at,
+                })),
+                total: data.length,
+            };
+        }),
+    },
+
+    // ── 10. Review a PR ──────────────────────────────────────
+    {
+        name: "review_pr",
+        description: "Run an AI code review on a pull request. Returns bug findings, security issues, and suggestions.",
+        parameters: {
+            type: "object",
+            properties: {
+                prNumber: { type: "number", description: "Pull request number" },
+            },
+            required: ["prNumber"],
+        },
+        execute: withErrorHandling("review_pr", async (args, deps) => {
+            const review = await deps.reviewService.reviewPr(deps.owner, deps.repo, args.prNumber);
+            return {
+                prTitle: review.pr.title,
+                bugs: review.review.bugs,
+                security: review.review.security,
+                suggestions: review.review.suggestions,
+                summary: review.review.summary,
+                filesReviewed: review.reviewMeta.filesReviewed,
+                fromCache: review.fromCache,
+            };
+        }),
+    },
+
+    // ── 11. Trigger AI implementation for an issue ───────────
+    {
+        name: "trigger_ai_implement",
+        description: "Trigger the Sellio AI Agent to autonomously implement a GitHub issue (generates code, opens a PR). Use with caution.",
+        parameters: {
+            type: "object",
+            properties: {
+                issueNumber: { type: "number", description: "Issue number to implement" },
+                projectId:   { type: "string", description: "Project node ID for moving the card" },
+                itemId:      { type: "string", description: "Project item node ID" },
+                fieldId:     { type: "string", description: "Status field node ID" },
+            },
+            required: ["issueNumber"],
+        },
+        execute: withErrorHandling("trigger_ai_implement", async (args, deps) => {
+            const { octokit, owner, repo, syncQueue, logger } = deps;
+            const { data: issue } = await octokit.issues.get({ owner, repo, issue_number: args.issueNumber });
+            const job = {
+                type: "ai_implement",
+                owner, repo,
+                issueNumber: issue.number,
+                issueTitle: issue.title,
+                issueBody: issue.body,
+                projectId: args.projectId ?? "",
+                itemId: args.itemId ?? "",
+                fieldId: args.fieldId ?? "",
+                phase: 1,
+                taskId: `${owner}-${repo}-${issue.number}-${Date.now()}`,
+            };
+
+            if (syncQueue) {
+                await syncQueue.send(job);
+                return { enqueued: true, taskId: job.taskId, issueNumber: issue.number };
+            }
+            logger.warn("syncQueue not available — cannot enqueue AI implement job");
+            return { error: true, message: "AI implementation queue is not configured. Contact the squad admin." };
+        }),
+    },
+
+    // ── 12. Get team leaderboard ─────────────────────────────
+    {
+        name: "get_leaderboard",
+        description: "Fetch the current team leaderboard with scores and rankings.",
+        parameters: {
+            type: "object",
+            properties: {
+                limit: { type: "number", description: "Max number of entries to return (default 10)" },
+            },
+        },
+        execute: withErrorHandling("get_leaderboard", async (args, deps) => {
+            const result = await deps.scoreAggregationService.getLeaderboard(args.limit ?? 10);
+            return { entries: result.entries, cachedAt: result.cachedAt };
+        }),
+    },
+
+    // ── 13. Resolve project node ID by name ──────────────────
+    {
+        name: "resolve_project_id",
+        description: "Find the GitHub Projects V2 node ID for a project by its name.",
+        parameters: {
+            type: "object",
+            properties: {
+                projectName: { type: "string", description: "Project name or partial name, e.g. 'Sellio Mobile'" },
+            },
+            required: ["projectName"],
+        },
+        execute: withErrorHandling("resolve_project_id", async (args, deps) => {
+            const projects = await deps.gqlClient.listOrgProjectsSlim(deps.org);
+            const q = args.projectName.toLowerCase().replace(/[_\-]/g, " ");
+            const match = projects.find((p: any) => {
+                const title = (p.title ?? "").toLowerCase().replace(/[_\-]/g, " ");
+                return title.includes(q) || q.includes(title);
+            });
+            if (!match) return { found: false, available: projects.map((p: any) => p.title) };
+            return { found: true, projectId: match.id, title: match.title, number: match.number };
+        }),
+    },
+
+    // ── 14. Get repo CI status ───────────────────────────────
+    {
+        name: "get_repo_ci_status",
+        description: "Get recent CI workflow runs for the repo, including any failures.",
+        parameters: {
+            type: "object",
+            properties: {
+                branch: { type: "string", description: "Branch name (default: main/master)" },
+            },
+        },
+        execute: withErrorHandling("get_repo_ci_status", async (args, deps) => {
+            const branch = args.branch ?? "main";
+            const runs = await deps.gitOpsService.listWorkflowRunsForBranch(deps.owner, deps.repo, branch);
+            return {
+                branch,
+                runs: runs.slice(0, 5).map((r: any) => ({
+                    id: r.id,
+                    name: r.name,
+                    status: r.status,
+                    conclusion: r.conclusion,
+                    branch: r.head_branch,
+                    url: r.html_url,
+                    createdAt: r.created_at,
+                })),
+            };
+        }),
+    },
+];
+
+// ─── Registry class ──────────────────────────────────────────
+
+export class AgentToolRegistry {
+    private readonly toolMap: Map<string, AgentTool>;
+
+    constructor() {
+        this.toolMap = new Map(TOOLS.map(t => [t.name, t]));
+    }
+
+    /** Returns the tool list in OpenAI-compatible function-calling format. */
+    getToolSchemas(): { type: "function"; function: { name: string; description: string; parameters: Record<string, unknown> } }[] {
+        return TOOLS.map(t => ({
+            type: "function" as const,
+            function: {
+                name: t.name,
+                description: t.description,
+                parameters: t.parameters,
+            },
+        }));
+    }
+
+    /** Executes a named tool with the given args and deps. Returns a structured result. */
+    async execute(toolName: string, args: unknown, deps: ToolDeps): Promise<unknown> {
+        const tool = this.toolMap.get(toolName);
+        if (!tool) {
+            return {
+                error: true,
+                message: `Tool '${toolName}' is not implemented. Available tools: ${[...this.toolMap.keys()].join(", ")}`,
+            };
+        }
+        return tool.execute(args, deps);
+    }
+
+    /** Returns a plain-text summary of all tools for the system prompt. */
+    getToolSummary(): string {
+        return TOOLS.map(t => `- **${t.name}**: ${t.description}`).join("\n");
+    }
+}

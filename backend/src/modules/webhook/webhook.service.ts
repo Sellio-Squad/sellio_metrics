@@ -32,6 +32,8 @@ import type {
     PushPayload,
 } from "./webhook.schemas";
 import type { AiPipelineService } from "../ai-pipeline/ai-pipeline.service";
+import type { AiChatService } from "../ai-chat/ai-chat.service";
+import type { OrgMemberGuard } from "../ai-chat/org-member-guard";
 
 export interface WebhookHandlerResult {
     affectedDevelopers: string[];
@@ -50,6 +52,8 @@ interface WebhookServiceDeps {
     cachedGithubClient?: CachedGitHubClient;
     env: { org: string };
     aiPipelineService: AiPipelineService;
+    aiChatService: AiChatService;
+    orgMemberGuard: OrgMemberGuard;
 }
 
 export class WebhookService {
@@ -64,6 +68,8 @@ export class WebhookService {
     private readonly cachedGithubClient?: CachedGitHubClient;
     private readonly org: string;
     private readonly aiPipelineService: AiPipelineService;
+    private readonly aiChatService: AiChatService;
+    private readonly orgMemberGuard: OrgMemberGuard;
 
     constructor(deps: WebhookServiceDeps) {
         this.logger        = deps.logger.child({ module: "webhook-service" });
@@ -77,6 +83,8 @@ export class WebhookService {
         this.cachedGithubClient = deps.cachedGithubClient;
         this.org           = deps.env.org;
         this.aiPipelineService = deps.aiPipelineService;
+        this.aiChatService = deps.aiChatService;
+        this.orgMemberGuard = deps.orgMemberGuard;
     }
 
     // ─── Pull Request (merged) ──────────────────────────────
@@ -208,15 +216,23 @@ export class WebhookService {
         if (hasMention && author && !isBot(author, comment.user?.type)) {
             const owner = payload.repository.owner?.login ?? this.org;
             const repo = payload.repository.name;
-            const botPromise = this.aiPipelineService.handleCommentMention(
-                owner,
-                repo,
-                payload.issue.number,
-                comment.id,
-                comment.body,
-                author
-            ).catch(err => {
-                this.logger.error({ err: err.message }, "Error in handleCommentMention");
+
+            const botPromise = (async () => {
+                // Security: verify org membership before letting the bot act
+                const isMember = await this.orgMemberGuard.isMember(this.org, author);
+                if (!isMember) {
+                    await this.aiPipelineService.gitOps.commentOnIssue(owner, repo, payload.issue.number,
+                        `👋 Hi @${author}! I'm **Sellio Bot** — I only assist members of the **${this.org}** organization. If you believe this is an error, contact the squad admin.`);
+                    return;
+                }
+                // Route to full agentic AI chat service
+                await this.aiChatService.chatFromGitHub(
+                    owner, repo, author,
+                    payload.issue.number,
+                    comment.body
+                );
+            })().catch(err => {
+                this.logger.error({ err: err.message }, "Error in issue comment bot mention");
             });
 
             return { ...affected, botPromise };
@@ -242,18 +258,21 @@ export class WebhookService {
         if (hasMention && author && !isBot(author, comment.user?.type)) {
             const owner = payload.repository.owner?.login ?? this.org;
             const repo = payload.repository.name;
-            const botPromise = this.aiPipelineService.handleReviewComment(
-                owner,
-                repo,
-                payload.pull_request.number,
-                comment.id,
-                comment.body,
-                author,
-                comment.path || "",
-                comment.line ?? null,
-                comment.diff_hunk || ""
-            ).catch(err => {
-                this.logger.error({ err: err.message }, "Error in handleReviewComment");
+
+            const botPromise = (async () => {
+                const isMember = await this.orgMemberGuard.isMember(this.org, author);
+                if (!isMember) {
+                    await this.aiPipelineService.gitOps.commentOnIssue(owner, repo, payload.pull_request.number,
+                        `👋 Hi @${author}! I'm **Sellio Bot** — I only assist members of the **${this.org}** organization.`);
+                    return;
+                }
+                await this.aiChatService.chatFromGitHub(
+                    owner, repo, author,
+                    payload.pull_request.number,
+                    comment.body
+                );
+            })().catch(err => {
+                this.logger.error({ err: err.message }, "Error in review comment bot mention");
             });
 
             return { ...affected, botPromise };

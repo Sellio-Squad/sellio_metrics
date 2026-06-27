@@ -770,4 +770,79 @@ export class GitHubGraphQLClient {
 
         return allCommits;
     }
+
+    // ─── Project V2 mutations ─────────────────────────────────
+
+    /**
+     * Adds an issue (or any content) to a GitHub Projects V2 board by node IDs.
+     * Used by the AI chat agent when creating tickets.
+     */
+    async addProjectV2Item(projectId: string, contentNodeId: string): Promise<string> {
+        const mutation = `
+            mutation AddProjectV2Item($projectId: ID!, $contentId: ID!) {
+                addProjectV2ItemById(input: {
+                    projectId: $projectId
+                    contentId: $contentId
+                }) {
+                    item {
+                        id
+                    }
+                }
+            }
+        `;
+        const result: any = await (this.octokit as any).graphql(mutation, {
+            projectId,
+            contentId: contentNodeId,
+        });
+        const itemId = result?.addProjectV2ItemById?.item?.id ?? "";
+        this.logger.info({ projectId, contentNodeId, itemId }, "Added item to Project V2");
+        return itemId;
+    }
+
+    /**
+     * Returns a slim list of org projects: { id, title, number }.
+     * Used by the AI chat agent to resolve project names to node IDs.
+     * Cached externally by the caller.
+     */
+    async listOrgProjectsSlim(org: string): Promise<{ id: string; title: string; number: number }[]> {
+        const query = `
+            query ListOrgProjectsSlim($org: String!, $cursor: String) {
+                organization(login: $org) {
+                    projectsV2(first: 20, after: $cursor) {
+                        nodes {
+                            id
+                            title
+                            number
+                        }
+                        pageInfo {
+                            hasNextPage
+                            endCursor
+                        }
+                    }
+                }
+                rateLimit { cost remaining }
+            }
+        `;
+
+        const projects: { id: string; title: string; number: number }[] = [];
+        let cursor: string | null = null;
+        let hasMore = true;
+
+        while (hasMore && projects.length < 50) {
+            const result: any = await (this.octokit as any).graphql(query, {
+                org,
+                cursor: cursor ?? undefined,
+            });
+
+            const page = result?.organization?.projectsV2;
+            if (!page) break;
+
+            projects.push(...(page.nodes ?? []));
+            hasMore = page.pageInfo.hasNextPage;
+            cursor = page.pageInfo.endCursor ?? null;
+        }
+
+        this.logger.info({ org, total: projects.length }, "Listed org projects (slim)");
+        return projects;
+    }
 }

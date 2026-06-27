@@ -45,6 +45,7 @@ import debugRoutes      from "./modules/debug/debug.routes";
 import logsRoutes       from "./modules/logs/logs.routes";
 import reviewRoutes     from "./modules/review/review.routes";
 import { aiPipelineRoutes } from "./modules/ai-pipeline/ai-pipeline.routes";
+import aiChatRoutes from "./modules/ai-chat/ai-chat.routes";
 import type { SyncRepoJob, CommitSyncJob } from "./modules/sync/sync-job.types";
 
 // ─── Durable Object export (required by Cloudflare runtime) ────────────────
@@ -152,6 +153,7 @@ function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace, aiPipe
         meetingRooms,
     ));
     app.route("/api/ai-pipeline", aiPipelineRoutes(aiPipelineHub));
+    app.route("/api/ai-chat",     aiChatRoutes);
     app.route("/api/debug",       debugRoutes);
     app.route("/api/logs",        logsRoutes);
     app.route("/api/review",      reviewRoutes);
