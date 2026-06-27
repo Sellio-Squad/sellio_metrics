@@ -3,8 +3,13 @@
 # Deploys the Fastify backend as a Cloudflare Worker.
 # Uses nodejs_compat for Octokit, Awilix, and Pino support.
 #
-# Secrets (set via dashboard or `wrangler secret put`):
-#   APP_ID, INSTALLATION_ID, APP_PRIVATE_KEY, GEMINI_API_KEY
+# Secrets (set via `wrangler secret put <NAME>` — NEVER commit values):
+#   APP_ID                — GitHub App ID
+#   INSTALLATION_ID       — GitHub App Installation ID
+#   APP_PRIVATE_KEY       — GitHub App private key (PEM)
+#   GEMINI_API_KEY        — Google AI Studio key (free tier)
+#   SELLIO_WEBHOOK_SECRET — Shared secret for GitHub Actions → Worker callbacks
+#   WORKER_URL            — Public URL: https://sellio-metrics.abdoessam743.workers.dev
 #
 # AI Services (Free):
 #   Workers AI  — 10,000 neurons/day free (GPU inference on Cloudflare edge)

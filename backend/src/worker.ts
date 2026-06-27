@@ -78,6 +78,8 @@ interface WorkerEnv {
     DEEPSEEK_API_KEY?: string;
     GROK_API_KEY?: string;
     GROQ_API_KEY?: string;
+    SELLIO_WEBHOOK_SECRET?: string;  // Shared secret for GitHub Actions → Worker callbacks
+    WORKER_URL?: string;             // Public URL of this Worker (for agent callback)
     // Cloudflare AI Services (free tier)
     AI?:            any;          // Workers AI binding — free on-platform GPU inference
     BROWSER?:       any;          // Cloudflare Browser Rendering binding
@@ -103,8 +105,10 @@ function bootstrapEnv(workerEnv: WorkerEnv): void {
     if (workerEnv.DEEPSEEK_API_KEY)      process.env.DEEPSEEK_API_KEY     = workerEnv.DEEPSEEK_API_KEY;
     if (workerEnv.GROK_API_KEY)          process.env.GROK_API_KEY         = workerEnv.GROK_API_KEY;
     if (workerEnv.GROQ_API_KEY)          process.env.GROQ_API_KEY         = workerEnv.GROQ_API_KEY;
-    if (workerEnv.CF_ACCOUNT_ID)         process.env.CF_ACCOUNT_ID        = workerEnv.CF_ACCOUNT_ID;
-    if (workerEnv.AI_GATEWAY_SLUG)       process.env.AI_GATEWAY_SLUG      = workerEnv.AI_GATEWAY_SLUG;
+    if (workerEnv.CF_ACCOUNT_ID)           process.env.CF_ACCOUNT_ID           = workerEnv.CF_ACCOUNT_ID;
+    if (workerEnv.AI_GATEWAY_SLUG)         process.env.AI_GATEWAY_SLUG         = workerEnv.AI_GATEWAY_SLUG;
+    if (workerEnv.SELLIO_WEBHOOK_SECRET)   process.env.SELLIO_WEBHOOK_SECRET   = workerEnv.SELLIO_WEBHOOK_SECRET;
+    if (workerEnv.WORKER_URL)              process.env.WORKER_URL              = workerEnv.WORKER_URL;
 }
 
 function buildApp(cradle: Cradle, meetingRooms: CFDurableObjectNamespace, aiPipelineHub: CFDurableObjectNamespace) {
