@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:injectable/injectable.dart';
 import 'package:sellio_metrics/data/datasources/ai_chat/ai_chat_data_source.dart';
 import 'package:sellio_metrics/domain/entities/chat_message_entity.dart';
 import 'package:sellio_metrics/domain/entities/repo_info.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 @injectable
 class AiChatProvider extends ChangeNotifier {
@@ -25,11 +27,49 @@ class AiChatProvider extends ChangeNotifier {
   RepoInfo? get selectedRepo => _selectedRepo;
   List<RepoInfo> get availableRepos => _availableRepos;
 
+  Future<void> _loadHistory() async {
+    if (_selectedRepo == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final historyStr = prefs.getString('ai_chat_history_${_selectedRepo!.id}');
+      final sessionIdStr = prefs.getString('ai_chat_session_${_selectedRepo!.id}');
+      
+      if (historyStr != null) {
+        final List<dynamic> decoded = jsonDecode(historyStr);
+        _messages = decoded.map((e) => ChatMessageEntity.fromJson(e as Map<String, dynamic>)).toList();
+      } else {
+        _messages = [];
+      }
+      _sessionId = sessionIdStr;
+      notifyListeners();
+    } catch (_) {
+      _messages = [];
+      _sessionId = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveHistory() async {
+    if (_selectedRepo == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final historyStr = jsonEncode(_messages.map((e) => e.toJson()).toList());
+      await prefs.setString('ai_chat_history_${_selectedRepo!.id}', historyStr);
+      
+      if (_sessionId != null) {
+        await prefs.setString('ai_chat_session_${_selectedRepo!.id}', _sessionId!);
+      } else {
+        await prefs.remove('ai_chat_session_${_selectedRepo!.id}');
+      }
+    } catch (_) {}
+  }
+
   Future<void> _loadRepos() async {
     try {
       _availableRepos = await _dataSource.getAvailableRepos();
       if (_availableRepos.isNotEmpty && _selectedRepo == null) {
         _selectedRepo = _availableRepos.first;
+        await _loadHistory();
       }
       notifyListeners();
     } catch (e) {
@@ -41,9 +81,7 @@ class AiChatProvider extends ChangeNotifier {
   void selectRepo(RepoInfo repo) {
     if (_selectedRepo?.fullName == repo.fullName) return;
     _selectedRepo = repo;
-    _messages = [];
-    _sessionId = null;
-    notifyListeners();
+    _loadHistory();
   }
 
   Future<void> sendMessage(String text) async {
@@ -61,6 +99,7 @@ class AiChatProvider extends ChangeNotifier {
     _messages.add(userMessage);
     _isLoading = true;
     _error = null;
+    await _saveHistory();
     notifyListeners();
 
     try {
@@ -81,6 +120,7 @@ class AiChatProvider extends ChangeNotifier {
       );
 
       _messages.add(botMessage);
+      await _saveHistory();
     } catch (e) {
       _error = 'Failed to send message: $e';
     } finally {
@@ -98,6 +138,7 @@ class AiChatProvider extends ChangeNotifier {
     _messages = [];
     _sessionId = null;
     _error = null;
+    await _saveHistory();
     notifyListeners();
   }
 }
