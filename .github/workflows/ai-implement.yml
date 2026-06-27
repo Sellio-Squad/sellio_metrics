@@ -1,0 +1,172 @@
+name: 🤖 AI Implement
+
+on:
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: "Target repo owner (e.g. Sellio-Squad)"
+        required: true
+        type: string
+      repo:
+        description: "Target repo name (e.g. sellio_mobile)"
+        required: true
+        type: string
+      issue_number:
+        description: "Issue number"
+        required: true
+        type: string
+      task_id:
+        description: "Unique task ID from Cloudflare KV"
+        required: true
+        type: string
+      plan_json:
+        description: "Implementation plan as JSON string"
+        required: true
+        type: string
+      branch_name:
+        description: "Branch to create and push to (e.g. ai/42-fix-login)"
+        required: true
+        type: string
+
+jobs:
+  implement:
+    name: "🤖 Implement Issue #${{ inputs.issue_number }} in ${{ inputs.repo }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Checkout sellio_metrics to get agent scripts ─────────────
+      - name: "📦 Checkout sellio_metrics (agent scripts)"
+        uses: actions/checkout@v4
+        with:
+          path: sellio_metrics
+
+      # ── 2. Checkout the TARGET repo ─────────────────────────────────
+      - name: "📦 Checkout ${{ inputs.owner }}/${{ inputs.repo }}"
+        uses: actions/checkout@v4
+        with:
+          repository: "${{ inputs.owner }}/${{ inputs.repo }}"
+          token: ${{ secrets.ORG_GITHUB_TOKEN }}
+          path: target_repo
+          fetch-depth: 0
+
+      # ── 3. Auto-detect stack ─────────────────────────────────────────
+      - name: "🔍 Detect stack"
+        id: detect
+        run: |
+          cd target_repo
+          if [ -f "pubspec.yaml" ]; then
+            echo "stack=flutter" >> $GITHUB_OUTPUT
+            echo "Detected: Flutter/Dart"
+          elif [ -f "build.gradle.kts" ] || [ -f "build.gradle" ]; then
+            echo "stack=kotlin" >> $GITHUB_OUTPUT
+            echo "Detected: Kotlin/Spring Boot"
+          elif [ -f "package.json" ]; then
+            echo "stack=node" >> $GITHUB_OUTPUT
+            echo "Detected: Node/TypeScript"
+          else
+            echo "stack=unknown" >> $GITHUB_OUTPUT
+            echo "Unknown stack"
+          fi
+
+      # ── 4a. Setup Flutter ────────────────────────────────────────────
+      - name: "Setup Flutter"
+        if: steps.detect.outputs.stack == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.x"
+          channel: "stable"
+          cache: true
+
+      # ── 4b. Setup Java 17 (Kotlin/Spring Boot) ─────────────────────
+      - name: "Setup Java 17"
+        if: steps.detect.outputs.stack == 'kotlin'
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      # ── 4c. Setup Node 20 ────────────────────────────────────────────
+      - name: "Setup Node 20"
+        if: steps.detect.outputs.stack == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: target_repo/package-lock.json
+
+      # ── 5. Setup Python for agent script ────────────────────────────
+      - name: "Setup Python 3.11"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: "Install Python dependencies"
+        run: pip install google-generativeai
+
+      # ── 6. Configure git in target repo ─────────────────────────────
+      - name: "Configure git"
+        run: |
+          cd target_repo
+          git config user.email "sellio-bot@sellio.app"
+          git config user.name "Sellio Bot"
+          git checkout -b "${{ inputs.branch_name }}"
+
+      # ── 7. Run AI agent ──────────────────────────────────────────────
+      - name: "Run AI Agent"
+        id: agent
+        working-directory: target_repo
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          STACK: ${{ steps.detect.outputs.stack }}
+          PLAN_JSON: ${{ inputs.plan_json }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+        run: python ../sellio_metrics/.github/scripts/run_agent.py
+
+      # ── 8. Push branch ───────────────────────────────────────────────
+      - name: "Push branch to ${{ inputs.repo }}"
+        run: |
+          cd target_repo
+          git push origin "${{ inputs.branch_name }}"
+
+      # ── 9. Notify Cloudflare — SUCCESS ───────────────────────────────
+      - name: "Notify Cloudflare (success)"
+        if: success()
+        run: |
+          PAYLOAD=$(jq -n \
+            --arg taskId    "${{ inputs.task_id }}" \
+            --arg branch    "${{ inputs.branch_name }}" \
+            --arg status    "success" \
+            --arg owner     "${{ inputs.owner }}" \
+            --arg repo      "${{ inputs.repo }}" \
+            --argjson issueNum  "${{ inputs.issue_number }}" \
+            '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum}')
+
+          curl -sf --retry 3 -X POST \
+            "${{ secrets.SELLIO_WORKER_URL }}/api/webhooks/ai-pipeline-result" \
+            -H "Content-Type: application/json" \
+            -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
+            -d "$PAYLOAD"
+
+      # ── 10. Notify Cloudflare — FAILURE ─────────────────────────────
+      - name: "Notify Cloudflare (failure)"
+        if: failure()
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          PAYLOAD=$(jq -n \
+            --arg taskId   "${{ inputs.task_id }}" \
+            --arg branch   "${{ inputs.branch_name }}" \
+            --arg status   "failed" \
+            --arg owner    "${{ inputs.owner }}" \
+            --arg repo     "${{ inputs.repo }}" \
+            --argjson issueNum "${{ inputs.issue_number }}" \
+            --arg error    "Agent failed after max retries. Logs: $RUN_URL" \
+            '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum, error: $error}')
+
+          curl -sf --retry 3 -X POST \
+            "${{ secrets.SELLIO_WORKER_URL }}/api/webhooks/ai-pipeline-result" \
+            -H "Content-Type: application/json" \
+            -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
+            -d "$PAYLOAD" || echo "Cloudflare notification failed"

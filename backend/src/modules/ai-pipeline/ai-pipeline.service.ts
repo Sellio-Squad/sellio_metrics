@@ -189,151 +189,173 @@ export class AiPipelineService {
         }
     }
 
-    // ─── Phase 2: Code Gen & Self-Validation ──────────────────
+    // ─── Phase 2: Dispatch GitHub Actions Agent ───────────────
 
     private async executePhase2(job: AiImplementJob): Promise<void> {
-        this.logger.info({ taskId: job.taskId }, "Running Phase 2: Code Generation and Self-Validation");
+        this.logger.info({ taskId: job.taskId }, "Running Phase 2: Dispatching GitHub Actions AI agent");
 
-        await this.emitEvent(job, "phase2", "Generating Code", "Generating code changes file-by-file...", "running");
+        await this.emitEvent(job, "phase2", "Dispatching Agent", "Triggering GitHub Actions AI agent...", "running");
 
-        // 1. Retrieve plan, context, and images from KV
-        const [contextVal, planVal, imagesVal, searchContextVal] = await Promise.all([
-            this.cache.get<RepoContext>(`ai:task:${job.taskId}:context`),
+        // 1. Retrieve plan from KV
+        const [planVal, searchContextVal] = await Promise.all([
             this.cache.get<ImplementationPlan>(`ai:task:${job.taskId}:plan`),
-            this.cache.get<{ mimeType: string; data: string }[]>(`ai:task:${job.taskId}:images`),
             this.cache.get<string>(`ai:task:${job.taskId}:search_context`),
         ]);
 
-        if (!contextVal || !planVal) {
-            throw new AppError("Context or plan not found in KV cache. Phase 2 aborted.", 400, "AI_CACHE_MISS");
+        if (!planVal) {
+            throw new AppError("Plan not found in KV cache. Phase 2 aborted.", 400, "AI_CACHE_MISS");
         }
 
-        const context = contextVal.data;
         const plan = planVal.data;
-        const images = imagesVal?.data || [];
         const searchContext = searchContextVal?.data || "";
 
-        // Comment on issue that code generation has started
+        // 2. Compute branch name (same convention as before)
+        const slug = job.issueTitle
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, "-")
+            .replace(/(^-|-$)/g, "")
+            .slice(0, 40);
+        const branchName = `ai/${job.issueNumber}-${slug}`;
+
+        // 3. Build plan JSON for the agent
+        const planJson = JSON.stringify({
+            summary:        plan.summary,
+            approach:       plan.approach,
+            filesToModify:  plan.filesToModify,
+            newFiles:       plan.newFiles,
+            issueNumber:    job.issueNumber,
+            issueTitle:     job.issueTitle,
+            issueBody:      job.issueBody ?? "",
+            searchContext,
+        });
+
+        // 4. Save pending state so the callback handler can find the job
+        await this.cache.set(`ai:task:${job.taskId}:phase2_pending`, {
+            ...job,
+            branchName,
+            phase: 3,
+        }, 7200); // 2h TTL (workflow has 30 min timeout)
+
+        // 5. Dispatch workflow_dispatch via GitHub REST API
+        const token = process.env.GITHUB_TOKEN || process.env.APP_PRIVATE_KEY;
+        const workflowRef = "main"; // branch where the workflow file lives
+
+        // We always dispatch to sellio_metrics (where the workflow is defined)
+        const dispatchUrl =
+            `https://api.github.com/repos/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml/dispatches`;
+
+        const workerUrl = process.env.WORKER_URL || "https://sellio-metrics.abdoessam743.workers.dev";
+
+        const dispatchBody = {
+            ref: workflowRef,
+            inputs: {
+                owner:        job.owner,
+                repo:         job.repo,
+                issue_number: String(job.issueNumber),
+                task_id:      job.taskId,
+                plan_json:    planJson,
+                branch_name:  branchName,
+            },
+        };
+
+        // Use Octokit if available, otherwise fall back to raw fetch
+        try {
+            const octokit = this.gitOps["github"].raw;
+            await octokit.request("POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches", {
+                owner:       "Sellio-Squad",
+                repo:        "sellio_metrics",
+                workflow_id: "ai-implement.yml",
+                ref:         workflowRef,
+                inputs:      dispatchBody.inputs,
+            });
+        } catch (err: any) {
+            this.logger.error({ err: err.message }, "Failed to dispatch GitHub Actions workflow");
+            throw new AppError(`Failed to dispatch agent workflow: ${err.message}`, 502, "GH_DISPATCH_FAILED");
+        }
+
+        // 6. Comment on issue that the agent has been dispatched
         await this.gitOps.commentOnIssue(
             job.owner,
             job.repo,
             job.issueNumber,
-            `🤖 **Sellio AI Agent**\n- *Phase 2:* Generating code modifications and performing self-validation checks...`
+            `🤖 **Sellio AI Agent**\n- *Phase 2:* GitHub Actions agent dispatched. The agent will clone the repo, write code, run \`${this.getTestCommand(job.repo)}\`, and self-correct on failures.\n- Track progress: [View workflow run](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml)`
         );
 
-        let changes: CodeChange[] = [];
-        let validated = false;
-        let attempt = 1;
-        let feedback = "";
+        await this.emitEvent(
+            job,
+            "phase2",
+            "Agent Dispatched",
+            `GitHub Actions agent is running. Branch: \`${branchName}\`. Waiting for result...`,
+            "running"
+        );
 
-        while (attempt <= 3 && !validated) {
-            this.logger.info({ taskId: job.taskId, attempt }, "Code generation attempt");
-            changes = [];
-
-            // Generate code for modified files
-            for (const filePath of plan.filesToModify) {
-                const existingFile = context.relevantFiles.find((f: any) => f.path === filePath);
-                const existingContent = existingFile ? existingFile.content : "";
-                
-                const content = await this.generateCodeForFile(
-                    filePath,
-                    existingContent,
-                    plan,
-                    context,
-                    searchContext,
-                    feedback,
-                    images
-                );
-                changes.push({ path: filePath, content, action: "modify" });
-            }
-
-            // Generate code for new files
-            for (const filePath of plan.newFiles) {
-                const content = await this.generateCodeForFile(
-                    filePath,
-                    "",
-                    plan,
-                    context,
-                    searchContext,
-                    feedback,
-                    images
-                );
-                changes.push({ path: filePath, content, action: "create" });
-            }
-
-            // ── Keep code generation as running until validation passes ──
-            await this.emitEvent(job, "phase2", "Generating Code", `Generated ${changes.length} file change(s). Running validation...`, "running");
-
-            // ── STEP 1: Cloudflare-side structural validation (pre-GitHub CI check) ──
-            // This runs INSIDE Workers before any code reaches GitHub.
-            // Catches real import errors, missing deps, bracket mismatches, etc.
-            await this.emitEvent(job, "phase2", "Validating Code Structure", "Running pre-GitHub structural checks (imports, deps, syntax)...", "running");
-
-            const structuralResult = await this.codeValidator.validate(changes, context, plan);
-
-            if (!structuralResult.success) {
-                // Build targeted feedback from real errors — not a vague "try again"
-                const errorSummary = structuralResult.errors
-                    .map(e => `- [${e.type}] ${e.file}${e.line ? ` (line ${e.line})` : ""}: ${e.message}`)
-                    .join("\n");
-
-                feedback = `Your previous attempt failed STRUCTURAL VALIDATION with the following specific errors:\n${errorSummary}\n\nPlease fix EXACTLY these issues. Focus on:\n- Ensuring all imports point to files that actually exist\n- Fixing any bracket/brace mismatches\n- Adding any missing package dependencies you reference`;
-
-                this.logger.warn({ taskId: job.taskId, attempt, errors: structuralResult.errors.length }, "Structural validation failed, regenerating");
-                // Reset events for next attempt so the user sees a clean retry in the timeline
-                await this.emitEvent(job, "phase2", "Validating Code Structure", `Attempt ${attempt} failed structural check — retrying...`, "running");
-                await this.emitEvent(job, "phase2", "Generating Code", `Attempt ${attempt} failed. Regenerating with targeted feedback...`, "running");
-                attempt++;
-                continue;
-            }
-
-            // Update status to show structural passed and running semantic checks
-            await this.emitEvent(job, "phase2", "Validating Code Structure", "Structural validation passed. Running semantic logic checks...", "running");
-
-            // ── STEP 2: LLM semantic validation (logic, types, architecture) ──
-            // Only runs after structural checks pass — avoids wasting tokens on broken code.
-            const semanticResult = await this.selfValidateChanges(changes, context);
-            if (semanticResult.success) {
-                validated = true;
-                this.logger.info({ taskId: job.taskId, attempt }, "All validation checks passed");
-            } else {
-                const semanticErrors = semanticResult.errors.join("\n");
-                feedback = `Your previous attempt failed SEMANTIC VALIDATION with logic/type errors:\n${semanticErrors}\nPlease fix these architectural and type-level issues.`;
-                this.logger.warn({ taskId: job.taskId, attempt, errors: semanticResult.errors }, "Semantic validation failed, retrying");
-                // Reset events for the retry so the UI timeline reflects the re-attempt
-                await this.emitEvent(job, "phase2", "Validating Code Structure", `Semantic check failed on attempt ${attempt} — retrying...`, "running");
-                await this.emitEvent(job, "phase2", "Generating Code", `Attempt ${attempt} failed semantic check. Regenerating...`, "running");
-                attempt++;
-            }
-        }
-
-        if (!validated) {
-            throw new AppError(`LLM self-validation failed after retries: ${feedback}`, 422, "AI_VALIDATION_FAILED");
-        }
-
-        // On complete success, mark all events done in chronological order
-        await this.emitEvent(job, "phase2", "Generating Code", `Generated ${changes.length} file change(s) successfully.`, "done");
-        await this.emitEvent(job, "phase2", "Validating Code Structure", "All structural/semantic validation checks passed.", "done");
-        await this.emitEvent(job, "phase2", "Code Validation Passed", "All validation checks passed successfully.", "done");
-
-        // Save generated changes to KV
-        await this.cache.set(`ai:task:${job.taskId}:code`, changes, 3600);
-
-        // Enqueue Phase 3
-        if (this.syncQueue) {
-            // Using syncQueue for safety since polling is in Phase 3
-            await this.syncQueue.send({
-                ...job,
-                phase: 3,
-            });
-            this.logger.info({ taskId: job.taskId }, "Phase 2 complete. Enqueued Phase 3");
-        } else {
-            this.logger.warn("No SYNC_QUEUE bound, executing Phase 3 synchronously");
-            await this.executePhase3({ ...job, phase: 3 });
-        }
+        this.logger.info({ taskId: job.taskId, branchName }, "Phase 2 dispatched to GitHub Actions. Awaiting callback.");
+        // Phase 3 will be triggered by the callback route POST /api/webhooks/ai-pipeline-result
     }
 
+    /** Returns a human-readable test command hint based on the repo name. */
+    private getTestCommand(repo: string): string {
+        if (repo.includes("mobile") || repo.includes("metrics")) return "flutter analyze && flutter test";
+        if (repo.includes("backend") && !repo.includes("sellio_metrics")) return "./gradlew build";
+        return "npm run build && npm test";
+    }
+
+    /**
+     * Called when GitHub Actions POSTs back the agent result.
+     * If status=success → enqueue Phase 3 (open PR from agent's branch).
+     * If status=failed  → call handleFailure.
+     */
+    async receiveAgentResult(result: {
+        taskId: string;
+        branch: string;
+        status: "success" | "failed";
+        owner: string;
+        repo: string;
+        issueNumber: number;
+        error?: string;
+    }): Promise<void> {
+        const { taskId, branch, status, owner, repo, issueNumber, error } = result;
+        this.logger.info({ taskId, status, branch }, "Received GitHub Actions agent result");
+
+        // Retrieve the saved pending job
+        const pendingVal = await this.cache.get<any>(`ai:task:${taskId}:phase2_pending`);
+        if (!pendingVal) {
+            this.logger.warn({ taskId }, "No pending Phase 2 job found in KV — may have expired");
+            return;
+        }
+
+        const job: AiImplementJob = pendingVal.data;
+
+        if (status === "success") {
+            await this.emitEvent(job, "phase2", "Agent Completed", `Agent pushed branch \`${branch}\` successfully.`, "done");
+            await this.emitEvent(job, "phase2", "Code Validation Passed", "Build and tests passed in GitHub Actions.", "done");
+
+            // Enqueue Phase 3 with the branch already created by the agent
+            if (this.syncQueue) {
+                await this.syncQueue.send({
+                    ...job,
+                    phase: 3,
+                    agentBranch: branch, // signals Phase 3 to skip branch creation
+                });
+                this.logger.info({ taskId, branch }, "Enqueued Phase 3 from agent result");
+            } else {
+                await this.executePhase3({ ...job, phase: 3, agentBranch: branch } as any);
+            }
+        } else {
+            const errMsg = error ?? "GitHub Actions agent failed (no error detail)";
+            this.logger.error({ taskId, errMsg }, "Agent reported failure");
+            await this.emitEvent(job, "phase2", "Agent Failed", errMsg, "failed");
+            await this.handleFailure(job, errMsg);
+        }
+
+        // Clean up pending state
+        await this.cache.del(`ai:task:${taskId}:phase2_pending`);
+    }
+
+
+
     // ─── Phase 3: Ship & Monitor ─────────────────────────────
+
 
     private async executePhase3(job: AiImplementJob): Promise<void> {
         this.logger.info({ taskId: job.taskId }, "Running Phase 3: Commit and Pull Request");

@@ -3,6 +3,8 @@ import type { HonoEnv } from "../../core/hono-env";
 import type { CFDurableObjectNamespace } from "../meetings/meetings.routes";
 import type { AiRunRecord } from "./ai-pipeline.types";
 
+const WEBHOOK_SECRET = process.env.SELLIO_WEBHOOK_SECRET ?? "";
+
 export function aiPipelineRoutes(aiPipelineHub: CFDurableObjectNamespace) {
     const app = new Hono<HonoEnv>();
 
@@ -11,6 +13,48 @@ export function aiPipelineRoutes(aiPipelineHub: CFDurableObjectNamespace) {
         const doId = aiPipelineHub.idFromName("global");
         const doStub = aiPipelineHub.get(doId);
         return doStub.fetch(c.req.raw);
+    });
+
+    // ─── GitHub Actions agent callback ───────────────────────
+    // Called by .github/workflows/ai-implement.yml when the agent finishes.
+    // Header: X-Sellio-Signature must match SELLIO_WEBHOOK_SECRET.
+    app.post("/result", async (c) => {
+        const { aiPipelineService, logger } = c.get("cradle");
+
+        // Verify shared secret
+        const sig = c.req.header("X-Sellio-Signature");
+        if (!sig || sig !== WEBHOOK_SECRET) {
+            logger.warn({ sig }, "ai-pipeline /result: invalid signature");
+            return c.json({ error: "Unauthorized" }, 401);
+        }
+
+        let body: {
+            taskId: string;
+            branch: string;
+            status: "success" | "failed";
+            owner: string;
+            repo: string;
+            issueNumber: number;
+            error?: string;
+        };
+
+        try {
+            body = await c.req.json();
+        } catch {
+            return c.json({ error: "Invalid JSON body" }, 400);
+        }
+
+        if (!body.taskId || !body.status) {
+            return c.json({ error: "Missing taskId or status" }, 400);
+        }
+
+        try {
+            await aiPipelineService.receiveAgentResult(body);
+            return c.json({ ok: true });
+        } catch (err: any) {
+            logger.error({ taskId: body.taskId, err: err.message }, "Failed to process agent result");
+            return c.json({ error: err.message }, 500);
+        }
     });
 
     // REST list for debugging or fallback
