@@ -8,7 +8,6 @@ abstract class AiChatDataSource {
     required String owner,
     required String repo,
     required String message,
-    required String githubLogin,
     String? sessionId,
   });
 

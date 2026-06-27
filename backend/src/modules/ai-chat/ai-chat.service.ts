@@ -124,20 +124,11 @@ export class AiChatService {
         owner: string,
         repo: string,
         userMessage: string,
-        githubLogin: string,
         sessionId?: string
     ): Promise<{ sessionId: string; message: string; toolCallsMade: ToolCallRecord[] }> {
 
-        // 1. Security: verify org membership
-        const isMember = await this.orgMemberGuard.isMember(this.org, githubLogin);
-        if (!isMember) {
-            throw new AppError(
-                `Sorry, only members of the **${this.org}** GitHub organization can use Sellio Bot.`,
-                403,
-                "NOT_ORG_MEMBER"
-            );
-        }
-
+        // 1. Security: org membership is bypassed (removed)
+        
         // 2. Load or create session
         const sid = sessionId ?? crypto.randomUUID();
         const session = await this.loadOrCreateSession(sid, owner, repo);
