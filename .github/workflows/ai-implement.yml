@@ -49,6 +49,7 @@ jobs:
           repository: "${{ inputs.owner }}/${{ inputs.repo }}"
           token: ${{ steps.app-token.outputs.token }}
           path: target_repo
+          ref: develop
           fetch-depth: 0
 
       # ── 3. Fetch issue details directly from GitHub API ────────────────
@@ -232,11 +233,15 @@ jobs:
       # ── 8. Run OpenHands Agent ────────────────────────────────────────
       - name: "🤖 Run OpenHands Agent"
         id: agent
+        working-directory: target_repo
         env:
-          LLM_MODEL: "gemini/gemini-2.5-flash"
+          LLM_MODEL: "gemini/gemini-1.5-flash"
           LLM_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           WORKSPACE_BASE: ${{ github.workspace }}/target_repo
           RUNTIME: local
+          LLM_NUM_RETRIES: "10"
+          LLM_RETRY_MIN_WAIT: "15"
+          LLM_RETRY_MAX_WAIT: "120"
         run: |
           python -m openhands.core.main \
             -f /tmp/task.txt \
