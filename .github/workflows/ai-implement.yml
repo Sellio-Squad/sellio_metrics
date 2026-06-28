@@ -221,9 +221,8 @@ jobs:
           RUNTIME: local
         run: |
           python -m openhands.core.main \
-            --headless \
             -f /tmp/task.txt \
-            --max-iterations 50
+            -i 50
 
       # ── 9. Final verification (safety net — fails workflow if OpenHands missed errors) ─
       - name: "✅ Final verification — Flutter"
