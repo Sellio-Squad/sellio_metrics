@@ -3,14 +3,16 @@
 Sellio AI Agent — Multi-stack code implementation with real test execution.
 
 Reads an implementation plan from the PLAN_JSON env var, generates code using
-Gemini 2.0 Flash (1500 req/day free tier), writes files to disk, runs the
-appropriate test/build command for the detected stack, and self-corrects on
-failures. Up to MAX_RETRIES attempts.
+Gemini, writes files to disk, runs the appropriate test/build command for the
+detected stack, and self-corrects on failures. Up to MAX_RETRIES attempts.
 
-Key features:
-  - Scopes flutter commands to the specific app subfolder (monorepo safe)
-  - On retry: only regenerates files that CAUSED errors (learns from faults)
-  - Handles 429 rate-limit errors with exponential backoff (up to 60s wait)
+Key design decisions:
+  - ALL files are generated in ONE Gemini call per attempt (not one call per file).
+    This reduces quota usage from N*retries to just retries (e.g. 3 calls total
+    instead of 39), making the free tier viable even for large tasks.
+  - On retry, only files that caused errors are regenerated (targeted learning).
+  - Model fallback chain: tries the next model when one is exhausted.
+  - 429 errors are handled with automatic wait + retry.
 
 Stacks supported:
   flutter  → flutter pub get + flutter analyze + flutter test (app-scoped)
@@ -32,7 +34,6 @@ import time
 from pathlib import Path
 
 from google import genai
-from google.genai import errors as genai_errors
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -42,19 +43,23 @@ STACK          = os.environ.get("STACK", "unknown")
 ISSUE_NUMBER   = os.environ.get("ISSUE_NUMBER", "0")
 MAX_RETRIES    = 3
 
-# Model fallback list: tries each in order when the previous is rate-limited.
-# Free tier quotas (requests/day):
-#   gemini-2.0-flash     → 1,500 RPD
-#   gemini-1.5-flash     → 1,500 RPD (different quota pool)
-#   gemini-1.5-flash-8b  → 4,000 RPD (smallest, most generous)
+# Model fallback chain — ordered by preference.
+# Based on actual free-tier quotas visible in Google AI Studio:
+#   gemini-3.1-flash-lite  → 500 RPD  ✅ Best for this use case
+#   gemini-2.5-flash-lite  →  20 RPD  (fallback)
+#   gemini-2.5-flash       →  20 RPD  (last resort)
 GEMINI_MODELS = [
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-8b",
+    "gemini-3.1-flash-lite",
+    "gemini-2.5-flash-lite",
+    "gemini-2.5-flash",
 ]
-_model_index = 0  # current model index
+_model_index = 0
 
 client = genai.Client(api_key=GEMINI_API_KEY)
+
+# Delimiter used to separate files in the batched prompt/response
+FILE_START = "<<<FILE:"
+FILE_END   = "<<<END>>>"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -64,17 +69,12 @@ def run(cmd: list[str], cwd: str = ".") -> tuple[bool, str]:
         return True, ""
     try:
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            cwd=cwd,
-            timeout=300,
+            cmd, capture_output=True, text=True, cwd=cwd, timeout=300,
         )
         output = (result.stdout + "\n" + result.stderr).strip()
-        success = result.returncode == 0
-        if not success:
+        if result.returncode != 0:
             print(f"  [exit {result.returncode}] {' '.join(cmd)}")
-        return success, output
+        return result.returncode == 0, output
     except subprocess.TimeoutExpired:
         return False, "Command timed out after 5 minutes"
     except FileNotFoundError:
@@ -95,64 +95,236 @@ def write_file(path: str, content: str) -> None:
     print(f"  ✅ {path}")
 
 
-def strip_fences(text: str) -> str:
-    """Remove markdown ``` fences from LLM output."""
-    lines = text.strip().splitlines()
-    if lines and lines[0].startswith("```"):
-        lines = lines[1:]
-    if lines and lines[-1].strip() == "```":
-        lines = lines[:-1]
-    return "\n".join(lines).strip()
-
-
-def call_gemini(prompt: str, retry_count: int = 3) -> str:
+def call_gemini(prompt: str) -> str:
     """
     Call Gemini with automatic retry on 429 rate-limit errors.
-    Falls back to the next model in GEMINI_MODELS if the current one
-    has its daily quota exhausted.
+    Falls back to the next model in GEMINI_MODELS when quota is exhausted.
     """
     global _model_index
-    for attempt in range(retry_count):
+    max_api_retries = 4
+
+    for attempt in range(max_api_retries):
         model = GEMINI_MODELS[_model_index]
         try:
-            response = client.models.generate_content(
-                model=model,
-                contents=prompt,
-            )
+            response = client.models.generate_content(model=model, contents=prompt)
             return response.text
         except Exception as e:
             err_str = str(e)
             is_rate_limit = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+
             if is_rate_limit:
-                # Parse wait hint from error message
+                # If the model has permanently exhausted its daily quota, switch model
+                if "limit: 0" in err_str:
+                    if _model_index < len(GEMINI_MODELS) - 1:
+                        _model_index += 1
+                        next_model = GEMINI_MODELS[_model_index]
+                        print(f"  ⚠️  {model} daily quota exhausted — switching to {next_model}")
+                        continue
+                    else:
+                        print("  ❌ All models have exhausted their daily quota.")
+                        raise
+
+                # Temporary rate limit — wait and retry
                 wait_match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_str)
-                wait_secs  = min(float(wait_match.group(1)) if wait_match else 15.0, 60.0)
-
-                # If quota is permanently exhausted for today (limit: 0), try next model
-                if "limit: 0" in err_str and _model_index < len(GEMINI_MODELS) - 1:
-                    _model_index += 1
-                    next_model = GEMINI_MODELS[_model_index]
-                    print(f"  ⚠️  {model} quota exhausted — switching to {next_model}")
-                    continue
-
-                print(f"  ⏳ Gemini rate-limited ({model}). Waiting {wait_secs:.0f}s...")
+                wait_secs  = min(float(wait_match.group(1)) if wait_match else 20.0, 65.0)
+                print(f"  ⏳ Rate-limited on {model}. Waiting {wait_secs:.0f}s... (attempt {attempt+1}/{max_api_retries})")
                 time.sleep(wait_secs)
-                if attempt == retry_count - 1:
+                if attempt == max_api_retries - 1:
                     raise
             else:
                 raise
+
     raise RuntimeError("Gemini call failed after all retries")
 
 
-# ── Flutter app subfolder detection (monorepo safe) ──────────────────────────
+# ── Batched code generation ───────────────────────────────────────────────────
+
+LANG_HINT = {
+    "flutter": "Dart / Flutter",
+    "kotlin":  "Kotlin / Spring Boot 3 / JPA",
+    "node":    "TypeScript / Node.js",
+    "unknown": "the project's language",
+}
+
+
+def build_batched_prompt(
+    plan: dict,
+    all_paths: list[str],
+    paths_to_generate: list[str],
+    existing: dict[str, str],
+    per_file_errors: dict[str, str],
+) -> str:
+    """
+    Build a single prompt that asks Gemini to generate ALL requested files at once.
+
+    This is the key optimization: 1 API call per attempt instead of N calls,
+    reducing quota usage by ~13x for a typical task.
+    """
+    lang = LANG_HINT.get(STACK, "the project's language")
+
+    # Describe each file to generate
+    files_section = ""
+    for path in paths_to_generate:
+        existing_content = existing.get(path, "")
+        file_error = per_file_errors.get(path, "")
+
+        if existing_content:
+            files_section += f"\n### File: `{path}` (MODIFY)\n"
+            files_section += f"Current content:\n```\n{existing_content[:3000]}\n```\n"
+        else:
+            files_section += f"\n### File: `{path}` (CREATE — does not exist yet)\n"
+
+        if file_error:
+            files_section += f"⚠️ This file had errors — fix these specifically:\n```\n{file_error[:1000]}\n```\n"
+
+    # List all paths in the task (for cross-referencing imports)
+    all_files_list = "\n".join(f"  - {p}" for p in all_paths)
+
+    return f"""You are a senior {lang} engineer implementing a GitHub issue.
+
+## Issue
+Title: {plan.get("issueTitle", "")}
+Summary: {plan.get("summary", "")}
+Approach: {plan.get("approach", "")}
+
+## All files in this task (for cross-referencing imports):
+{all_files_list}
+
+## Files to generate
+{files_section}
+
+## Output format — CRITICAL
+Output EACH file using this EXACT delimiter format. No other text allowed outside these blocks.
+
+{FILE_START} path/to/file.dart>>>
+[complete file content here]
+{FILE_END}
+
+{FILE_START} path/to/another.dart>>>
+[complete file content here]
+{FILE_END}
+
+## Rules
+- Use the exact delimiters shown above. Do NOT use markdown fences inside the blocks.
+- Output ALL {len(paths_to_generate)} file(s) listed above. Do not skip any.
+- All imports must reference files that actually exist in the project.
+- Match the existing code style and conventions precisely.
+- For {lang}: follow idiomatic patterns (null-safety, DI, clean architecture, etc.).
+"""
+
+
+def parse_batched_response(response_text: str, expected_paths: list[str]) -> dict[str, str]:
+    """
+    Parse the batched Gemini response into {file_path: content} dict.
+    Falls back to returning an empty dict for files that weren't found.
+    """
+    result: dict[str, str] = {}
+
+    # Split by FILE_START delimiter
+    parts = response_text.split(FILE_START)
+    for part in parts[1:]:  # skip text before first <<<FILE:
+        # Extract path from the first line: " path/to/file.dart>>>"
+        header_end = part.find(">>>")
+        if header_end == -1:
+            continue
+        path = part[:header_end].strip()
+
+        # Find matching expected path (handle slight formatting differences)
+        matched_path = None
+        for expected in expected_paths:
+            if expected == path or expected.endswith(path) or path.endswith(expected):
+                matched_path = expected
+                break
+        if not matched_path:
+            # Try fuzzy match by filename
+            fname = Path(path).name
+            for expected in expected_paths:
+                if Path(expected).name == fname:
+                    matched_path = expected
+                    break
+
+        if not matched_path:
+            print(f"  ⚠️  Unmatched file in response: '{path}' — skipping")
+            continue
+
+        # Extract content between >>> and <<<END>>>
+        content_start = header_end + len(">>>")
+        content_end   = part.find(FILE_END)
+        content = part[content_start:content_end].strip() if content_end != -1 else part[content_start:].strip()
+
+        # Strip any accidental ``` fences
+        lines = content.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        result[matched_path] = "\n".join(lines).strip()
+
+    return result
+
+
+def generate_files(
+    plan: dict,
+    existing: dict[str, str],
+    paths_to_generate: list[str],
+    error_output: str = "",
+) -> dict[str, str]:
+    """
+    Generate all requested files in ONE Gemini call.
+    Attributes errors to specific files so each gets targeted feedback.
+    """
+    all_paths = plan.get("filesToModify", []) + plan.get("newFiles", [])
+
+    # Attribute error lines to specific files
+    per_file_errors: dict[str, str] = {}
+    if error_output:
+        unattributed_lines: list[str] = []
+        for line in error_output.splitlines():
+            attributed = False
+            for path in paths_to_generate:
+                if path in line or Path(path).name in line:
+                    per_file_errors.setdefault(path, "")
+                    per_file_errors[path] += line + "\n"
+                    attributed = True
+            if not attributed:
+                unattributed_lines.append(line)
+
+        # For files with no specific error lines, give them unattributed context
+        unattributed_text = "\n".join(unattributed_lines[:30])
+        for path in paths_to_generate:
+            if path not in per_file_errors and unattributed_text:
+                per_file_errors[path] = unattributed_text
+
+    print(f"  🤖 Calling Gemini [{GEMINI_MODELS[_model_index]}] for {len(paths_to_generate)} file(s)...")
+    prompt   = build_batched_prompt(plan, all_paths, paths_to_generate, existing, per_file_errors)
+    response = call_gemini(prompt)
+
+    result = parse_batched_response(response, paths_to_generate)
+
+    # Warn about any files that weren't parsed from the response
+    missing = [p for p in paths_to_generate if p not in result]
+    if missing:
+        print(f"  ⚠️  {len(missing)} file(s) missing from response: {', '.join(missing)}")
+        print("  🔁 Will retry missing files individually...")
+        for path in missing:
+            print(f"     🤖 Individual call for: {path}")
+            solo_prompt = build_batched_prompt(plan, all_paths, [path], existing, per_file_errors)
+            solo_response = call_gemini(solo_prompt)
+            solo_result   = parse_batched_response(solo_response, [path])
+            if path in solo_result:
+                result[path] = solo_result[path]
+            else:
+                print(f"     ❌ Still missing: {path} — will leave original")
+
+    return result
+
+
+# ── Flutter app subfolder detection ──────────────────────────────────────────
 
 def detect_flutter_app_dir(all_paths: list[str]) -> str:
     """
-    Detect the target app subfolder from plan file paths.
-
-    In a monorepo (e.g. sellio_mobile), files live under apps/customer/...
-    Running flutter analyze at root picks up ALL apps (incl. broken ones like
-    apps/admin). We scope commands to the specific app being modified.
+    Detect the target app subfolder from plan file paths (monorepo safe).
+    Scopes flutter pub get + flutter analyze to the specific app, not repo root.
     """
     candidates: list[Path] = []
     for p in all_paths:
@@ -164,7 +336,6 @@ def detect_flutter_app_dir(all_paths: list[str]) -> str:
                 break
 
     if not candidates:
-        # Fallback: detect from apps/X pattern
         for p in all_paths:
             parts = Path(p).parts
             if len(parts) >= 2 and parts[0] == "apps":
@@ -183,31 +354,6 @@ def detect_flutter_app_dir(all_paths: list[str]) -> str:
     return "."
 
 
-# ── Error attribution: which files caused the failure? ───────────────────────
-
-def parse_failing_files(error_output: str, all_paths: list[str]) -> list[str]:
-    """
-    Parse flutter analyze / compiler output to find which files had errors.
-
-    flutter analyze format:
-      error • <message> • path/to/file.dart:line:col • lint_code
-    Returns paths from all_paths that appear in the error output.
-    If we can't detect specific files, returns all_paths (full regeneration).
-    """
-    failing: list[str] = []
-    for path in all_paths:
-        # Match both full path and filename
-        if path in error_output or Path(path).name in error_output:
-            failing.append(path)
-
-    if not failing:
-        print("  ⚠️  Could not attribute errors to specific files — regenerating all")
-        return all_paths
-
-    print(f"  🎯 Errors attributed to {len(failing)} file(s): {', '.join(failing)}")
-    return failing
-
-
 # ── Stack configuration ───────────────────────────────────────────────────────
 
 def resolve_stack_config(all_paths: list[str]) -> tuple[str, list[list[str]], list[str], list[str]]:
@@ -215,116 +361,41 @@ def resolve_stack_config(all_paths: list[str]) -> tuple[str, list[list[str]], li
     if STACK == "flutter":
         app_dir = detect_flutter_app_dir(all_paths)
         install  = [["flutter", "pub", "get"]]
-        # --fatal-warnings only: info-level lint notes don't block the agent
         build    = ["flutter", "analyze", "--no-pub", "--fatal-warnings"]
         test     = ["flutter", "test", "--no-pub", "--reporter=compact"]
         return app_dir, install, build, test
 
     if STACK == "kotlin":
-        return ".", [], ["./gradlew", "compileKotlin", "--no-daemon", "-q"], ["./gradlew", "test", "--no-daemon", "-q"]
+        return ".", [], \
+            ["./gradlew", "compileKotlin", "--no-daemon", "-q"], \
+            ["./gradlew", "test", "--no-daemon", "-q"]
 
     if STACK == "node":
-        return ".", [["npm", "ci", "--prefer-offline"]], ["npm", "run", "build"], ["npm", "test", "--if-present"]
+        return ".", [["npm", "ci", "--prefer-offline"]], \
+            ["npm", "run", "build"], \
+            ["npm", "test", "--if-present"]
 
     return ".", [], [], []
 
 
-# ── Code generation ───────────────────────────────────────────────────────────
+# ── Error attribution ─────────────────────────────────────────────────────────
 
-LANG_HINT = {
-    "flutter": "Dart / Flutter",
-    "kotlin":  "Kotlin / Spring Boot 3 / JPA",
-    "node":    "TypeScript / Node.js",
-    "unknown": "the project's language",
-}
-
-
-def build_prompt(
-    file_path: str,
-    existing_content: str,
-    plan: dict,
-    all_paths: list[str],
-    file_feedback: str,
-) -> str:
-    lang = LANG_HINT.get(STACK, "the project's language")
-    existing_block = (
-        f"## Current content of `{file_path}`:\n```\n{existing_content}\n```\n"
-        if existing_content
-        else f"## `{file_path}` does not exist yet — create it.\n"
-    )
-    feedback_block = (
-        f"## ⚠️ This file had errors in the previous attempt — fix ONLY these issues:\n```\n{file_feedback[:2500]}\n```\n"
-        if file_feedback
-        else ""
-    )
-    cross_ref = "\n".join(
-        f"  - `{p}` ({'modify' if p in plan.get('filesToModify', []) else 'create'})"
-        for p in all_paths
-        if p != file_path
-    )
-
-    return f"""You are a senior {lang} engineer implementing a GitHub issue.
-
-## Issue
-Title: {plan.get("issueTitle", "")}
-Summary: {plan.get("summary", "")}
-Approach: {plan.get("approach", "")}
-
-## File to generate
-`{file_path}`
-
-{existing_block}
-
-## Other files in this task (for cross-reference only):
-{cross_ref or "  (none)"}
-
-{feedback_block}
-
-## Rules
-- Output ONLY the complete final file content for `{file_path}`.
-- Do NOT wrap output in markdown code fences.
-- Do NOT include any explanation outside the code.
-- All imports must reference files that actually exist in the repository.
-- Match the existing style and conventions precisely.
-- For {lang}: follow idiomatic patterns (null-safety, DI, etc.).
-"""
-
-
-def generate_files(
-    plan: dict,
-    existing: dict[str, str],
-    paths_to_generate: list[str],
-    error_output: str = "",
-) -> dict[str, str]:
+def parse_failing_files(error_output: str, all_paths: list[str]) -> list[str]:
     """
-    Generate (or regenerate) only the specified paths.
-
-    On retry, error_output is parsed per-file so each prompt gets
-    only the errors relevant to THAT file — the AI learns precisely.
+    Parse flutter analyze / compiler output to find which files had errors.
+    If we can't detect specific files, returns all paths (full regeneration).
     """
-    all_paths = plan.get("filesToModify", []) + plan.get("newFiles", [])
+    failing: list[str] = []
+    for path in all_paths:
+        if path in error_output or Path(path).name in error_output:
+            failing.append(path)
 
-    # Build per-file error context from the error output
-    per_file_errors: dict[str, list[str]] = {}
-    if error_output:
-        for line in error_output.splitlines():
-            for path in paths_to_generate:
-                if path in line or Path(path).name in line:
-                    per_file_errors.setdefault(path, []).append(line)
+    if not failing:
+        print("  ⚠️  Could not attribute errors to specific files — regenerating all")
+        return all_paths
 
-    result: dict[str, str] = {}
-    for path in paths_to_generate:
-        file_feedback = "\n".join(per_file_errors.get(path, []))
-        if not file_feedback and error_output and path in paths_to_generate:
-            # File is being regenerated but no specific lines attributed —
-            # give it the full error for context
-            file_feedback = error_output[:1500]
-
-        print(f"  🤖 Generating: {path}")
-        prompt = build_prompt(path, existing.get(path, ""), plan, all_paths, file_feedback)
-        content = call_gemini(prompt)
-        result[path] = strip_fences(content)
-    return result
+    print(f"  🎯 Errors in {len(failing)} file(s): {', '.join(p.split('/')[-1] for p in failing)}")
+    return failing
 
 
 # ── Install / Build / Test ────────────────────────────────────────────────────
@@ -338,25 +409,19 @@ def install_deps(app_dir: str, install_cmds: list[list[str]]) -> tuple[bool, str
     return True, ""
 
 
-def build_and_test(
-    app_dir: str,
-    build_cmd: list[str],
-    test_cmd: list[str],
-) -> tuple[bool, str]:
-    """Run build (type-check/compile) then tests. Returns (ok, error_output)."""
+def build_and_test(app_dir: str, build_cmd: list[str], test_cmd: list[str]) -> tuple[bool, str]:
     if build_cmd:
         print(f"  🏗️  {' '.join(build_cmd)} (in {app_dir}/)")
         ok, out = run(build_cmd, cwd=app_dir)
         if not ok:
-            no_issues = "no issues found" in out.lower() or "0 issues" in out.lower()
-            if not no_issues:
+            if "no issues found" not in out.lower() and "0 issues" not in out.lower():
                 return False, out
 
     if test_cmd:
         print(f"  🧪  {' '.join(test_cmd)} (in {app_dir}/)")
         ok, out = run(test_cmd, cwd=app_dir)
         if not ok:
-            if any(phrase in out.lower() for phrase in ["no tests ran", "0 tests", "no test files"]):
+            if any(p in out.lower() for p in ["no tests ran", "0 tests", "no test files"]):
                 print("  ℹ️  No tests found — skipping")
                 return True, ""
             return False, out
@@ -372,7 +437,6 @@ def git_commit(issue_number: str, title: str) -> None:
 
 
 def restore_files(originals: dict[str, str]) -> None:
-    """Restore original file contents before a retry."""
     for path, content in originals.items():
         Path(path).write_text(content, encoding="utf-8")
 
@@ -382,7 +446,8 @@ def restore_files(originals: dict[str, str]) -> None:
 def main() -> None:
     print(f"\n{'='*60}")
     print(f"🚀 Sellio AI Agent  |  stack={STACK}  |  issue=#{ISSUE_NUMBER}")
-    print(f"   Models (in order): {' → '.join(GEMINI_MODELS)}")
+    print(f"   Models: {' → '.join(GEMINI_MODELS)}")
+    print(f"   Strategy: 1 batched API call per attempt (quota-efficient)")
     print(f"{'='*60}\n")
 
     try:
@@ -394,40 +459,31 @@ def main() -> None:
     all_paths = plan.get("filesToModify", []) + plan.get("newFiles", [])
     print(f"Files to touch ({len(all_paths)}): {', '.join(all_paths) or 'none'}")
 
-    # Snapshot original file contents (for restore on retry)
     existing = {p: read_file(p) for p in plan.get("filesToModify", [])}
-
-    # Resolve stack-specific commands (scoped to the right app dir)
     app_dir, install_cmds, build_cmd, test_cmd = resolve_stack_config(all_paths)
 
-    # Install dependencies once before the retry loop
     print("\n📦 Installing dependencies...")
     ok, out = install_deps(app_dir, install_cmds)
     if not ok:
         print(f"⚠️  Dep install warning (continuing):\n{out[:1000]}")
 
-    # Track which files are "good" across attempts to avoid regenerating them
     generated_files: dict[str, str] = {}
     paths_to_generate = list(all_paths)
     error_output = ""
 
     for attempt in range(1, MAX_RETRIES + 1):
         print(f"\n{'─'*50}")
-        print(f"🔄 Attempt {attempt}/{MAX_RETRIES}")
-        if attempt > 1:
-            print(f"  🎓 Regenerating only {len(paths_to_generate)} failing file(s)")
+        print(f"🔄 Attempt {attempt}/{MAX_RETRIES}  "
+              f"({'all files' if attempt == 1 else f'{len(paths_to_generate)} failing file(s)'})")
         print(f"{'─'*50}")
 
-        # Generate only the files that need it
         new_generated = generate_files(plan, existing, paths_to_generate, error_output)
         generated_files.update(new_generated)
 
-        # Write ALL current files to disk
         print("\n📝 Writing files...")
         for path, content in generated_files.items():
             write_file(path, content)
 
-        # Build + test
         print("\n🧪 Running checks...")
         ok, error_output = build_and_test(app_dir, build_cmd, test_cmd)
 
@@ -439,10 +495,8 @@ def main() -> None:
 
         print(f"\n❌ Attempt {attempt} failed.")
         if attempt < MAX_RETRIES:
-            # Identify which files actually caused the errors
             paths_to_generate = parse_failing_files(error_output, all_paths)
-            print(f"🔁 Retrying {len(paths_to_generate)} file(s) with targeted feedback...")
-            # Restore only originals that will be regenerated
+            print(f"🔁 Retrying with targeted feedback for {len(paths_to_generate)} file(s)...")
             restore_files({p: existing[p] for p in paths_to_generate if p in existing})
         else:
             print("❌ Max retries reached.")
