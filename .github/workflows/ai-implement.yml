@@ -42,6 +42,12 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ inputs.owner }}
 
+      # ── 1.5. Checkout sellio_metrics (agent scripts) ───────────────────
+      - name: "📦 Checkout sellio_metrics"
+        uses: actions/checkout@v4
+        with:
+          path: sellio_metrics
+
       # ── 2. Checkout the TARGET repo ────────────────────────────────────
       - name: "📦 Checkout ${{ inputs.owner }}/${{ inputs.repo }}"
         uses: actions/checkout@v4
@@ -235,7 +241,7 @@ jobs:
         id: agent
         working-directory: target_repo
         env:
-          LLM_MODEL: "gemini/gemini-1.5-flash"
+          LLM_MODEL: "gemini/gemini-2.5-flash"
           LLM_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           WORKSPACE_BASE: ${{ github.workspace }}/target_repo
           RUNTIME: local
@@ -243,7 +249,7 @@ jobs:
           LLM_RETRY_MIN_WAIT: "15"
           LLM_RETRY_MAX_WAIT: "120"
         run: |
-          python -m openhands.core.main \
+          python ../sellio_metrics/.github/scripts/run_openhands.py \
             -f /tmp/task.txt \
             -i 50
 
