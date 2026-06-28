@@ -113,6 +113,5 @@ litellm.completion = fallback_completion
 
 # Execute mini-swe-agent
 if __name__ == "__main__":
-    import runpy
-    # Execute the CLI entry point
-    runpy.run_module("minisweagent.cli", run_name="__main__")
+    from minisweagent.run.mini import app
+    app()
