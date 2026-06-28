@@ -3,8 +3,6 @@ import type { HonoEnv } from "../../core/hono-env";
 import type { CFDurableObjectNamespace } from "../meetings/meetings.routes";
 import type { AiRunRecord } from "./ai-pipeline.types";
 
-const WEBHOOK_SECRET = process.env.SELLIO_WEBHOOK_SECRET ?? "";
-
 export function aiPipelineRoutes(aiPipelineHub: CFDurableObjectNamespace) {
     const app = new Hono<HonoEnv>();
 
@@ -20,10 +18,11 @@ export function aiPipelineRoutes(aiPipelineHub: CFDurableObjectNamespace) {
     // Header: X-Sellio-Signature must match SELLIO_WEBHOOK_SECRET.
     app.post("/result", async (c) => {
         const { aiPipelineService, logger } = c.get("cradle");
+        const webhookSecret = process.env.SELLIO_WEBHOOK_SECRET ?? "";
 
         // Verify shared secret
         const sig = c.req.header("X-Sellio-Signature");
-        if (!sig || sig !== WEBHOOK_SECRET) {
+        if (!sig || sig !== webhookSecret) {
             logger.warn({ sig }, "ai-pipeline /result: invalid signature");
             return c.json({ error: "Unauthorized" }, 401);
         }

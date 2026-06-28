@@ -107,21 +107,32 @@ def call_gemini(prompt: str) -> str:
         model = GEMINI_MODELS[_model_index]
         try:
             response = client.models.generate_content(model=model, contents=prompt)
+            if not response:
+                raise ValueError("Gemini returned an empty response object")
+            if response.text is None:
+                # Log why the response was empty/None
+                finish_reason = "Unknown"
+                if response.candidates and response.candidates[0].finish_reason:
+                    finish_reason = str(response.candidates[0].finish_reason)
+                raise ValueError(f"Gemini response.text is None. Finish reason: {finish_reason}")
             return response.text
         except Exception as e:
             err_str = str(e)
+            # Treat both 429 RESOURCE_EXHAUSTED and our own ValueError (blocked response) as retryable/fallback conditions
             is_rate_limit = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+            is_value_error = isinstance(e, ValueError)
 
-            if is_rate_limit:
-                # If the model has permanently exhausted its daily quota, switch model
-                if "limit: 0" in err_str:
+            if is_rate_limit or is_value_error:
+                # If the model has permanently exhausted its daily quota or got blocked, switch model
+                if "limit: 0" in err_str or is_value_error:
                     if _model_index < len(GEMINI_MODELS) - 1:
                         _model_index += 1
                         next_model = GEMINI_MODELS[_model_index]
-                        print(f"  ⚠️  {model} daily quota exhausted — switching to {next_model}")
+                        reason = "blocked/empty response" if is_value_error else "daily quota exhausted"
+                        print(f"  ⚠️  {model} {reason} — switching to {next_model}")
                         continue
                     else:
-                        print("  ❌ All models have exhausted their daily quota.")
+                        print("  ❌ All models have exhausted their daily quota or failed.")
                         raise
 
                 # Temporary rate limit — wait and retry
