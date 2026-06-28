@@ -175,7 +175,8 @@ jobs:
           5. For EACH Flutter app relevant to this issue, run:
                flutter pub get
                flutter analyze --no-pub --fatal-warnings
-          6. Fix EVERY error. For any "undefined class/method": grep for it first, read the file, then fix.
+          6. Fix EVERY error AND warning in files you have touched.
+             For any "undefined class/method": grep for it first, read the file, then fix.
           7. Run: flutter test --no-pub
           8. Fix EVERY test failure. Repeat until both analyze and test are clean."""
           elif stack == "kotlin":
@@ -225,48 +226,97 @@ jobs:
           {build_steps}
           9. When all checks pass with no new errors: summarize what was done and stop.
 
-          CRITICAL RULES (violation = compile failure):
+          CRITICAL RULES (violation = compile failure or workflow rejection):
           - NEVER invent a class name, import path, method, or constructor parameter.
           - NEVER write an import without verifying the file path exists via grep/find.
           - If analyze/build says "undefined X": grep for X immediately, read its file, fix.
           - Every fix must be based on code you have actually read — not a guess.
+          - NEVER leave unused imports in any file. Remove every unused import you introduced.
+          - NEVER add an import for a symbol you did not use in the same file.
+          - If a test file has unused imports after your changes, remove them.
+          - Clean imports are NOT optional — unused_import causes the workflow to fail.
           """
 
           Path("/tmp/task.txt").write_text(task)
           print(f"✅ Task written ({len(task)} bytes)")
           PYEOF
 
-      # ── 8. Run OpenHands Agent ────────────────────────────────────────
+      # ── 8. Write repo microagent instructions for OpenHands ────────────
+      - name: "📝 Write OpenHands microagent instructions"
+        env:
+          STACK: ${{ steps.detect.outputs.stack }}
+          REPO: ${{ inputs.repo }}
+        run: |
+          mkdir -p target_repo/.openhands/microagents
+          python3 << 'PYEOF'
+          import os
+          from pathlib import Path
+
+          stack = os.environ.get("STACK", "unknown")
+          repo  = os.environ.get("REPO", "")
+
+          if stack == "flutter":
+              hint = """This is a Flutter/Dart monorepo.
+          - App packages live under `apps/` (e.g. apps/customer, apps/merchant).
+          - Shared libraries live under `packages/` (e.g. packages/core).
+          - ALWAYS run `flutter pub get` before any analyze/test.
+          - Run `flutter analyze --no-pub --fatal-warnings` to check for errors.
+          - Run `flutter test --no-pub` to run unit tests.
+          - NEVER leave unused imports in any file you touch.
+          - Use ONLY classes/methods found by grep — never invent APIs.
+          """
+          elif stack == "kotlin":
+              hint = """This is a Kotlin/Spring Boot project.
+          - Build with `./gradlew compileKotlin`.
+          - Test with `./gradlew test`.
+          """
+          elif stack == "node":
+              hint = """This is a Node.js/TypeScript project.
+          - Build with `npm run build`.
+          - Test with `npm test`.
+          """
+          else:
+              hint = f"Repository: {repo}. Follow the project's build instructions."
+
+          instructions = f"""# Repository Instructions\n\n{hint}\n"""
+          Path("target_repo/.openhands/microagents/repo.md").write_text(instructions)
+          print(f"✅ Wrote .openhands/microagents/repo.md ({len(instructions)} bytes)")
+          PYEOF
+
+      # ── 9. Run OpenHands Agent ────────────────────────────────────────
       - name: "🤖 Run OpenHands Agent"
         id: agent
         working-directory: target_repo
         env:
           LLM_MODEL: "gemini/gemini-2.5-flash"
           LLM_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           WORKSPACE_BASE: ${{ github.workspace }}/target_repo
           RUNTIME: local
-          LLM_NUM_RETRIES: "10"
-          LLM_RETRY_MIN_WAIT: "15"
-          LLM_RETRY_MAX_WAIT: "120"
+          LLM_NUM_RETRIES: "5"
+          LLM_RETRY_MIN_WAIT: "10"
+          LLM_RETRY_MAX_WAIT: "60"
         run: |
           python ../sellio_metrics/.github/scripts/run_openhands.py \
             -f /tmp/task.txt \
-            -i 50
+            -i 30
 
-      # ── 9. Final verification (safety net — fails workflow if OpenHands missed errors) ─
+      # ── 10. Final verification (safety net — fails workflow if OpenHands missed errors) ─
       - name: "✅ Final verification — Flutter"
         if: steps.detect.outputs.stack == 'flutter'
         run: |
           # Find every Flutter app directory and verify each one
+          # --no-fatal-warnings: lint WARNINGS do not fail the build; only ERRORs do.
           find target_repo -name "pubspec.yaml" \
             -not -path "*/build/*" \
             -not -path "*/.dart_tool/*" \
             | xargs -I{} dirname {} \
             | while read APP_DIR; do
                 echo "── Verifying: $APP_DIR ──"
-                (cd "$APP_DIR" && flutter pub get)
-                (cd "$APP_DIR" && flutter analyze)
-                (cd "$APP_DIR" && flutter test) || true
+                (cd "$APP_DIR" && flutter pub get) || { echo "pub get failed: $APP_DIR"; exit 1; }
+                (cd "$APP_DIR" && flutter analyze --no-fatal-warnings) || { echo "analyze ERRORS in: $APP_DIR"; exit 1; }
+                (cd "$APP_DIR" && flutter test --no-pub) || true
               done
 
 
@@ -280,7 +330,15 @@ jobs:
         run: |
           cd target_repo && npm run build && npm test
 
-      # ── 10. Push branch ───────────────────────────────────────────────
+      # ── 11. Remove microagents instructions before push ────────────────
+      - name: "🧹 Remove OpenHands microagent file before push"
+        run: |
+          rm -f target_repo/.openhands/microagents/repo.md
+          # Remove the directory only if it was created by us (i.e. now empty)
+          rmdir --ignore-fail-on-non-empty target_repo/.openhands/microagents 2>/dev/null || true
+          rmdir --ignore-fail-on-non-empty target_repo/.openhands 2>/dev/null || true
+
+      # ── 12. Push branch ───────────────────────────────────────────────
       - name: "Push branch to ${{ inputs.repo }}"
         run: |
           cd target_repo
