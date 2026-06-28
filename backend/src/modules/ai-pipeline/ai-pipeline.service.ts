@@ -171,7 +171,6 @@ export class AiPipelineService {
                         issue_number: String(job.issueNumber),
                         task_id:      job.taskId,
                         branch_name:  branchName,
-                        agent_type:   job.agentType || "swe-agent",
                     },
                 }
             );
