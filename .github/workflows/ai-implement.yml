@@ -114,7 +114,7 @@ jobs:
           # Dependencies are minimal (one package) so install time is negligible.
 
       - name: "Install Python dependencies"
-        run: pip install google-generativeai
+        run: pip install google-genai
 
       # ── 6. Configure git in target repo ─────────────────────────────
       - name: "Configure git"

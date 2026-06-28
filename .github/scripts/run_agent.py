@@ -7,7 +7,7 @@ Gemini 2.5 Flash, writes files to disk, runs the appropriate test/build command
 for the detected stack, and self-corrects on failures. Up to MAX_RETRIES attempts.
 
 Stacks supported:
-  flutter  → flutter pub get + flutter analyze + flutter test
+  flutter  → flutter pub get + flutter analyze + flutter test (scoped to app subfolder)
   kotlin   → ./gradlew compileKotlin (+ test if under 5 min)
   node     → npm ci + npm run build + npm test
   unknown  → skips test step, commits as-is
@@ -23,7 +23,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-import google.generativeai as genai
+from google import genai
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
@@ -33,34 +33,7 @@ STACK          = os.environ.get("STACK", "unknown")
 ISSUE_NUMBER   = os.environ.get("ISSUE_NUMBER", "0")
 MAX_RETRIES    = 3
 
-genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-2.5-flash")
-
-# ── Stack-specific commands ───────────────────────────────────────────────────
-
-# Commands to install/prepare dependencies
-INSTALL_CMDS: dict[str, list[list[str]]] = {
-    "flutter": [["flutter", "pub", "get"]],
-    "kotlin":  [],  # Gradle resolves deps on first build
-    "node":    [["npm", "ci", "--prefer-offline"]],
-    "unknown": [],
-}
-
-# Commands to compile/type-check (fast — runs every attempt)
-BUILD_CMDS: dict[str, list[str]] = {
-    "flutter": ["flutter", "analyze", "--no-pub", "--fatal-infos"],
-    "kotlin":  ["./gradlew", "compileKotlin", "--no-daemon", "-q"],
-    "node":    ["npm", "run", "build"],
-    "unknown": [],
-}
-
-# Commands to run tests (slower — only runs if build passes)
-TEST_CMDS: dict[str, list[str]] = {
-    "flutter": ["flutter", "test", "--no-pub", "--reporter=compact"],
-    "kotlin":  ["./gradlew", "test", "--no-daemon", "-q"],
-    "node":    ["npm", "test", "--if-present"],
-    "unknown": [],
-}
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -112,11 +85,58 @@ def strip_fences(text: str) -> str:
 
 
 def call_gemini(prompt: str) -> str:
-    response = model.generate_content(prompt)
+    response = client.models.generate_content(
+        model="gemini-2.5-flash",
+        contents=prompt,
+    )
     return response.text
 
 
-# ── Code generation ───────────────────────────────────────────────────────────
+# ── App subfolder detection (Flutter monorepo support) ────────────────────────
+
+def detect_flutter_app_dir(all_paths: list[str]) -> str:
+    """
+    Detect the target app subfolder from the plan's file paths.
+
+    In a monorepo like sellio_mobile, files are under apps/customer/...
+    Running flutter analyze at the root picks up ALL apps (including broken ones
+    like apps/admin). We scope the analyze command to the specific app being modified.
+
+    Returns the deepest common prefix that contains a pubspec.yaml.
+    Falls back to "." if we can't determine it.
+    """
+    candidates: list[Path] = []
+    for p in all_paths:
+        parts = Path(p).parts
+        # Walk up from the file and find the first dir that has pubspec.yaml
+        for i in range(len(parts) - 1, 0, -1):
+            candidate = Path(*parts[:i])
+            if (candidate / "pubspec.yaml").exists():
+                candidates.append(candidate)
+                break
+
+    if not candidates:
+        # Try common monorepo conventions: apps/customer, apps/merchant, etc.
+        for p in all_paths:
+            parts = Path(p).parts
+            if len(parts) >= 2 and parts[0] == "apps":
+                candidate = Path(parts[0]) / parts[1]
+                if candidate.is_dir():
+                    candidates.append(candidate)
+                    break
+
+    if candidates:
+        # Use the most common candidate
+        from collections import Counter
+        most_common = Counter(str(c) for c in candidates).most_common(1)[0][0]
+        print(f"  📁 Scoped Flutter commands to: {most_common}/")
+        return most_common
+
+    print("  📁 Could not detect app subfolder — using repo root '.'")
+    return "."
+
+
+# ── Stack-specific commands ───────────────────────────────────────────────────
 
 LANG_HINT = {
     "flutter": "Dart / Flutter",
@@ -125,6 +145,22 @@ LANG_HINT = {
     "unknown": "the project's language",
 }
 
+
+def get_flutter_commands(app_dir: str) -> tuple[list[list[str]], list[str], list[str]]:
+    """
+    Return (install_cmds, build_cmd, test_cmd) scoped to app_dir.
+    We use --no-fatal-infos (only warnings are fatal) to avoid info-level lint
+    issues in external packages triggering a failure.
+    """
+    install  = [["flutter", "pub", "get"]]
+    # --fatal-warnings only: info-level lints (e.g. missing analysis_options in
+    # sibling apps) don't block the agent.
+    build    = ["flutter", "analyze", "--no-pub", "--fatal-warnings"]
+    test     = ["flutter", "test", "--no-pub", "--reporter=compact"]
+    return install, build, test
+
+
+# ── Code generation ───────────────────────────────────────────────────────────
 
 def build_prompt(
     file_path: str,
@@ -190,33 +226,29 @@ def generate_files(plan: dict, existing: dict[str, str], feedback: str = "") -> 
 
 # ── Test runner ───────────────────────────────────────────────────────────────
 
-def install_deps() -> tuple[bool, str]:
-    for cmd in INSTALL_CMDS.get(STACK, []):
-        print(f"  📦 {' '.join(cmd)}")
-        ok, out = run(cmd)
+def install_deps(app_dir: str, install_cmds: list[list[str]]) -> tuple[bool, str]:
+    for cmd in install_cmds:
+        print(f"  📦 {' '.join(cmd)} (in {app_dir}/)")
+        ok, out = run(cmd, cwd=app_dir)
         if not ok:
             return False, out
     return True, ""
 
 
-def build_and_test() -> tuple[bool, str]:
+def build_and_test(app_dir: str, build_cmd: list[str], test_cmd: list[str]) -> tuple[bool, str]:
     """Run build (type-check/compile) then tests. Returns (ok, error_output)."""
-    build_cmd = BUILD_CMDS.get(STACK)
     if build_cmd:
-        print(f"  🏗️  {' '.join(build_cmd)}")
-        ok, out = run(build_cmd)
+        print(f"  🏗️  {' '.join(build_cmd)} (in {app_dir}/)")
+        ok, out = run(build_cmd, cwd=app_dir)
         if not ok:
-            # Flutter: "No issues found" still exits 0. Real errors exit 1.
             no_issues = "no issues found" in out.lower() or "0 issues" in out.lower()
             if not no_issues:
                 return False, out
 
-    test_cmd = TEST_CMDS.get(STACK)
     if test_cmd:
-        print(f"  🧪  {' '.join(test_cmd)}")
-        ok, out = run(test_cmd)
+        print(f"  🧪  {' '.join(test_cmd)} (in {app_dir}/)")
+        ok, out = run(test_cmd, cwd=app_dir)
         if not ok:
-            # "No tests found" is acceptable
             if any(phrase in out.lower() for phrase in ["no tests ran", "0 tests", "no test files"]):
                 print("  ℹ️  No tests found — skipping")
                 return True, ""
@@ -258,9 +290,27 @@ def main() -> None:
     # Snapshot original file contents
     existing = {p: read_file(p) for p in plan.get("filesToModify", [])}
 
+    # Detect Flutter app subfolder (scopes pub get + analyze to the right app)
+    if STACK == "flutter":
+        app_dir = detect_flutter_app_dir(all_paths)
+        install_cmds, build_cmd, test_cmd = get_flutter_commands(app_dir)
+    elif STACK == "kotlin":
+        app_dir = "."
+        install_cmds = []
+        build_cmd = ["./gradlew", "compileKotlin", "--no-daemon", "-q"]
+        test_cmd  = ["./gradlew", "test", "--no-daemon", "-q"]
+    elif STACK == "node":
+        app_dir = "."
+        install_cmds = [["npm", "ci", "--prefer-offline"]]
+        build_cmd = ["npm", "run", "build"]
+        test_cmd  = ["npm", "test", "--if-present"]
+    else:
+        app_dir = "."
+        install_cmds, build_cmd, test_cmd = [], [], []
+
     # Install dependencies once before the retry loop
     print("\n📦 Installing dependencies...")
-    ok, out = install_deps()
+    ok, out = install_deps(app_dir, install_cmds)
     if not ok:
         print(f"⚠️  Dep install warning (continuing):\n{out[:1000]}")
 
@@ -280,7 +330,7 @@ def main() -> None:
 
         # Build + test
         print("\n🧪 Running checks...")
-        ok, error_output = build_and_test()
+        ok, error_output = build_and_test(app_dir, build_cmd, test_cmd)
 
         if ok:
             print(f"\n✅ All checks passed on attempt {attempt}!")
