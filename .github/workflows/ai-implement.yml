@@ -115,11 +115,32 @@ jobs:
           git config user.name "Sellio Bot"
           git checkout -b "${{ inputs.branch_name }}"
 
+      # ── 5a. Cache Pip & Playwright Browsers ───────────────────────────
+      - name: "Cache Pip"
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-openhands-v1
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: "Cache Playwright browsers"
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/playwright
+          key: ${{ runner.os }}-playwright-openhands-v1
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
       # ── 6. Install OpenHands ──────────────────────────────────────────
       - name: "Install OpenHands"
         run: |
           pip install --upgrade pyOpenSSL cryptography
           pip install openhands-ai
+          if [ "${{ steps.playwright-cache.outputs.cache-hit }}" != "true" ]; then
+            playwright install chromium
+          fi
 
       # ── 7. Build task description (stack-aware, no bash quoting issues) ─
       - name: "Build task description"
