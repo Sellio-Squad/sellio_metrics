@@ -29,6 +29,8 @@ jobs:
     name: "🤖 Implement Issue #${{ inputs.issue_number }} in ${{ inputs.repo }}"
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: /home/runner/.cache/playwright
 
     steps:
       # ── 1. Generate GitHub App installation token ──────────────────────
