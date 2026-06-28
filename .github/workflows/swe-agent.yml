@@ -1,4 +1,10 @@
-name: 🤖 AI Implement
+name: 🧑‍💻 SWE-agent Implement
+
+# SWE-agent uses mini-swe-agent, which is a lightweight software engineering agent.
+# Compared to OpenHands CodeActAgent:
+#   - Uses 5-10x FEWER tokens per call (~10-20k vs ~75k)
+#   - Fits comfortably within Gemini free tier limits for most issues
+#   - Runs natively inside the runner without needing Docker containers
 
 on:
   workflow_dispatch:
@@ -25,12 +31,10 @@ on:
         type: string
 
 jobs:
-  implement:
-    name: "🤖 Implement Issue #${{ inputs.issue_number }} in ${{ inputs.repo }}"
+  swe-agent:
+    name: "🧑‍💻 SWE-agent Issue #${{ inputs.issue_number }} in ${{ inputs.repo }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 60
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: /home/runner/.cache/playwright
+    timeout-minutes: 40
 
     steps:
       # ── 1. Generate GitHub App installation token ──────────────────────
@@ -42,13 +46,13 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ inputs.owner }}
 
-      # ── 1.5. Checkout sellio_metrics (agent scripts) ───────────────────
+      # ── 2. Checkout sellio_metrics (scripts) ───────────────────────────
       - name: "📦 Checkout sellio_metrics"
         uses: actions/checkout@v4
         with:
           path: sellio_metrics
 
-      # ── 2. Checkout the TARGET repo ────────────────────────────────────
+      # ── 3. Checkout the TARGET repo ────────────────────────────────────
       - name: "📦 Checkout ${{ inputs.owner }}/${{ inputs.repo }}"
         uses: actions/checkout@v4
         with:
@@ -58,7 +62,7 @@ jobs:
           ref: develop
           fetch-depth: 0
 
-      # ── 3. Fetch issue details directly from GitHub API ────────────────
+      # ── 4. Fetch issue details directly from GitHub API ────────────────
       - name: "📋 Fetch issue details"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -68,9 +72,8 @@ jobs:
           gh api /repos/${{ inputs.owner }}/${{ inputs.repo }}/issues/${{ inputs.issue_number }} \
             --jq '.body'  > /tmp/issue_body.txt
           echo "📋 Issue: $(cat /tmp/issue_title.txt)"
-          echo "   Body: $(wc -c < /tmp/issue_body.txt) bytes"
 
-      # ── 4. Auto-detect stack ───────────────────────────────────────────
+      # ── 5. Auto-detect stack ───────────────────────────────────────────
       - name: "🔍 Detect stack"
         id: detect
         run: |
@@ -89,7 +92,7 @@ jobs:
             echo "Unknown stack"
           fi
 
-      # ── 4a. Setup Flutter ──────────────────────────────────────────────
+      # ── 5a. Setup Flutter ──────────────────────────────────────────────
       - name: "Setup Flutter"
         if: steps.detect.outputs.stack == 'flutter'
         uses: subosito/flutter-action@v2
@@ -98,7 +101,7 @@ jobs:
           channel: "stable"
           cache: true
 
-      # ── 4b. Setup Java 17 (Kotlin/Spring Boot) ────────────────────────
+      # ── 5b. Setup Java 17 (Kotlin/Spring Boot) ────────────────────────
       - name: "Setup Java 17"
         if: steps.detect.outputs.stack == 'kotlin'
         uses: actions/setup-java@v4
@@ -107,7 +110,7 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      # ── 4c. Setup Node 20 ─────────────────────────────────────────────
+      # ── 5c. Setup Node 20 ─────────────────────────────────────────────
       - name: "Setup Node 20"
         if: steps.detect.outputs.stack == 'node'
         uses: actions/setup-node@v4
@@ -116,7 +119,18 @@ jobs:
           cache: npm
           cache-dependency-path: target_repo/package-lock.json
 
-      # ── 5. Configure git ──────────────────────────────────────────────
+      # ── 6. Setup Python & install mini-swe-agent ──────────────────────
+      - name: "🐍 Setup Python 3.11"
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: "📦 Install mini-swe-agent"
+        run: |
+          pip install mini-swe-agent
+
+      # ── 7. Configure git ───────────────────────────────────────────────
       - name: "Configure git"
         run: |
           cd target_repo
@@ -124,29 +138,7 @@ jobs:
           git config user.name "Sellio Bot"
           git checkout -b "${{ inputs.branch_name }}"
 
-      # ── 5a. Cache Pip & Playwright Browsers ───────────────────────────
-      - name: "Cache Pip"
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-openhands-v2
-
-      - name: "Cache Playwright browsers"
-        uses: actions/cache@v4
-        id: playwright-cache
-        with:
-          path: ~/.cache/playwright
-          key: ${{ runner.os }}-playwright-openhands-v3
-
-      # ── 6. Install OpenHands ──────────────────────────────────────────
-      - name: "Install OpenHands"
-        run: |
-          pip install --upgrade pyOpenSSL cryptography
-          pip install openhands-ai
-          python -m playwright install
-
-
-      # ── 7. Build task description (stack-aware, no bash quoting issues) ─
+      # ── 8. Build task description (stack-aware, no bash quoting issues) ─
       - name: "Build task description"
         env:
           STACK: ${{ steps.detect.outputs.stack }}
@@ -175,8 +167,7 @@ jobs:
           5. For EACH Flutter app relevant to this issue, run:
                flutter pub get
                flutter analyze --no-pub --fatal-warnings
-          6. Fix EVERY error AND warning in files you have touched.
-             For any "undefined class/method": grep for it first, read the file, then fix.
+          6. Fix EVERY error AND warning in files you have touched. Remove unused imports.
           7. Run: flutter test --no-pub
           8. Fix EVERY test failure. Repeat until both analyze and test are clean."""
           elif stack == "kotlin":
@@ -211,103 +202,44 @@ jobs:
 
           MANDATORY WORKFLOW — execute in this exact order:
 
-          1. EXPLORE: List the project structure:
-               find . -maxdepth 4 -name "*.dart" -o -name "pubspec.yaml" | head -60
-             Understand WHERE the code lives (e.g. apps/customer/lib/, lib/, src/).
-
-          2. RESEARCH — before writing ANY code:
-             For EVERY class, widget, service, repository, or route you plan to USE:
-               a. Run: grep -rn "class ClassName" .
-               b. Read that file completely.
-               c. Use ONLY its real public API — never invent parameters.
-             Never assume a class, method, or file exists without verifying first.
-
+          1. EXPLORE: List the project structure to understand WHERE the code lives.
+          2. RESEARCH: Grep for classes/methods before writing code. Use only real verified APIs.
           3. WRITE: Create or modify files using ONLY verified APIs.
           {build_steps}
-          9. When all checks pass with no new errors: summarize what was done and stop.
+          9. When all checks pass with no new errors, summarize what was done.
 
-          CRITICAL RULES (violation = compile failure or workflow rejection):
-          - NEVER invent a class name, import path, method, or constructor parameter.
-          - NEVER write an import without verifying the file path exists via grep/find.
-          - If analyze/build says "undefined X": grep for X immediately, read its file, fix.
-          - Every fix must be based on code you have actually read — not a guess.
-          - NEVER leave unused imports in any file. Remove every unused import you introduced.
-          - NEVER add an import for a symbol you did not use in the same file.
-          - If a test file has unused imports after your changes, remove them.
-          - Clean imports are NOT optional — unused_import causes the workflow to fail.
+          CRITICAL RULES:
+          - NEVER invent class names, import paths, or constructor parameters.
+          - Remove every unused import you introduce. Unused imports fail the workflow.
           """
 
           Path("/tmp/task.txt").write_text(task)
           print(f"✅ Task written ({len(task)} bytes)")
           PYEOF
 
-      # ── 8. Write repo microagent instructions for OpenHands ────────────
-      - name: "📝 Write OpenHands microagent instructions"
-        env:
-          STACK: ${{ steps.detect.outputs.stack }}
-          REPO: ${{ inputs.repo }}
-        run: |
-          mkdir -p target_repo/.openhands/microagents
-          python3 << 'PYEOF'
-          import os
-          from pathlib import Path
-
-          stack = os.environ.get("STACK", "unknown")
-          repo  = os.environ.get("REPO", "")
-
-          if stack == "flutter":
-              hint = """This is a Flutter/Dart monorepo.
-          - App packages live under `apps/` (e.g. apps/customer, apps/merchant).
-          - Shared libraries live under `packages/` (e.g. packages/core).
-          - ALWAYS run `flutter pub get` before any analyze/test.
-          - Run `flutter analyze --no-pub --fatal-warnings` to check for errors.
-          - Run `flutter test --no-pub` to run unit tests.
-          - NEVER leave unused imports in any file you touch.
-          - Use ONLY classes/methods found by grep — never invent APIs.
-          """
-          elif stack == "kotlin":
-              hint = """This is a Kotlin/Spring Boot project.
-          - Build with `./gradlew compileKotlin`.
-          - Test with `./gradlew test`.
-          """
-          elif stack == "node":
-              hint = """This is a Node.js/TypeScript project.
-          - Build with `npm run build`.
-          - Test with `npm test`.
-          """
-          else:
-              hint = f"Repository: {repo}. Follow the project's build instructions."
-
-          instructions = f"""# Repository Instructions\n\n{hint}\n"""
-          Path("target_repo/.openhands/microagents/repo.md").write_text(instructions)
-          print(f"✅ Wrote .openhands/microagents/repo.md ({len(instructions)} bytes)")
-          PYEOF
-
-      # ── 9. Run OpenHands Agent ────────────────────────────────────────
-      - name: "🤖 Run OpenHands Agent"
+      # ── 9. Run mini-swe-agent ──────────────────────────────────────────
+      - name: "🤖 Run mini-swe-agent"
         id: agent
         working-directory: target_repo
         env:
-          LLM_MODEL: "gemini/gemini-2.5-flash"
-          LLM_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
+          GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
+          GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
+          GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          WORKSPACE_BASE: ${{ github.workspace }}/target_repo
-          RUNTIME: local
-          LLM_NUM_RETRIES: "5"
-          LLM_RETRY_MIN_WAIT: "10"
-          LLM_RETRY_MAX_WAIT: "60"
         run: |
-          python ../sellio_metrics/.github/scripts/run_openhands.py \
-            -f /tmp/task.txt \
-            -i 30
+          # We run the wrapper script run_mini_swe.py in YOLO mode (automated)
+          # passing the model gemini/gemini-2.5-flash as default, and the task prompt.
+          python ../sellio_metrics/.github/scripts/run_mini_swe.py \
+            --model gemini/gemini-2.5-flash \
+            --yolo \
+            --task "$(cat /tmp/task.txt)"
 
-      # ── 10. Final verification (safety net — fails workflow if OpenHands missed errors) ─
+      # ── 10. Final verification (safety net) ────────────────────────────
       - name: "✅ Final verification — Flutter"
         if: steps.detect.outputs.stack == 'flutter'
         run: |
-          # Find every Flutter app directory and verify each one
-          # --no-fatal-warnings: lint WARNINGS do not fail the build; only ERRORs do.
           find target_repo -name "pubspec.yaml" \
             -not -path "*/build/*" \
             -not -path "*/.dart_tool/*" \
@@ -319,7 +251,6 @@ jobs:
                 (cd "$APP_DIR" && flutter test --no-pub) || true
               done
 
-
       - name: "✅ Final verification — Kotlin"
         if: steps.detect.outputs.stack == 'kotlin'
         run: |
@@ -330,16 +261,8 @@ jobs:
         run: |
           cd target_repo && npm run build && npm test
 
-      # ── 11. Remove microagents instructions before push ────────────────
-      - name: "🧹 Remove OpenHands microagent file before push"
-        run: |
-          rm -f target_repo/.openhands/microagents/repo.md
-          # Remove the directory only if it was created by us (i.e. now empty)
-          rmdir --ignore-fail-on-non-empty target_repo/.openhands/microagents 2>/dev/null || true
-          rmdir --ignore-fail-on-non-empty target_repo/.openhands 2>/dev/null || true
-
-      # ── 12. Push branch ───────────────────────────────────────────────
-      - name: "Push branch to ${{ inputs.repo }}"
+      # ── 11. Push branch ───────────────────────────────────────────────
+      - name: "🚀 Push branch to ${{ inputs.repo }}"
         run: |
           cd target_repo
           git add -A
@@ -347,7 +270,7 @@ jobs:
           git commit --allow-empty -m "feat(ai): implement #${{ inputs.issue_number }}"
           git push origin "${{ inputs.branch_name }}"
 
-      # ── 11. Notify Cloudflare — SUCCESS ──────────────────────────────
+      # ── 12. Notify Cloudflare — SUCCESS ──────────────────────────────
       - name: "Notify Cloudflare (success)"
         if: success()
         run: |
@@ -373,7 +296,7 @@ jobs:
           cat /tmp/cf_response.json || true
           [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || exit 1
 
-      # ── 12. Notify Cloudflare — FAILURE ──────────────────────────────
+      # ── 13. Notify Cloudflare — FAILURE ──────────────────────────────
       - name: "Notify Cloudflare (failure)"
         if: failure()
         run: |
@@ -389,7 +312,7 @@ jobs:
             --arg owner    "${{ inputs.owner }}" \
             --arg repo     "${{ inputs.repo }}" \
             --argjson issueNum "${{ inputs.issue_number }}" \
-            --arg error    "OpenHands agent failed. Logs: $RUN_URL" \
+            --arg error    "SWE-agent failed. Logs: $RUN_URL" \
             '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum, error: $error}')
 
           HTTP_CODE=$(curl -s -o /tmp/cf_response.json -w "%{http_code}" --retry 3 -X POST \

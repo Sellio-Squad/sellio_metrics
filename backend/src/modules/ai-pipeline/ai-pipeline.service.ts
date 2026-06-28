@@ -85,10 +85,9 @@ export class AiPipelineService {
 
             switch (job.phase) {
                 case 1:
+                    // Phase 1 = direct dispatch to OpenHands via GitHub Actions.
+                    // OpenHands handles its own planning, context gathering, and coding.
                     await this.executePhase1(job);
-                    break;
-                case 2:
-                    await this.executePhase2(job);
                     break;
                 case 3:
                     await this.executePhase3(job);
@@ -102,202 +101,99 @@ export class AiPipelineService {
         }
     }
 
-    // ─── Phase 1: Context & Plan ─────────────────────────────
+    // ─── Phase 1: Dispatch directly to OpenHands via GitHub Actions ──────
+    //
+    // OpenHands replaces LLM planning, context gathering, web search, and
+    // code generation. The Cloudflare worker's only job is:
+    //   1. Move project card to In Progress
+    //   2. Assign the bot
+    //   3. Comment on the issue
+    //   4. Dispatch GitHub Actions (OpenHands runs inside)
 
     private async executePhase1(job: AiImplementJob): Promise<void> {
-        this.logger.info({ taskId: job.taskId }, "Running Phase 1: Gathering context and planning");
+        // OpenHands is currently disabled in favor of SWE-agent
+        const agentName = "SWE-agent";
+        const workflowFile = "swe-agent.yml";
+        
+        this.logger.info({ taskId: job.taskId, requestedAgent: job.agentType }, `Phase 1: Dispatching ${agentName} via GitHub Actions`);
 
         await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "running");
 
-        // 1. Move card to In Progress column
+        // 1. Move card to In Progress
         await this.gitOps.moveProjectCardByName(job.projectId, job.itemId, job.fieldId, "In Progress");
 
         // 2. Assign issue to the Sellio bot
         await this.gitOps.assignToBot(job.owner, job.repo, job.issueNumber);
 
-        // 3. Comment on the issue that AI is starting
+        // 3. Comment on issue that agent is starting
         await this.gitOps.commentOnIssue(
             job.owner,
             job.repo,
             job.issueNumber,
-            `🤖 **Sellio AI Agent** has picked up this ticket!\n- *Phase 1:* Gathering repository context and planning implementation...`
-        );
-
-        // 4. Gather 4-layer context (cached where appropriate)
-        const context = await this.contextService.gatherContext(
-            job.owner,
-            job.repo,
-            job.issueNumber,
-            job.issueTitle,
-            job.issueBody
-        );
-
-        // Extract and cache images
-        const images = await this.extractAndFetchImages(job.issueBody || "");
-        if (images.length > 0) {
-            await this.cache.set(`ai:task:${job.taskId}:images`, images, 3600);
-        }
-
-        // 5. Determine if web search is needed dynamically based on the task
-        const searchDecision = await this.determineSearchNeeds(job.issueTitle, job.issueBody);
-        let searchContext = "";
-
-        if (searchDecision.needsSearch) {
-            await this.gitOps.commentOnIssue(
-                job.owner,
-                job.repo,
-                job.issueNumber,
-                `🤖 **Sellio AI Agent**\n- *Phase 1:* Performing web search and package registry checks for the implementation...`
-            );
-            searchContext = await this.searchPackagesAndDocs(searchDecision.packages, searchDecision.queries, context.fileTree);
-        } else {
-            this.logger.info({ taskId: job.taskId }, "Skipping web search: Task classified as local and does not need external references.");
-        }
-
-        // 6. Generate plan using LLM
-        const plan = await this.generatePlan(context, job.issueTitle, job.issueBody, searchContext, images);
-
-        // Comment with plan summary
-        await this.gitOps.commentOnIssue(
-            job.owner,
-            job.repo,
-            job.issueNumber,
-            `🤖 **Sellio AI Agent** — Plan Generated:\n- **Files to Modify:** ${plan.filesToModify.map(f => `\`${f}\``).join(", ") || "*None*"}\n- **New Files:** ${plan.newFiles.map(f => `\`${f}\``).join(", ") || "*None*"}\n\n*Approach Summary:*\n${plan.summary}`
+            `🤖 **Sellio AI Agent** has picked up this ticket!\n- Dispatching **${agentName}** to implement this issue autonomously.\n- The agent will search the codebase, write code, run \`flutter analyze\` & \`flutter test\`, and self-correct on failures.\n- Track progress: [View workflow run](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/${workflowFile})`
         );
 
         await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "done");
-        await this.emitEvent(job, "phase1", "Planning Completed", `Generated plan: ${plan.summary}`, "done");
 
-        // 7. Save context, plan, and search context to KV cache (TTL 1 hour)
-        await Promise.all([
-            this.cache.set(`ai:task:${job.taskId}:context`, context, 3600),
-            this.cache.set(`ai:task:${job.taskId}:plan`, plan, 3600),
-            this.cache.set(`ai:task:${job.taskId}:search_context`, searchContext, 3600),
-        ]);
-
-        // 7. Enqueue Phase 2 in the syncQueue (which has longer budget)
-        if (this.syncQueue) {
-            await this.syncQueue.send({
-                ...job,
-                phase: 2,
-            });
-            this.logger.info({ taskId: job.taskId }, "Phase 1 complete. Enqueued Phase 2");
-        } else {
-            // Local fallback if no queue
-            this.logger.warn("No SYNC_QUEUE bound, executing Phase 2 synchronously");
-            await this.executePhase2({ ...job, phase: 2 });
-        }
+        // 4. Dispatch GitHub Actions
+        await this.dispatchToGitHub(job);
     }
 
-    // ─── Phase 2: Dispatch GitHub Actions Agent ───────────────
-
-    private async executePhase2(job: AiImplementJob): Promise<void> {
-        this.logger.info({ taskId: job.taskId }, "Running Phase 2: Dispatching GitHub Actions AI agent");
-
-        await this.emitEvent(job, "phase2", "Dispatching Agent", "Triggering GitHub Actions AI agent...", "running");
-
-        // 1. Retrieve plan from KV
-        const [planVal, searchContextVal] = await Promise.all([
-            this.cache.get<ImplementationPlan>(`ai:task:${job.taskId}:plan`),
-            this.cache.get<string>(`ai:task:${job.taskId}:search_context`),
-        ]);
-
-        if (!planVal) {
-            throw new AppError("Plan not found in KV cache. Phase 2 aborted.", 400, "AI_CACHE_MISS");
-        }
-
-        const plan = planVal.data;
-        const searchContext = searchContextVal?.data || "";
-
-        // 2. Compute branch name (same convention as before)
+    private async dispatchToGitHub(job: AiImplementJob): Promise<void> {
         const slug = job.issueTitle
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/(^-|-$)/g, "")
             .slice(0, 40);
         const branchName = `ai/${job.issueNumber}-${slug}`;
+        
+        // OpenHands is currently disabled in favor of SWE-agent
+        const agentName = "SWE-agent";
+        const workflowFile = "swe-agent.yml";
 
-        // 3. Build plan JSON for the agent
-        const planJson = JSON.stringify({
-            summary:        plan.summary,
-            approach:       plan.approach,
-            filesToModify:  plan.filesToModify,
-            newFiles:       plan.newFiles,
-            issueNumber:    job.issueNumber,
-            issueTitle:     job.issueTitle,
-            issueBody:      job.issueBody ?? "",
-            searchContext,
-        });
-
-        // 4. Save pending state so the callback handler can find the job
+        // Save pending state for the callback handler
         await this.cache.set(`ai:task:${job.taskId}:phase2_pending`, {
             ...job,
             branchName,
             phase: 3,
-        }, 7200); // 2h TTL (workflow has 30 min timeout)
+        }, 7200); // 2h TTL
 
-        // 5. Dispatch workflow_dispatch via GitHub REST API using the App installation token.
-        //    Requires the GitHub App to have "Actions: Read & Write" permission.
-        //    The workflow file must exist on the ref branch — using "develop" since that's
-        //    where .github/workflows/ai-implement.yml was committed. Merge to main when ready.
         const octokit = this.gitOps.getOctokit();
-        const workflowRef = "develop";
         try {
             await octokit.request(
                 "POST /repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches",
                 {
                     owner:       "Sellio-Squad",
                     repo:        "sellio_metrics",
-                    workflow_id: "ai-implement.yml",
-                    ref:         workflowRef,
+                    workflow_id: workflowFile,
+                    ref:         "develop",
                     inputs: {
                         owner:        job.owner,
                         repo:         job.repo,
                         issue_number: String(job.issueNumber),
                         task_id:      job.taskId,
-                        plan_json:    planJson,
                         branch_name:  branchName,
                     },
                 }
             );
         } catch (err: any) {
-            this.logger.error({ err: err.message }, "Failed to dispatch GitHub Actions workflow");
-            throw new AppError(`Failed to dispatch agent workflow: ${err.message}`, 502, "GH_DISPATCH_FAILED");
+            this.logger.error({ err: err.message }, `Failed to dispatch GitHub Actions workflow for ${agentName}`);
+            throw new AppError(`Failed to dispatch ${agentName} workflow: ${err.message}`, 502, "GH_DISPATCH_FAILED");
         }
 
-
-
-        // 6. Comment on issue that the agent has been dispatched
-        await this.gitOps.commentOnIssue(
-            job.owner,
-            job.repo,
-            job.issueNumber,
-            `🤖 **Sellio AI Agent**\n- *Phase 2:* GitHub Actions agent dispatched. The agent will clone the repo, write code, run \`${this.getTestCommand(job.repo)}\`, and self-correct on failures.\n- Track progress: [View workflow run](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml)`
-        );
-
-        // Mark dispatch step as done
         await this.emitEvent(
             job,
-            "phase2",
-            "Dispatching Agent",
-            "GitHub Actions AI agent dispatched successfully.",
-            "done"
-        );
-
-        // Start agent dispatched step as running
-        await this.emitEvent(
-            job,
-            "phase2",
+            "phase1",
             "Agent Dispatched",
-            `GitHub Actions agent is running. Branch: \`${branchName}\`. [Track real-time logs here](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml)`,
+            `${agentName} agent dispatched. Branch: \`${branchName}\`. [Track logs](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/${workflowFile})`,
             "running"
         );
 
-
-
-        this.logger.info({ taskId: job.taskId, branchName }, "Phase 2 dispatched to GitHub Actions. Awaiting callback.");
-        // Phase 3 will be triggered by the callback route POST /api/webhooks/ai-pipeline-result
+        this.logger.info({ taskId: job.taskId, branchName, agentName }, `${agentName} dispatched. Awaiting callback.`);
     }
+
+    // Phase 2 removed — OpenHands replaced the run_agent.py batch approach.
+    // Dispatch now happens directly from Phase 1 via dispatchToGitHub().
 
     /** Returns a human-readable test command hint based on the repo name. */
     private getTestCommand(repo: string): string {
