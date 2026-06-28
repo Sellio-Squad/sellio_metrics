@@ -118,27 +118,35 @@ def call_gemini(prompt: str) -> str:
             return response.text
         except Exception as e:
             err_str = str(e)
-            # Treat both 429 RESOURCE_EXHAUSTED and our own ValueError (blocked response) as retryable/fallback conditions
-            is_rate_limit = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+            # Treat 429 (rate limits), 503/500 (server overloads/errors), and ValueError as retryable/fallback conditions
+            is_retryable = (
+                "429" in err_str or 
+                "RESOURCE_EXHAUSTED" in err_str or
+                "503" in err_str or 
+                "UNAVAILABLE" in err_str or
+                "500" in err_str or
+                isinstance(e, ValueError)
+            )
             is_value_error = isinstance(e, ValueError)
 
-            if is_rate_limit or is_value_error:
+            if is_retryable:
                 # If the model has permanently exhausted its daily quota or got blocked, switch model
+                # Also switch model if we get a persistent 503/500 error
                 if "limit: 0" in err_str or is_value_error:
                     if _model_index < len(GEMINI_MODELS) - 1:
                         _model_index += 1
                         next_model = GEMINI_MODELS[_model_index]
-                        reason = "blocked/empty response" if is_value_error else "daily quota exhausted"
+                        reason = "blocked/empty response" if is_value_error else "daily quota exhausted/error"
                         print(f"  ⚠️  {model} {reason} — switching to {next_model}")
                         continue
                     else:
                         print("  ❌ All models have exhausted their daily quota or failed.")
                         raise
 
-                # Temporary rate limit — wait and retry
+                # Temporary rate limit or server overload — wait and retry
                 wait_match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_str)
                 wait_secs  = min(float(wait_match.group(1)) if wait_match else 20.0, 65.0)
-                print(f"  ⏳ Rate-limited on {model}. Waiting {wait_secs:.0f}s... (attempt {attempt+1}/{max_api_retries})")
+                print(f"  ⏳ Temporary error on {model} ({err_str[:100]}). Waiting {wait_secs:.0f}s... (attempt {attempt+1}/{max_api_retries})")
                 time.sleep(wait_secs)
                 if attempt == max_api_retries - 1:
                     raise
