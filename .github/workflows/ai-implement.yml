@@ -134,7 +134,7 @@ jobs:
         run: |
           pip install --upgrade pyOpenSSL cryptography
           pip install openhands-ai
-          playwright install
+          python -m playwright install
 
 
       # ── 7. Build task description (stack-aware, no bash quoting issues) ─
