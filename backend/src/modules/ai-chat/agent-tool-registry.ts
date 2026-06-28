@@ -355,7 +355,7 @@ export const TOOLS: AgentTool[] = [
                 projectId:   { type: "string", description: "Project node ID for moving the card" },
                 itemId:      { type: "string", description: "Project item node ID" },
                 fieldId:     { type: "string", description: "Status field node ID" },
-                agentType:   { type: "string", enum: ["swe-agent"], description: "Which AI agent to run. Currently only 'swe-agent' is supported (OpenHands is disabled).", default: "swe-agent" },
+                agentType:   { type: "string", enum: ["openhands", "swe-agent"], description: "Which AI agent to run. 'swe-agent' is more token-efficient and fits better in free tier quotas. 'openhands' is standard.", default: "swe-agent" },
             },
             required: ["issueNumber"],
         },

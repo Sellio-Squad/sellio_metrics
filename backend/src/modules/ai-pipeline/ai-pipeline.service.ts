@@ -111,11 +111,10 @@ export class AiPipelineService {
     //   4. Dispatch GitHub Actions (OpenHands runs inside)
 
     private async executePhase1(job: AiImplementJob): Promise<void> {
-        // OpenHands is currently disabled in favor of SWE-agent
-        const agentName = "SWE-agent";
-        const workflowFile = "ai-implement.yml";
+        const agentName = job.agentType === "openhands" ? "OpenHands" : "SWE-agent";
+        const workflowFile = job.agentType === "openhands" ? "openhands-agent.yml" : "swe-agent.yml";
         
-        this.logger.info({ taskId: job.taskId, requestedAgent: job.agentType }, `Phase 1: Dispatching ${agentName} via GitHub Actions`);
+        this.logger.info({ taskId: job.taskId, agentName }, `Phase 1: Dispatching ${agentName} via GitHub Actions`);
 
         await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "running");
 
@@ -147,9 +146,8 @@ export class AiPipelineService {
             .slice(0, 40);
         const branchName = `ai/${job.issueNumber}-${slug}`;
         
-        // OpenHands is currently disabled in favor of SWE-agent
-        const agentName = "SWE-agent";
-        const workflowFile = "ai-implement.yml";
+        const agentName = job.agentType === "openhands" ? "OpenHands" : "SWE-agent";
+        const workflowFile = job.agentType === "openhands" ? "openhands-agent.yml" : "swe-agent.yml";
 
         // Save pending state for the callback handler
         await this.cache.set(`ai:task:${job.taskId}:phase2_pending`, {
@@ -173,6 +171,7 @@ export class AiPipelineService {
                         issue_number: String(job.issueNumber),
                         task_id:      job.taskId,
                         branch_name:  branchName,
+                        agent_type:   job.agentType || "swe-agent",
                     },
                 }
             );
