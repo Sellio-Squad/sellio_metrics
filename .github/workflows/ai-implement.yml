@@ -264,9 +264,11 @@ jobs:
             | xargs -I{} dirname {} \
             | while read APP_DIR; do
                 echo "── Verifying: $APP_DIR ──"
-                (cd "$APP_DIR" && flutter analyze --no-pub --fatal-warnings)
-                (cd "$APP_DIR" && flutter test --no-pub) || true
+                (cd "$APP_DIR" && flutter pub get)
+                (cd "$APP_DIR" && flutter analyze --fatal-warnings)
+                (cd "$APP_DIR" && flutter test) || true
               done
+
 
       - name: "✅ Final verification — Kotlin"
         if: steps.detect.outputs.stack == 'kotlin'
