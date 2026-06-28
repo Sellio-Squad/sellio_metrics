@@ -117,7 +117,9 @@ jobs:
 
       # ── 6. Install OpenHands ──────────────────────────────────────────
       - name: "Install OpenHands"
-        run: pipx install openhands-ai --pip-args="--upgrade pyOpenSSL cryptography"
+        run: |
+          pip install --upgrade pyOpenSSL cryptography
+          pip install openhands-ai
 
       # ── 7. Build task description (stack-aware, no bash quoting issues) ─
       - name: "Build task description"
@@ -218,7 +220,7 @@ jobs:
           WORKSPACE_BASE: ${{ github.workspace }}/target_repo
           RUNTIME: local
         run: |
-          openhands-ai \
+          python -m openhands.core.main \
             --headless \
             -f /tmp/task.txt \
             --max-iterations 50
