@@ -85,5 +85,6 @@ print(f"✅ LiteLLM completion patched. Fallback order: {', '.join(GEMINI_MODELS
 
 # Execute OpenHands
 if __name__ == "__main__":
-    from openhands.core.main import main
-    main()
+    import runpy
+    runpy.run_module("openhands.core.main", run_name="__main__")
+
