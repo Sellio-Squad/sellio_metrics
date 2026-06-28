@@ -26,6 +26,14 @@ GEMINI_MODELS = [
     "gemini/gemma-3-27b-it",
     "gemini/gemma-3-12b-it",
     "gemini/gemma-3-4b-it",
+    "gemini/gemini-2.0-flash",
+    "gemini/gemini-2.0-flash-lite-preview",
+    "gemini/gemini-2.0-flash-thinking-exp",
+    "gemini/gemini-1.5-flash",
+    "gemini/gemini-1.5-flash-8b",
+    "gemini/gemini-1.5-pro",
+    "gemini/gemma-2-27b-it",
+    "gemini/gemma-2-9b-it",
 ]
 _current_model_index = 0
 
