@@ -323,6 +323,244 @@ def _collect_project_context(app_dir: str, all_paths: list[str]) -> str:
     return _cached_project_context
 
 
+_cached_symbols: str | None = None
+
+
+def _extract_camel_case_symbols(text: str) -> list[str]:
+    """
+    Extract CamelCase class/widget names from a plan description or approach text.
+    e.g. "StoreRepository, SellioStoreCard, GoRouter" → ["StoreRepository", "SellioStoreCard", "GoRouter"]
+    """
+    # Match words that start with an uppercase and contain at least one more uppercase
+    # (typical class naming pattern). Also match known types like GoRouter, Cubit, etc.
+    symbols = re.findall(r'\b[A-Z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*\b', text)
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    result = []
+    for s in symbols:
+        if s not in seen:
+            seen.add(s)
+            result.append(s)
+    return result
+
+
+def _extract_public_api(content: str, max_lines: int = 80) -> str:
+    """
+    Extract the public API from a Dart file:
+      - All import/export/part lines
+      - Class/abstract class/enum/mixin declarations
+      - Constructor signatures
+      - Public method signatures (not their bodies)
+
+    This gives the AI the real API surface without bloating the prompt with implementation details.
+    """
+    lines = content.splitlines()
+    output = []
+    in_class = False
+    brace_depth = 0
+    i = 0
+
+    while i < min(len(lines), max_lines * 3):  # scan more lines but output fewer
+        line = lines[i]
+        stripped = line.strip()
+
+        # Always include: imports, exports, parts, library declarations
+        if (stripped.startswith("import ")
+                or stripped.startswith("export ")
+                or stripped.startswith("part ")
+                or stripped.startswith("library ")):
+            output.append(line)
+            i += 1
+            continue
+
+        # Include class/enum/mixin/abstract declarations
+        is_type_decl = re.match(
+            r'^\s*(abstract\s+class|class|enum|mixin|extension|sealed\s+class|final\s+class)\s+', line
+        )
+        if is_type_decl:
+            output.append(line)
+            in_class = True
+            brace_depth = line.count("{") - line.count("}")
+            i += 1
+            continue
+
+        if in_class:
+            brace_depth += line.count("{") - line.count("}")
+
+            # Include constructor lines (class name followed by ( or .)
+            is_constructor = re.match(r'^\s*[A-Z][a-zA-Z0-9_]*[\.(]', line)
+            # Include @override, @required, final fields, method signatures (no body inline)
+            is_field_or_method = re.match(
+                r'^\s*(final|late|static|const|@|@override|@required|required|[A-Z]|void|Future|Stream|String|int|double|bool|List|Map|Set|dynamic|Object|Widget|BuildContext)',
+                line
+            )
+            # Include closing braces for class
+            if stripped == "}" and brace_depth <= 0:
+                output.append(line)
+                in_class = False
+                i += 1
+                continue
+
+            if is_constructor or is_field_or_method:
+                output.append(line)
+                # Skip multi-line body (simplified — stop at ; or })
+                if "{" in line and not "}" in line:
+                    # skip until matching brace
+                    j = i + 1
+                    depth = 1
+                    while j < len(lines) and depth > 0:
+                        depth += lines[j].count("{") - lines[j].count("}")
+                        j += 1
+                    output.append("  // ...")
+                    i = j
+                    continue
+
+        if len(output) >= max_lines:
+            break
+        i += 1
+
+    return "\n".join(output)
+
+
+def _discover_symbols(plan: dict, app_dir: str, all_paths: list[str]) -> str:
+    """
+    Pre-tool-calling: simulate what OpenHands does interactively (grep → open → read).
+
+    For every CamelCase symbol in the plan:
+      1. Run `grep -r "class SYMBOL" {app_dir}` to find where it's defined
+      2. Open that file and extract its public API
+      3. Inject into the prompt as a verified source of truth
+
+    This ensures Gemini NEVER needs to guess class names, constructors, or imports —
+    it has the actual definitions right in front of it.
+    Results are cached globally (computed once, reused across retries).
+    """
+    global _cached_symbols
+    if _cached_symbols is not None:
+        return _cached_symbols
+
+    task_filenames = {Path(p).name for p in all_paths}
+
+    # Collect all text from the plan to extract symbols from
+    plan_text = " ".join([
+        plan.get("summary", ""),
+        plan.get("approach", ""),
+        plan.get("issueTitle", ""),
+        " ".join(plan.get("filesToModify", [])),
+        " ".join(plan.get("newFiles", [])),
+    ])
+
+    symbols = _extract_camel_case_symbols(plan_text)
+
+    # Skip generic Flutter/Dart keywords — we only want project-specific types
+    skip_symbols = {
+        "StatelessWidget", "StatefulWidget", "BuildContext", "Widget", "State",
+        "Cubit", "Bloc", "BlocBuilder", "BlocConsumer", "BlocListener",
+        "BlocProvider", "MultiBlocProvider", "FutureBuilder", "StreamBuilder",
+        "Navigator", "MaterialApp", "Scaffold", "AppBar", "ListView",
+        "Column", "Row", "Container", "Padding", "Text", "TextStyle",
+        "EdgeInsets", "SizedBox", "Center", "Expanded", "Flexible",
+        "MaterialPage", "GoRouter", "GoRoute", "GoRouterState",
+        "Either", "Failure", "Success", "Equatable", "GetIt",
+        "String", "List", "Map", "Set", "Future", "Stream", "Object",
+        "DateTime", "Duration", "int", "double", "bool", "dynamic",
+        "ChangeNotifier", "InheritedWidget", "Key", "GlobalKey",
+        "ScaffoldMessenger", "SnackBar", "SnackBarAction", "Colors",
+        "Theme", "TextTheme", "MediaQuery", "CircularProgressIndicator",
+        "Image", "Icon", "Icons", "FloatingActionButton", "GestureDetector",
+        "InkWell", "TextButton", "ElevatedButton", "OutlinedButton",
+    }
+
+    symbols = [s for s in symbols if s not in skip_symbols]
+
+    discovered: list[str] = []
+    seen_files: set[str] = set()
+
+    # Find all .dart files once — reuse for every symbol grep
+    _, find_out = run(["find", "lib", "-name", "*.dart", "-not", "-path", "*/build/*"], cwd=app_dir)
+    dart_files = [f for f in find_out.splitlines() if f.strip()]
+
+    if not dart_files:
+        _cached_symbols = ""
+        return ""
+
+    print(f"  🔍 Discovering {len(symbols)} symbols across {len(dart_files)} dart files")
+
+    for symbol in symbols[:30]:  # cap at 30 symbols to avoid prompt bloat
+        # grep for "class SYMBOL" or "abstract class SYMBOL"
+        grep_args = ["grep", "-l", f"class {symbol}"] + dart_files
+        ok, grep_out = run(grep_args, cwd=app_dir)
+        if not ok or not grep_out.strip():
+            grep_args = ["grep", "-l", f"abstract class {symbol}"] + dart_files
+            ok, grep_out = run(grep_args, cwd=app_dir)
+
+        if not grep_out.strip():
+            continue
+
+        # Pick the most relevant file (prefer non-test, non-generated)
+        candidates = [
+            f for f in grep_out.strip().splitlines()
+            if "_test.dart" not in f
+            and ".g.dart" not in f
+            and ".freezed.dart" not in f
+            and Path(f).name not in task_filenames
+        ]
+
+        if not candidates:
+            continue
+
+        file_path = candidates[0]
+
+        # Avoid reading the same file twice
+        if file_path in seen_files:
+            continue
+        seen_files.add(file_path)
+
+        content = read_file(file_path)
+        if not content:
+            continue
+
+        api = _extract_public_api(strip_comments_and_empty_lines(content))
+        if api.strip():
+            # Compute the import path for this file relative to app_dir
+            try:
+                rel = Path(file_path).relative_to(Path(app_dir))
+                # Convert to package import format: lib/... → package:sellio_mobile/...
+                parts = rel.parts
+                if parts[0] == "lib":
+                    # Read package name from pubspec.yaml
+                    pkg_name = "sellio_mobile"  # default
+                    pubspec_path = Path(app_dir) / "pubspec.yaml"
+                    if pubspec_path.exists():
+                        for line in pubspec_path.read_text(encoding="utf-8").splitlines():
+                            if line.startswith("name:"):
+                                pkg_name = line.split(":", 1)[1].strip()
+                                break
+                    import_path = f"package:{pkg_name}/{'/'.join(parts[1:])}"
+                else:
+                    import_path = str(rel)
+            except ValueError:
+                import_path = file_path
+
+            discovered.append(
+                f"#### `{symbol}` — found in `{file_path}`\n"
+                f"Import: `import '{import_path}';`\n"
+                f"```dart\n{api}\n```"
+            )
+            print(f"     ✅ {symbol} → {file_path}")
+
+    if not discovered:
+        _cached_symbols = ""
+        return ""
+
+    result = (
+        "### Discovered Symbols — ACTUAL project definitions (use ONLY these, never invent):\n\n"
+        + "\n\n".join(discovered)
+    )
+    _cached_symbols = result
+    return result
+
+
 def build_batched_prompt(
     plan: dict,
     all_paths: list[str],
@@ -341,6 +579,9 @@ def build_batched_prompt(
 
     # Collect project-specific context (pubspec + existing import patterns)
     project_context = _collect_project_context(app_dir, all_paths) if STACK == "flutter" else ""
+
+    # Discover real class/widget/repo definitions by grepping the repo (like OpenHands does)
+    discovered_symbols = _discover_symbols(plan, app_dir, all_paths) if STACK == "flutter" else ""
 
     # Describe each file to generate
     files_section = ""
@@ -361,14 +602,16 @@ def build_batched_prompt(
     all_files_list = "\n".join(f"  - {p}" for p in all_paths)
 
     context_block = f"\n## Project context (use ONLY these packages and import patterns):\n{project_context}\n" if project_context else ""
+    symbols_block = f"\n## Discovered Symbols (VERIFIED definitions from repository — use ONLY these APIs):\n{discovered_symbols}\n" if discovered_symbols else ""
 
     return f"""You are a senior {lang} engineer implementing a GitHub issue.
+You have full READ access to the repository and MUST use its actual APIs — NEVER guess or invent.
 
 ## Issue
 Title: {plan.get("issueTitle", "")}
 Summary: {plan.get("summary", "")}
 Approach: {plan.get("approach", "")}
-{context_block}
+{context_block}{symbols_block}
 ## All files in this task (for cross-referencing imports):
 {all_files_list}
 
@@ -386,11 +629,12 @@ Output EACH file using this EXACT delimiter format. No other text allowed outsid
 [complete file content here]
 {FILE_END}
 
-## Rules
+## Rules — ALL MANDATORY
 - Use the exact delimiters shown above. Do NOT use markdown fences inside the blocks.
 - Output ALL {len(paths_to_generate)} file(s) listed above. Do not skip any.
-- CRITICAL: Only use imports from pubspec.yaml or files that exist in the repository.
-  Do NOT invent package names. Copy import patterns from the existing files shown above.
+- NEVER invent classes, repositories, widgets, routes, or constructors. The "Discovered Symbols" section above shows REAL definitions — use only those APIs.
+- NEVER invent import paths. Every import MUST either be from pubspec.yaml packages or be a path that appears in the Project file tree above.
+- If a symbol is NOT in the discovered list, grep is unavailable — DO NOT assume it exists. Use only what you see.
 - Remove any import that you are not 100% sure is used — unused imports cause build failures.
 - Every method that overrides a parent must have the @override annotation.
 - Match the existing code style and conventions precisely.
