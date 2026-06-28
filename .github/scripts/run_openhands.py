@@ -51,27 +51,17 @@ def fallback_completion(*args, **kwargs):
                 return res
             except Exception as e:
                 err_str = str(e)
-                is_rate_limit = (
-                    "429" in err_str or 
-                    "RESOURCE_EXHAUSTED" in err_str or 
-                    "limit:" in err_str or 
-                    "Quota exceeded" in err_str
-                )
-                
-                if is_rate_limit:
-                    print(f"  ⚠️  Rate limit/quota hit on model {model}. Error: {err_str[:150]}...")
-                    if attempt < len(GEMINI_MODELS) - 1:
-                        print(f"     Trying next fallback model in list...")
-                        last_exception = e
-                        # Sleep briefly to avoid hammering the API
-                        time.sleep(2)
-                        continue
-                    else:
-                        print("  ❌ All fallback Gemini models exhausted.")
-                        last_exception = e
+                print(f"  ⚠️  Error on model {model}: {err_str[:200]}...")
+                if attempt < len(GEMINI_MODELS) - 1:
+                    print(f"     Trying next fallback model in list...")
+                    last_exception = e
+                    # Update our current model index to the next one so we don't hit the failed one again
+                    _current_model_index = (model_index + 1) % len(GEMINI_MODELS)
+                    time.sleep(1)
+                    continue
                 else:
-                    # Raise immediately for non-rate-limit errors (e.g. syntax, auth)
-                    raise e
+                    print("  ❌ All fallback Gemini models exhausted.")
+                    last_exception = e
                     
         if last_exception:
             raise last_exception
