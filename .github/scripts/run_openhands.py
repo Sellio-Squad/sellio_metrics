@@ -21,12 +21,9 @@ _original_completion = litellm.completion
 
 # Define our fallback list of Gemini models
 GEMINI_MODELS = [
-    "gemini/gemini-3.5-flash",
     "gemini/gemini-3.1-flash-lite",
-    "gemini/gemini-3-flash-preview",
     "gemini/gemini-2.5-pro",
     "gemini/gemini-2.5-flash-lite",
-    "gemini/gemma-4",
     "gemini/gemma-3-12b-it",
     "gemini/gemma-3-4b-it",
 ]
