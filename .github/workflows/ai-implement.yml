@@ -19,10 +19,6 @@ on:
         description: "Unique task ID from Cloudflare KV"
         required: true
         type: string
-      plan_json:
-        description: "Implementation plan as JSON string"
-        required: true
-        type: string
       branch_name:
         description: "Branch to create and push to (e.g. ai/42-fix-login)"
         required: true
@@ -32,10 +28,10 @@ jobs:
   implement:
     name: "🤖 Implement Issue #${{ inputs.issue_number }} in ${{ inputs.repo }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 60
 
     steps:
-      # ── 1. Generate GitHub App installation token ─────────────────
+      # ── 1. Generate GitHub App installation token ──────────────────────
       - name: "Generate App token"
         uses: actions/create-github-app-token@v1
         id: app-token
@@ -44,13 +40,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: ${{ inputs.owner }}
 
-      # ── 2. Checkout sellio_metrics to get agent scripts ─────────────
-      - name: "📦 Checkout sellio_metrics (agent scripts)"
-        uses: actions/checkout@v4
-        with:
-          path: sellio_metrics
-
-      # ── 3. Checkout the TARGET repo ─────────────────────────────────
+      # ── 2. Checkout the TARGET repo ────────────────────────────────────
       - name: "📦 Checkout ${{ inputs.owner }}/${{ inputs.repo }}"
         uses: actions/checkout@v4
         with:
@@ -59,15 +49,27 @@ jobs:
           path: target_repo
           fetch-depth: 0
 
-      # ── 4. Auto-detect stack ─────────────────────────────────────────
+      # ── 3. Fetch issue details directly from GitHub API ────────────────
+      - name: "📋 Fetch issue details"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api /repos/${{ inputs.owner }}/${{ inputs.repo }}/issues/${{ inputs.issue_number }} \
+            --jq '.title' > /tmp/issue_title.txt
+          gh api /repos/${{ inputs.owner }}/${{ inputs.repo }}/issues/${{ inputs.issue_number }} \
+            --jq '.body'  > /tmp/issue_body.txt
+          echo "📋 Issue: $(cat /tmp/issue_title.txt)"
+          echo "   Body: $(wc -c < /tmp/issue_body.txt) bytes"
+
+      # ── 4. Auto-detect stack ───────────────────────────────────────────
       - name: "🔍 Detect stack"
         id: detect
         run: |
           cd target_repo
-          if [ -f "pubspec.yaml" ]; then
+          if find . -name "pubspec.yaml" -not -path "*/build/*" | grep -q .; then
             echo "stack=flutter" >> $GITHUB_OUTPUT
             echo "Detected: Flutter/Dart"
-          elif [ -f "build.gradle.kts" ] || [ -f "build.gradle" ]; then
+          elif find . -name "build.gradle*" | grep -q .; then
             echo "stack=kotlin" >> $GITHUB_OUTPUT
             echo "Detected: Kotlin/Spring Boot"
           elif [ -f "package.json" ]; then
@@ -78,7 +80,7 @@ jobs:
             echo "Unknown stack"
           fi
 
-      # ── 4a. Setup Flutter ────────────────────────────────────────────
+      # ── 4a. Setup Flutter ──────────────────────────────────────────────
       - name: "Setup Flutter"
         if: steps.detect.outputs.stack == 'flutter'
         uses: subosito/flutter-action@v2
@@ -87,7 +89,7 @@ jobs:
           channel: "stable"
           cache: true
 
-      # ── 4b. Setup Java 17 (Kotlin/Spring Boot) ─────────────────────
+      # ── 4b. Setup Java 17 (Kotlin/Spring Boot) ────────────────────────
       - name: "Setup Java 17"
         if: steps.detect.outputs.stack == 'kotlin'
         uses: actions/setup-java@v4
@@ -96,7 +98,7 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      # ── 4c. Setup Node 20 ────────────────────────────────────────────
+      # ── 4c. Setup Node 20 ─────────────────────────────────────────────
       - name: "Setup Node 20"
         if: steps.detect.outputs.stack == 'node'
         uses: actions/setup-node@v4
@@ -105,18 +107,7 @@ jobs:
           cache: npm
           cache-dependency-path: target_repo/package-lock.json
 
-      # ── 5. Setup Python for agent script ──────────────────────────
-      - name: "Setup Python 3.11"
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-          # No cache: pip here — there is no requirements.txt in the runner root.
-          # Dependencies are minimal (one package) so install time is negligible.
-
-      - name: "Install Python dependencies"
-        run: pip install google-genai
-
-      # ── 6. Configure git in target repo ─────────────────────────────
+      # ── 5. Configure git ──────────────────────────────────────────────
       - name: "Configure git"
         run: |
           cd target_repo
@@ -124,29 +115,154 @@ jobs:
           git config user.name "Sellio Bot"
           git checkout -b "${{ inputs.branch_name }}"
 
-      # ── 7. Run AI agent ──────────────────────────────────────────────
-      - name: "Run AI Agent"
-        id: agent
-        working-directory: target_repo
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          STACK: ${{ steps.detect.outputs.stack }}
-          PLAN_JSON: ${{ inputs.plan_json }}
-          ISSUE_NUMBER: ${{ inputs.issue_number }}
-        run: python ../sellio_metrics/.github/scripts/run_agent.py
+      # ── 6. Install OpenHands ──────────────────────────────────────────
+      - name: "Install OpenHands"
+        run: pip install openhands-ai
 
-      # ── 8. Push branch ───────────────────────────────────────────────
+      # ── 7. Build task description (stack-aware, no bash quoting issues) ─
+      - name: "Build task description"
+        env:
+          STACK: ${{ steps.detect.outputs.stack }}
+          ISSUE_NUMBER: ${{ inputs.issue_number }}
+          OWNER: ${{ inputs.owner }}
+          REPO: ${{ inputs.repo }}
+          WORKSPACE: ${{ github.workspace }}/target_repo
+        run: |
+          python3 << 'PYEOF'
+          import os
+          from pathlib import Path
+
+          stack        = os.environ.get("STACK", "unknown")
+          issue_number = os.environ.get("ISSUE_NUMBER", "?")
+          owner        = os.environ.get("OWNER", "")
+          repo         = os.environ.get("REPO", "")
+          workspace    = os.environ.get("WORKSPACE", "/workspace")
+          issue_title  = Path("/tmp/issue_title.txt").read_text().strip()
+          issue_body   = Path("/tmp/issue_body.txt").read_text().strip()
+
+          if stack == "flutter":
+              lang = "Flutter/Dart"
+              build_steps = """
+          4. Find ALL Flutter app directories:
+               find . -name "pubspec.yaml" -not -path "*/build/*" -not -path "*/.dart_tool/*"
+          5. For EACH Flutter app relevant to this issue, run:
+               flutter pub get
+               flutter analyze --no-pub --fatal-warnings
+          6. Fix EVERY error. For any "undefined class/method": grep for it first, read the file, then fix.
+          7. Run: flutter test --no-pub
+          8. Fix EVERY test failure. Repeat until both analyze and test are clean."""
+          elif stack == "kotlin":
+              lang = "Kotlin/Spring Boot"
+              build_steps = """
+          4. Run: ./gradlew compileKotlin
+          5. Fix EVERY compile error.
+          6. Run: ./gradlew test
+          7. Fix EVERY test failure. Repeat until clean."""
+          elif stack == "node":
+              lang = "Node.js/TypeScript"
+              build_steps = """
+          4. Run: npm run build
+          5. Fix EVERY build error.
+          6. Run: npm test
+          7. Fix EVERY test failure. Repeat until clean."""
+          else:
+              lang = "the project language"
+              build_steps = """
+          4. Run the project's build command.
+          5. Fix any errors."""
+
+          task = f"""You are implementing GitHub Issue #{issue_number} in a {lang} repository.
+
+          Repository: {owner}/{repo}
+          Issue #{issue_number}: {issue_title}
+
+          Requirements:
+          {issue_body}
+
+          Your working directory is: {workspace}
+
+          MANDATORY WORKFLOW — execute in this exact order:
+
+          1. EXPLORE: List the project structure:
+               find . -maxdepth 4 -name "*.dart" -o -name "pubspec.yaml" | head -60
+             Understand WHERE the code lives (e.g. apps/customer/lib/, lib/, src/).
+
+          2. RESEARCH — before writing ANY code:
+             For EVERY class, widget, service, repository, or route you plan to USE:
+               a. Run: grep -rn "class ClassName" .
+               b. Read that file completely.
+               c. Use ONLY its real public API — never invent parameters.
+             Never assume a class, method, or file exists without verifying first.
+
+          3. WRITE: Create or modify files using ONLY verified APIs.
+          {build_steps}
+          9. When all checks pass with no new errors: summarize what was done and stop.
+
+          CRITICAL RULES (violation = compile failure):
+          - NEVER invent a class name, import path, method, or constructor parameter.
+          - NEVER write an import without verifying the file path exists via grep/find.
+          - If analyze/build says "undefined X": grep for X immediately, read its file, fix.
+          - Every fix must be based on code you have actually read — not a guess.
+          """
+
+          Path("/tmp/task.txt").write_text(task)
+          print(f"✅ Task written ({len(task)} bytes)")
+          PYEOF
+
+      # ── 8. Run OpenHands Agent ────────────────────────────────────────
+      - name: "🤖 Run OpenHands Agent"
+        id: agent
+        env:
+          LLM_MODEL: "gemini/gemini-2.5-flash"
+          LLM_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          WORKSPACE_BASE: ${{ github.workspace }}/target_repo
+          RUNTIME: local
+        run: |
+          python -m openhands.core.main \
+            --headless \
+            -f /tmp/task.txt \
+            --max-iterations 50
+
+      # ── 9. Final verification (safety net — fails workflow if OpenHands missed errors) ─
+      - name: "✅ Final verification — Flutter"
+        if: steps.detect.outputs.stack == 'flutter'
+        run: |
+          # Find every Flutter app directory and verify each one
+          find target_repo -name "pubspec.yaml" \
+            -not -path "*/build/*" \
+            -not -path "*/.dart_tool/*" \
+            | xargs -I{} dirname {} \
+            | while read APP_DIR; do
+                echo "── Verifying: $APP_DIR ──"
+                (cd "$APP_DIR" && flutter analyze --no-pub --fatal-warnings)
+                (cd "$APP_DIR" && flutter test --no-pub) || true
+              done
+
+      - name: "✅ Final verification — Kotlin"
+        if: steps.detect.outputs.stack == 'kotlin'
+        run: |
+          cd target_repo && ./gradlew compileKotlin test
+
+      - name: "✅ Final verification — Node"
+        if: steps.detect.outputs.stack == 'node'
+        run: |
+          cd target_repo && npm run build && npm test
+
+      # ── 10. Push branch ───────────────────────────────────────────────
       - name: "Push branch to ${{ inputs.repo }}"
         run: |
           cd target_repo
+          git add -A
+          git diff --staged --stat
+          git commit --allow-empty -m "feat(ai): implement #${{ inputs.issue_number }}"
           git push origin "${{ inputs.branch_name }}"
 
-      # ── 9. Notify Cloudflare — SUCCESS ───────────────────────────────
+      # ── 11. Notify Cloudflare — SUCCESS ──────────────────────────────
       - name: "Notify Cloudflare (success)"
         if: success()
         run: |
           if [ -z "${{ secrets.SELLIO_WORKER_URL }}" ]; then
-            echo "❌ SELLIO_WORKER_URL secret is not set! Add it in repo Settings → Secrets."
+            echo "❌ SELLIO_WORKER_URL secret is not set!"
             exit 1
           fi
           PAYLOAD=$(jq -n \
@@ -163,17 +279,17 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
             -d "$PAYLOAD")
-          echo "📡 Cloudflare response [HTTP $HTTP_CODE]:"
+          echo "📡 Cloudflare [HTTP $HTTP_CODE]:"
           cat /tmp/cf_response.json || true
           [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || exit 1
 
-      # ── 10. Notify Cloudflare — FAILURE ─────────────────────────────
+      # ── 12. Notify Cloudflare — FAILURE ──────────────────────────────
       - name: "Notify Cloudflare (failure)"
         if: failure()
         run: |
           if [ -z "${{ secrets.SELLIO_WORKER_URL }}" ]; then
-            echo "❌ SELLIO_WORKER_URL secret is not set! Add it in repo Settings → Secrets."
-            exit 0  # don't re-fail, just warn
+            echo "❌ SELLIO_WORKER_URL secret is not set!"
+            exit 0
           fi
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           PAYLOAD=$(jq -n \
@@ -183,7 +299,7 @@ jobs:
             --arg owner    "${{ inputs.owner }}" \
             --arg repo     "${{ inputs.repo }}" \
             --argjson issueNum "${{ inputs.issue_number }}" \
-            --arg error    "Agent failed. Logs: $RUN_URL" \
+            --arg error    "OpenHands agent failed. Logs: $RUN_URL" \
             '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum, error: $error}')
 
           HTTP_CODE=$(curl -s -o /tmp/cf_response.json -w "%{http_code}" --retry 3 -X POST \
@@ -191,5 +307,5 @@ jobs:
             -H "Content-Type: application/json" \
             -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
             -d "$PAYLOAD")
-          echo "📡 Cloudflare response [HTTP $HTTP_CODE]:"
+          echo "📡 Cloudflare [HTTP $HTTP_CODE]:"
           cat /tmp/cf_response.json || true
