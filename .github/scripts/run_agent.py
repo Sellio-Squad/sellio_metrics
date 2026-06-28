@@ -53,7 +53,8 @@ GEMINI_MODELS = [
     "gemini-2.5-flash-lite",
     "gemini-2.5-flash",
 ]
-_model_index = 0
+_model_index = 0  # current model index
+_current_app_dir = "."  # set in main() after resolving stack config; used by generate_files
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -166,12 +167,68 @@ LANG_HINT = {
 }
 
 
+def _collect_project_context(app_dir: str, all_paths: list[str]) -> str:
+    """
+    Collect project-specific context to ground the AI's import decisions:
+      1. pubspec.yaml — tells the AI which packages are available
+      2. A sample of existing Dart files near the task paths — shows import patterns
+
+    This prevents the most common failure mode: the AI hallucinating imports that
+    don't exist in the project (e.g. wrong package names, non-existent files).
+    """
+    sections: list[str] = []
+
+    # 1. pubspec.yaml — source of truth for available packages
+    pubspec_path = Path(app_dir) / "pubspec.yaml"
+    if pubspec_path.exists():
+        pubspec_content = pubspec_path.read_text(encoding="utf-8")
+        # Only show the dependencies section — not the full file
+        sections.append(f"### pubspec.yaml (available packages):\n```yaml\n{pubspec_content[:3000]}\n```")
+
+    # 2. Read 4 existing Dart files near the task paths (not being generated)
+    # Priority: files in the same package/module that we're NOT generating
+    sampled_files: list[str] = []
+    task_paths_set = set(all_paths)
+
+    # Walk the app directory and find existing Dart files near our task paths
+    for task_path in all_paths[:4]:  # seed from first few task paths
+        task_dir = Path(task_path).parent
+        if not task_dir.exists():
+            task_dir = task_dir.parent  # go up one level if dir doesn't exist yet
+        if task_dir.exists():
+            for dart_file in task_dir.rglob("*.dart"):
+                rel = str(dart_file)
+                if rel not in task_paths_set and rel not in sampled_files:
+                    sampled_files.append(rel)
+                    if len(sampled_files) >= 4:
+                        break
+        if len(sampled_files) >= 4:
+            break
+
+    if sampled_files:
+        examples = ""
+        for path in sampled_files:
+            content = read_file(path)
+            # Only include the import lines (first ~30 lines) to keep prompt small
+            import_lines = "\n".join(
+                line for line in content.splitlines()[:40]
+                if line.startswith("import ") or line.startswith("part ") or line.startswith("export ") or not line.strip()
+            ).strip()
+            if import_lines:
+                examples += f"\n`{path}` imports:\n```dart\n{import_lines}\n```\n"
+        if examples:
+            sections.append(f"### Existing file import patterns (copy these patterns EXACTLY):{examples}")
+
+    return "\n\n".join(sections)
+
+
 def build_batched_prompt(
     plan: dict,
     all_paths: list[str],
     paths_to_generate: list[str],
     existing: dict[str, str],
     per_file_errors: dict[str, str],
+    app_dir: str = ".",
 ) -> str:
     """
     Build a single prompt that asks Gemini to generate ALL requested files at once.
@@ -180,6 +237,9 @@ def build_batched_prompt(
     reducing quota usage by ~13x for a typical task.
     """
     lang = LANG_HINT.get(STACK, "the project's language")
+
+    # Collect project-specific context (pubspec + existing import patterns)
+    project_context = _collect_project_context(app_dir, all_paths) if STACK == "flutter" else ""
 
     # Describe each file to generate
     files_section = ""
@@ -194,10 +254,12 @@ def build_batched_prompt(
             files_section += f"\n### File: `{path}` (CREATE — does not exist yet)\n"
 
         if file_error:
-            files_section += f"⚠️ This file had errors — fix these specifically:\n```\n{file_error[:1000]}\n```\n"
+            files_section += f"⚠️ Errors from previous attempt — fix ALL of these:\n```\n{file_error[:2000]}\n```\n"
 
     # List all paths in the task (for cross-referencing imports)
     all_files_list = "\n".join(f"  - {p}" for p in all_paths)
+
+    context_block = f"\n## Project context (use ONLY these packages and import patterns):\n{project_context}\n" if project_context else ""
 
     return f"""You are a senior {lang} engineer implementing a GitHub issue.
 
@@ -205,7 +267,7 @@ def build_batched_prompt(
 Title: {plan.get("issueTitle", "")}
 Summary: {plan.get("summary", "")}
 Approach: {plan.get("approach", "")}
-
+{context_block}
 ## All files in this task (for cross-referencing imports):
 {all_files_list}
 
@@ -226,7 +288,10 @@ Output EACH file using this EXACT delimiter format. No other text allowed outsid
 ## Rules
 - Use the exact delimiters shown above. Do NOT use markdown fences inside the blocks.
 - Output ALL {len(paths_to_generate)} file(s) listed above. Do not skip any.
-- All imports must reference files that actually exist in the project.
+- CRITICAL: Only use imports from pubspec.yaml or files that exist in the repository.
+  Do NOT invent package names. Copy import patterns from the existing files shown above.
+- Remove any import that you are not 100% sure is used — unused imports cause build failures.
+- Every method that overrides a parent must have the @override annotation.
 - Match the existing code style and conventions precisely.
 - For {lang}: follow idiomatic patterns (null-safety, DI, clean architecture, etc.).
 """
@@ -315,7 +380,7 @@ def generate_files(
                 per_file_errors[path] = unattributed_text
 
     print(f"  🤖 Calling Gemini [{GEMINI_MODELS[_model_index]}] for {len(paths_to_generate)} file(s)...")
-    prompt   = build_batched_prompt(plan, all_paths, paths_to_generate, existing, per_file_errors)
+    prompt   = build_batched_prompt(plan, all_paths, paths_to_generate, existing, per_file_errors, app_dir=_current_app_dir)
     response = call_gemini(prompt)
 
     result = parse_batched_response(response, paths_to_generate)
@@ -397,6 +462,31 @@ def resolve_stack_config(all_paths: list[str]) -> tuple[str, list[list[str]], li
     return ".", [], [], []
 
 
+def auto_fix_dart(app_dir: str) -> None:
+    """
+    Run `dart fix --apply` on the app directory to auto-correct lint issues
+    that the AI commonly introduces:
+      - unused_import       → removes hallucinated or leftover imports
+      - annotate_overrides  → adds missing @override annotations
+      - prefer_const_*      → const correctness
+
+    This runs AFTER writing files and BEFORE flutter analyze, so the analyze
+    step sees already-cleaned code. Many warning-level issues disappear entirely.
+    """
+    print(f"  🔧 dart fix --apply (in {app_dir}/)")
+    ok, out = run(["dart", "fix", "--apply"], cwd=app_dir)
+    if ok:
+        changed = [l for l in out.splitlines() if "fix" in l.lower() or "change" in l.lower()]
+        if changed:
+            print("  ✅ dart fix applied:")
+            for line in changed[:10]:
+                print(f"     {line}")
+        else:
+            print("  ✅ dart fix: nothing to change")
+    else:
+        print(f"  ⚠️  dart fix warning (non-fatal): {out[:200]}")
+
+
 # ── Error attribution ─────────────────────────────────────────────────────────
 
 def parse_failing_files(error_output: str, all_paths: list[str]) -> list[str]:
@@ -429,6 +519,10 @@ def install_deps(app_dir: str, install_cmds: list[list[str]]) -> tuple[bool, str
 
 
 def build_and_test(app_dir: str, build_cmd: list[str], test_cmd: list[str]) -> tuple[bool, str]:
+    # Auto-fix common lint issues before analyze (unused imports, missing @override, etc.)
+    if STACK == "flutter":
+        auto_fix_dart(app_dir)
+
     if build_cmd:
         print(f"  🏗️  {' '.join(build_cmd)} (in {app_dir}/)")
         ok, out = run(build_cmd, cwd=app_dir)
@@ -480,6 +574,10 @@ def main() -> None:
 
     existing = {p: read_file(p) for p in plan.get("filesToModify", [])}
     app_dir, install_cmds, build_cmd, test_cmd = resolve_stack_config(all_paths)
+
+    # Make app_dir available globally so generate_files can pass it to the prompt builder
+    global _current_app_dir
+    _current_app_dir = app_dir
 
     print("\n📦 Installing dependencies...")
     ok, out = install_deps(app_dir, install_cmds)
