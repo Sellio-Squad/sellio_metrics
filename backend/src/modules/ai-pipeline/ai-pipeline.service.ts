@@ -275,13 +275,25 @@ export class AiPipelineService {
             `🤖 **Sellio AI Agent**\n- *Phase 2:* GitHub Actions agent dispatched. The agent will clone the repo, write code, run \`${this.getTestCommand(job.repo)}\`, and self-correct on failures.\n- Track progress: [View workflow run](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml)`
         );
 
+        // Mark dispatch step as done
+        await this.emitEvent(
+            job,
+            "phase2",
+            "Dispatching Agent",
+            "GitHub Actions AI agent dispatched successfully.",
+            "done"
+        );
+
+        // Start agent dispatched step as running
         await this.emitEvent(
             job,
             "phase2",
             "Agent Dispatched",
-            `GitHub Actions agent is running. Branch: \`${branchName}\`. Waiting for result...`,
+            `GitHub Actions agent is running. Branch: \`${branchName}\`. [Track real-time logs here](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml)`,
             "running"
         );
+
+
 
         this.logger.info({ taskId: job.taskId, branchName }, "Phase 2 dispatched to GitHub Actions. Awaiting callback.");
         // Phase 3 will be triggered by the callback route POST /api/webhooks/ai-pipeline-result
