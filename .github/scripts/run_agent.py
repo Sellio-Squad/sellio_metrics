@@ -196,19 +196,32 @@ def _build_file_tree(root: str, max_depth: int = 4, max_files: int = 200) -> str
     return "\n".join(lines)
 
 
+_cached_project_context = None
+
+
+def strip_comments_and_empty_lines(code: str) -> str:
+    """
+    Remove single-line and multi-line comments and strip empty lines.
+    This keeps the code context compact, clean, and token-efficient for the LLM.
+    """
+    # Remove single line comments (// ...)
+    code = re.sub(r'//.*$', '', code, flags=re.MULTILINE)
+    # Remove multi-line comments (/* ... */)
+    code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+    # Filter out empty lines
+    lines = [line for line in code.splitlines() if line.strip()]
+    return "\n".join(lines)
+
+
 def _collect_project_context(app_dir: str, all_paths: list[str]) -> str:
     """
     Actively explore the project before generating code — same strategy Antigravity uses.
-
-    The agent runs INSIDE the cloned target repo (e.g. sellio_mobile), so it has
-    full file system access. We just need to READ the right files.
-
-    Collects:
-      1. pubspec.yaml               — exact package names available
-      2. Project file tree          — the AI understands the module structure
-      3. Key architectural files    — DI container, router, base classes
-      4. 2 complete existing screens — full working examples to copy patterns from
+    Caches results globally so we don't repeat expensive file operations during retries.
     """
+    global _cached_project_context
+    if _cached_project_context is not None:
+        return _cached_project_context
+
     sections: list[str] = []
     task_paths_set = set(all_paths)
 
@@ -252,7 +265,8 @@ def _collect_project_context(app_dir: str, all_paths: list[str]) -> str:
             continue  # skip files we're generating (we'll show their current state separately)
         content = read_file(path)
         if content:
-            key_files_content += f"\n#### `{path}`:\n```dart\n{content[:2000]}\n```\n"
+            cleaned_content = strip_comments_and_empty_lines(content)
+            key_files_content += f"\n#### `{path}`:\n```dart\n{cleaned_content[:2000]}\n```\n"
 
     if key_files_content:
         sections.append(
@@ -272,7 +286,8 @@ def _collect_project_context(app_dir: str, all_paths: list[str]) -> str:
                 continue
             content = read_file(rel)
             if content and len(content) > 200:
-                example_screens.append((rel, content))
+                cleaned_content = strip_comments_and_empty_lines(content)
+                example_screens.append((rel, cleaned_content))
             if len(example_screens) >= 2:
                 break
 
@@ -293,7 +308,8 @@ def _collect_project_context(app_dir: str, all_paths: list[str]) -> str:
                 continue
             content = read_file(rel)
             if content and len(content) > 100:
-                cubits_found.append((rel, content))
+                cleaned_content = strip_comments_and_empty_lines(content)
+                cubits_found.append((rel, cleaned_content))
             if len(cubits_found) >= 1:
                 break
 
@@ -303,7 +319,8 @@ def _collect_project_context(app_dir: str, all_paths: list[str]) -> str:
             cubit_text += f"\n#### `{path}`:\n```dart\n{content[:2000]}\n```\n"
         sections.append(f"### Existing Cubit example (use same pattern):{cubit_text}")
 
-    return "\n\n".join(sections)
+    _cached_project_context = "\n\n".join(sections)
+    return _cached_project_context
 
 
 def build_batched_prompt(
@@ -602,7 +619,13 @@ def install_deps(app_dir: str, install_cmds: list[list[str]]) -> tuple[bool, str
     return True, ""
 
 
-def build_and_test(app_dir: str, build_cmd: list[str], test_cmd: list[str]) -> tuple[bool, str]:
+def build_and_test(
+    app_dir: str,
+    build_cmd: list[str],
+    test_cmd: list[str],
+    touched_files: list[str],
+    baseline_errors: set[str],
+) -> tuple[bool, str]:
     # Auto-fix common lint issues before analyze (unused imports, missing @override, etc.)
     if STACK == "flutter":
         auto_fix_dart(app_dir)
@@ -611,8 +634,36 @@ def build_and_test(app_dir: str, build_cmd: list[str], test_cmd: list[str]) -> t
         print(f"  🏗️  {' '.join(build_cmd)} (in {app_dir}/)")
         ok, out = run(build_cmd, cwd=app_dir)
         if not ok:
-            if "no issues found" not in out.lower() and "0 issues" not in out.lower():
-                return False, out
+            # Filter out baseline errors in files we did NOT touch
+            new_errors = []
+            for line in out.splitlines():
+                cleaned = line.strip()
+                if not cleaned:
+                    continue
+
+                # Check if this error line references any of our touched files
+                is_touched = False
+                for path in touched_files:
+                    if path in line or Path(path).name in line:
+                        is_touched = True
+                        break
+
+                if is_touched:
+                    # We touched this file, so any error in it must be fixed/reported
+                    new_errors.append(line)
+                else:
+                    # We did not touch this file. Only fail/report if it's a NEW error
+                    if cleaned not in baseline_errors:
+                        new_errors.append(line)
+
+            if new_errors:
+                filtered_output = "\n".join(new_errors)
+                print(f"  ❌ Found {len(new_errors)} new error(s) introduced by this task:")
+                for e in new_errors[:10]:
+                    print(f"     {e}")
+                return False, filtered_output
+            else:
+                print("  ✅ All build errors were pre-existing (baseline). Treating build as successful.")
 
     if test_cmd:
         print(f"  🧪  {' '.join(test_cmd)} (in {app_dir}/)")
@@ -668,6 +719,17 @@ def main() -> None:
     if not ok:
         print(f"⚠️  Dep install warning (continuing):\n{out[:1000]}")
 
+    # Establish baseline errors to filter out pre-existing unrelated compiler/analyzer errors
+    baseline_errors = set()
+    if build_cmd:
+        print("\n🔍 Establishing baseline analyzer/compiler state...")
+        _, baseline_out = run(build_cmd, cwd=app_dir)
+        for line in baseline_out.splitlines():
+            cleaned = line.strip()
+            if cleaned:
+                baseline_errors.add(cleaned)
+        print(f"   Found {len(baseline_errors)} baseline warning/error lines.")
+
     generated_files: dict[str, str] = {}
     paths_to_generate = list(all_paths)
     error_output = ""
@@ -686,7 +748,13 @@ def main() -> None:
             write_file(path, content)
 
         print("\n🧪 Running checks...")
-        ok, error_output = build_and_test(app_dir, build_cmd, test_cmd)
+        ok, error_output = build_and_test(
+            app_dir,
+            build_cmd,
+            test_cmd,
+            touched_files=all_paths,
+            baseline_errors=baseline_errors
+        )
 
         if ok:
             print(f"\n✅ All checks passed on attempt {attempt}!")
