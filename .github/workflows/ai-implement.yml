@@ -145,6 +145,10 @@ jobs:
       - name: "Notify Cloudflare (success)"
         if: success()
         run: |
+          if [ -z "${{ secrets.SELLIO_WORKER_URL }}" ]; then
+            echo "❌ SELLIO_WORKER_URL secret is not set! Add it in repo Settings → Secrets."
+            exit 1
+          fi
           PAYLOAD=$(jq -n \
             --arg taskId    "${{ inputs.task_id }}" \
             --arg branch    "${{ inputs.branch_name }}" \
@@ -154,16 +158,23 @@ jobs:
             --argjson issueNum  "${{ inputs.issue_number }}" \
             '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum}')
 
-          curl -sf --retry 3 -X POST \
+          HTTP_CODE=$(curl -s -o /tmp/cf_response.json -w "%{http_code}" --retry 3 -X POST \
             "${{ secrets.SELLIO_WORKER_URL }}/api/ai-pipeline/result" \
             -H "Content-Type: application/json" \
             -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
-            -d "$PAYLOAD"
+            -d "$PAYLOAD")
+          echo "📡 Cloudflare response [HTTP $HTTP_CODE]:"
+          cat /tmp/cf_response.json || true
+          [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || exit 1
 
       # ── 10. Notify Cloudflare — FAILURE ─────────────────────────────
       - name: "Notify Cloudflare (failure)"
         if: failure()
         run: |
+          if [ -z "${{ secrets.SELLIO_WORKER_URL }}" ]; then
+            echo "❌ SELLIO_WORKER_URL secret is not set! Add it in repo Settings → Secrets."
+            exit 0  # don't re-fail, just warn
+          fi
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
           PAYLOAD=$(jq -n \
             --arg taskId   "${{ inputs.task_id }}" \
@@ -172,11 +183,13 @@ jobs:
             --arg owner    "${{ inputs.owner }}" \
             --arg repo     "${{ inputs.repo }}" \
             --argjson issueNum "${{ inputs.issue_number }}" \
-            --arg error    "Agent failed after max retries. Logs: $RUN_URL" \
+            --arg error    "Agent failed. Logs: $RUN_URL" \
             '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum, error: $error}')
 
-          curl -sf --retry 3 -X POST \
+          HTTP_CODE=$(curl -s -o /tmp/cf_response.json -w "%{http_code}" --retry 3 -X POST \
             "${{ secrets.SELLIO_WORKER_URL }}/api/ai-pipeline/result" \
             -H "Content-Type: application/json" \
             -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
-            -d "$PAYLOAD" || echo "Cloudflare notification failed"
+            -d "$PAYLOAD")
+          echo "📡 Cloudflare response [HTTP $HTTP_CODE]:"
+          cat /tmp/cf_response.json || true

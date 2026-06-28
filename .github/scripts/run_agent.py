@@ -42,8 +42,17 @@ STACK          = os.environ.get("STACK", "unknown")
 ISSUE_NUMBER   = os.environ.get("ISSUE_NUMBER", "0")
 MAX_RETRIES    = 3
 
-# gemini-2.0-flash: 1500 requests/day free (vs 25/day for gemini-2.5-flash)
-GEMINI_MODEL = "gemini-2.0-flash"
+# Model fallback list: tries each in order when the previous is rate-limited.
+# Free tier quotas (requests/day):
+#   gemini-2.0-flash     → 1,500 RPD
+#   gemini-1.5-flash     → 1,500 RPD (different quota pool)
+#   gemini-1.5-flash-8b  → 4,000 RPD (smallest, most generous)
+GEMINI_MODELS = [
+    "gemini-2.0-flash",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-8b",
+]
+_model_index = 0  # current model index
 
 client = genai.Client(api_key=GEMINI_API_KEY)
 
@@ -99,21 +108,34 @@ def strip_fences(text: str) -> str:
 def call_gemini(prompt: str, retry_count: int = 3) -> str:
     """
     Call Gemini with automatic retry on 429 rate-limit errors.
-    Waits up to 60 seconds when rate-limited before retrying.
+    Falls back to the next model in GEMINI_MODELS if the current one
+    has its daily quota exhausted.
     """
+    global _model_index
     for attempt in range(retry_count):
+        model = GEMINI_MODELS[_model_index]
         try:
             response = client.models.generate_content(
-                model=GEMINI_MODEL,
+                model=model,
                 contents=prompt,
             )
             return response.text
-        except genai_errors.ClientError as e:
-            if e.status_code == 429:
-                # Parse the retry-after hint from the error message
-                wait_match = re.search(r"retry in (\d+(?:\.\d+)?)s", str(e))
-                wait_secs = min(float(wait_match.group(1)) if wait_match else 30.0, 60.0)
-                print(f"  ⏳ Gemini rate-limited (429). Waiting {wait_secs:.0f}s before retry...")
+        except Exception as e:
+            err_str = str(e)
+            is_rate_limit = "429" in err_str or "RESOURCE_EXHAUSTED" in err_str
+            if is_rate_limit:
+                # Parse wait hint from error message
+                wait_match = re.search(r"retry in (\d+(?:\.\d+)?)s", err_str)
+                wait_secs  = min(float(wait_match.group(1)) if wait_match else 15.0, 60.0)
+
+                # If quota is permanently exhausted for today (limit: 0), try next model
+                if "limit: 0" in err_str and _model_index < len(GEMINI_MODELS) - 1:
+                    _model_index += 1
+                    next_model = GEMINI_MODELS[_model_index]
+                    print(f"  ⚠️  {model} quota exhausted — switching to {next_model}")
+                    continue
+
+                print(f"  ⏳ Gemini rate-limited ({model}). Waiting {wait_secs:.0f}s...")
                 time.sleep(wait_secs)
                 if attempt == retry_count - 1:
                     raise
@@ -359,7 +381,8 @@ def restore_files(originals: dict[str, str]) -> None:
 
 def main() -> None:
     print(f"\n{'='*60}")
-    print(f"🚀 Sellio AI Agent  |  stack={STACK}  |  model={GEMINI_MODEL}  |  issue=#{ISSUE_NUMBER}")
+    print(f"🚀 Sellio AI Agent  |  stack={STACK}  |  issue=#{ISSUE_NUMBER}")
+    print(f"   Models (in order): {' → '.join(GEMINI_MODELS)}")
     print(f"{'='*60}\n")
 
     try:
