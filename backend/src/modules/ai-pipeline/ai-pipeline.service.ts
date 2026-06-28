@@ -113,7 +113,7 @@ export class AiPipelineService {
     private async executePhase1(job: AiImplementJob): Promise<void> {
         // OpenHands is currently disabled in favor of SWE-agent
         const agentName = "SWE-agent";
-        const workflowFile = "swe-agent.yml";
+        const workflowFile = "ai-implement.yml";
         
         this.logger.info({ taskId: job.taskId, requestedAgent: job.agentType }, `Phase 1: Dispatching ${agentName} via GitHub Actions`);
 
@@ -149,7 +149,7 @@ export class AiPipelineService {
         
         // OpenHands is currently disabled in favor of SWE-agent
         const agentName = "SWE-agent";
-        const workflowFile = "swe-agent.yml";
+        const workflowFile = "ai-implement.yml";
 
         // Save pending state for the callback handler
         await this.cache.set(`ai:task:${job.taskId}:phase2_pending`, {
