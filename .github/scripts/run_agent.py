@@ -167,57 +167,141 @@ LANG_HINT = {
 }
 
 
+def _build_file_tree(root: str, max_depth: int = 4, max_files: int = 200) -> str:
+    """
+    Build a compact directory tree of the project, like `find` or `tree`.
+    Only shows Dart/YAML files. Lets the AI understand the project layout.
+    """
+    lines: list[str] = []
+    count = 0
+    root_path = Path(root)
+
+    for path in sorted(root_path.rglob("*")):
+        if count >= max_files:
+            lines.append("  ... (truncated)")
+            break
+        # Only show .dart and .yaml files, skip generated/build dirs
+        if any(part in path.parts for part in [".dart_tool", "build", ".git", ".fvm", "__pycache__"]):
+            continue
+        if path.suffix not in (".dart", ".yaml", ".yml", ".arb"):
+            continue
+        # Respect depth limit
+        rel = path.relative_to(root_path)
+        if len(rel.parts) > max_depth:
+            continue
+        indent = "  " * (len(rel.parts) - 1)
+        lines.append(f"{indent}{rel.name}")
+        count += 1
+
+    return "\n".join(lines)
+
+
 def _collect_project_context(app_dir: str, all_paths: list[str]) -> str:
     """
-    Collect project-specific context to ground the AI's import decisions:
-      1. pubspec.yaml — tells the AI which packages are available
-      2. A sample of existing Dart files near the task paths — shows import patterns
+    Actively explore the project before generating code — same strategy Antigravity uses.
 
-    This prevents the most common failure mode: the AI hallucinating imports that
-    don't exist in the project (e.g. wrong package names, non-existent files).
+    The agent runs INSIDE the cloned target repo (e.g. sellio_mobile), so it has
+    full file system access. We just need to READ the right files.
+
+    Collects:
+      1. pubspec.yaml               — exact package names available
+      2. Project file tree          — the AI understands the module structure
+      3. Key architectural files    — DI container, router, base classes
+      4. 2 complete existing screens — full working examples to copy patterns from
     """
     sections: list[str] = []
-
-    # 1. pubspec.yaml — source of truth for available packages
-    pubspec_path = Path(app_dir) / "pubspec.yaml"
-    if pubspec_path.exists():
-        pubspec_content = pubspec_path.read_text(encoding="utf-8")
-        # Only show the dependencies section — not the full file
-        sections.append(f"### pubspec.yaml (available packages):\n```yaml\n{pubspec_content[:3000]}\n```")
-
-    # 2. Read 4 existing Dart files near the task paths (not being generated)
-    # Priority: files in the same package/module that we're NOT generating
-    sampled_files: list[str] = []
     task_paths_set = set(all_paths)
 
-    # Walk the app directory and find existing Dart files near our task paths
-    for task_path in all_paths[:4]:  # seed from first few task paths
-        task_dir = Path(task_path).parent
-        if not task_dir.exists():
-            task_dir = task_dir.parent  # go up one level if dir doesn't exist yet
-        if task_dir.exists():
-            for dart_file in task_dir.rglob("*.dart"):
-                rel = str(dart_file)
-                if rel not in task_paths_set and rel not in sampled_files:
-                    sampled_files.append(rel)
-                    if len(sampled_files) >= 4:
-                        break
-        if len(sampled_files) >= 4:
-            break
+    # ── 1. pubspec.yaml ────────────────────────────────────────────────────────
+    pubspec_path = Path(app_dir) / "pubspec.yaml"
+    if pubspec_path.exists():
+        content = pubspec_path.read_text(encoding="utf-8")
+        sections.append(
+            f"### pubspec.yaml — ALL available packages (only use these):\n```yaml\n{content[:4000]}\n```"
+        )
 
-    if sampled_files:
-        examples = ""
-        for path in sampled_files:
-            content = read_file(path)
-            # Only include the import lines (first ~30 lines) to keep prompt small
-            import_lines = "\n".join(
-                line for line in content.splitlines()[:40]
-                if line.startswith("import ") or line.startswith("part ") or line.startswith("export ") or not line.strip()
-            ).strip()
-            if import_lines:
-                examples += f"\n`{path}` imports:\n```dart\n{import_lines}\n```\n"
-        if examples:
-            sections.append(f"### Existing file import patterns (copy these patterns EXACTLY):{examples}")
+    # ── 2. File tree ───────────────────────────────────────────────────────────
+    lib_dir = Path(app_dir) / "lib"
+    if lib_dir.exists():
+        tree = _build_file_tree(str(lib_dir), max_depth=5, max_files=150)
+        if tree:
+            sections.append(
+                f"### Project file tree (lib/ directory — use these exact paths for imports):\n```\n{tree}\n```"
+            )
+
+    # ── 3. Key architectural files ────────────────────────────────────────────
+    # These are the files the AI most often gets wrong imports for.
+    # Read them fully so the AI can copy exact import statements.
+    key_file_patterns = [
+        # DI / injection
+        f"{app_dir}/lib/di/injection_container.dart",
+        f"{app_dir}/lib/di/modules/bloc_module.dart",
+        f"{app_dir}/lib/di/service_locator.dart",
+        # Router / navigation
+        f"{app_dir}/lib/core/navigate/app_routes.dart",
+        f"{app_dir}/lib/core/navigate/route_manager.dart",
+        f"{app_dir}/lib/core/navigate/app_navigator.dart",
+        f"{app_dir}/lib/core/navigate/app_navigator_impl.dart",
+        # App entry / base
+        f"{app_dir}/lib/app.dart",
+        f"{app_dir}/lib/main.dart",
+    ]
+    key_files_content = ""
+    for path in key_file_patterns:
+        if path in task_paths_set:
+            continue  # skip files we're generating (we'll show their current state separately)
+        content = read_file(path)
+        if content:
+            key_files_content += f"\n#### `{path}`:\n```dart\n{content[:2000]}\n```\n"
+
+    if key_files_content:
+        sections.append(
+            f"### Key architectural files (copy import patterns from these EXACTLY):{key_files_content}"
+        )
+
+    # ── 4. Find 2 complete existing screens as examples ───────────────────────
+    # Find existing screen files that are NOT in our task — these are the best
+    # examples of how a complete, working screen looks in this project.
+    screens_dir = Path(app_dir) / "lib" / "presentation" / "screens"
+    example_screens: list[tuple[str, str]] = []
+
+    if screens_dir.exists():
+        for dart_file in sorted(screens_dir.rglob("*_screen.dart")):
+            rel = str(dart_file)
+            if rel in task_paths_set:
+                continue
+            content = read_file(rel)
+            if content and len(content) > 200:
+                example_screens.append((rel, content))
+            if len(example_screens) >= 2:
+                break
+
+    if example_screens:
+        examples_text = ""
+        for path, content in example_screens:
+            examples_text += f"\n#### `{path}` (complete existing screen — copy its structure):\n```dart\n{content[:3000]}\n```\n"
+        sections.append(
+            f"### Complete existing screen examples (use these as structural templates):{examples_text}"
+        )
+
+    # ── 5. Existing cubit examples ─────────────────────────────────────────────
+    cubits_found: list[tuple[str, str]] = []
+    if screens_dir.exists():
+        for dart_file in sorted(screens_dir.rglob("*_cubit.dart")):
+            rel = str(dart_file)
+            if rel in task_paths_set:
+                continue
+            content = read_file(rel)
+            if content and len(content) > 100:
+                cubits_found.append((rel, content))
+            if len(cubits_found) >= 1:
+                break
+
+    if cubits_found:
+        cubit_text = ""
+        for path, content in cubits_found:
+            cubit_text += f"\n#### `{path}`:\n```dart\n{content[:2000]}\n```\n"
+        sections.append(f"### Existing Cubit example (use same pattern):{cubit_text}")
 
     return "\n\n".join(sections)
 
