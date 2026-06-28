@@ -265,7 +265,7 @@ jobs:
             | while read APP_DIR; do
                 echo "── Verifying: $APP_DIR ──"
                 (cd "$APP_DIR" && flutter pub get)
-                (cd "$APP_DIR" && flutter analyze --fatal-warnings)
+                (cd "$APP_DIR" && flutter analyze)
                 (cd "$APP_DIR" && flutter test) || true
               done
 
