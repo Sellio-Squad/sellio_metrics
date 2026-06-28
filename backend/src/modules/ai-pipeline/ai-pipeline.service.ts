@@ -111,7 +111,11 @@ export class AiPipelineService {
     //   4. Dispatch GitHub Actions (OpenHands runs inside)
 
     private async executePhase1(job: AiImplementJob): Promise<void> {
-        this.logger.info({ taskId: job.taskId }, "Phase 1: Dispatching OpenHands via GitHub Actions");
+        // OpenHands is currently disabled in favor of SWE-agent
+        const agentName = "SWE-agent";
+        const workflowFile = "swe-agent.yml";
+        
+        this.logger.info({ taskId: job.taskId, requestedAgent: job.agentType }, `Phase 1: Dispatching ${agentName} via GitHub Actions`);
 
         await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "running");
 
@@ -121,17 +125,17 @@ export class AiPipelineService {
         // 2. Assign issue to the Sellio bot
         await this.gitOps.assignToBot(job.owner, job.repo, job.issueNumber);
 
-        // 3. Comment on issue that OpenHands is starting
+        // 3. Comment on issue that agent is starting
         await this.gitOps.commentOnIssue(
             job.owner,
             job.repo,
             job.issueNumber,
-            `🤖 **Sellio AI Agent** has picked up this ticket!\n- Dispatching **OpenHands** to implement this issue autonomously.\n- OpenHands will search the codebase, write code, run \`flutter analyze\` & \`flutter test\`, and self-correct on failures.\n- Track progress: [View workflow run](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml)`
+            `🤖 **Sellio AI Agent** has picked up this ticket!\n- Dispatching **${agentName}** to implement this issue autonomously.\n- The agent will search the codebase, write code, run \`flutter analyze\` & \`flutter test\`, and self-correct on failures.\n- Track progress: [View workflow run](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/${workflowFile})`
         );
 
         await this.emitEvent(job, "phase1", "Initializing Task", "Moving project card and assigning bot...", "done");
 
-        // 4. Dispatch GitHub Actions — OpenHands reads the issue directly
+        // 4. Dispatch GitHub Actions
         await this.dispatchToGitHub(job);
     }
 
@@ -142,6 +146,10 @@ export class AiPipelineService {
             .replace(/(^-|-$)/g, "")
             .slice(0, 40);
         const branchName = `ai/${job.issueNumber}-${slug}`;
+        
+        // OpenHands is currently disabled in favor of SWE-agent
+        const agentName = "SWE-agent";
+        const workflowFile = "swe-agent.yml";
 
         // Save pending state for the callback handler
         await this.cache.set(`ai:task:${job.taskId}:phase2_pending`, {
@@ -157,7 +165,7 @@ export class AiPipelineService {
                 {
                     owner:       "Sellio-Squad",
                     repo:        "sellio_metrics",
-                    workflow_id: "ai-implement.yml",
+                    workflow_id: workflowFile,
                     ref:         "develop",
                     inputs: {
                         owner:        job.owner,
@@ -165,24 +173,23 @@ export class AiPipelineService {
                         issue_number: String(job.issueNumber),
                         task_id:      job.taskId,
                         branch_name:  branchName,
-                        // OpenHands fetches issue title + body directly from GitHub API
                     },
                 }
             );
         } catch (err: any) {
-            this.logger.error({ err: err.message }, "Failed to dispatch GitHub Actions workflow");
-            throw new AppError(`Failed to dispatch OpenHands workflow: ${err.message}`, 502, "GH_DISPATCH_FAILED");
+            this.logger.error({ err: err.message }, `Failed to dispatch GitHub Actions workflow for ${agentName}`);
+            throw new AppError(`Failed to dispatch ${agentName} workflow: ${err.message}`, 502, "GH_DISPATCH_FAILED");
         }
 
         await this.emitEvent(
             job,
             "phase1",
             "Agent Dispatched",
-            `OpenHands agent dispatched. Branch: \`${branchName}\`. [Track logs](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/ai-implement.yml)`,
+            `${agentName} agent dispatched. Branch: \`${branchName}\`. [Track logs](https://github.com/Sellio-Squad/sellio_metrics/actions/workflows/${workflowFile})`,
             "running"
         );
 
-        this.logger.info({ taskId: job.taskId, branchName }, "OpenHands dispatched. Awaiting callback.");
+        this.logger.info({ taskId: job.taskId, branchName, agentName }, `${agentName} dispatched. Awaiting callback.`);
     }
 
     // Phase 2 removed — OpenHands replaced the run_agent.py batch approach.

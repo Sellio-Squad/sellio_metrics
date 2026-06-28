@@ -355,6 +355,7 @@ export const TOOLS: AgentTool[] = [
                 projectId:   { type: "string", description: "Project node ID for moving the card" },
                 itemId:      { type: "string", description: "Project item node ID" },
                 fieldId:     { type: "string", description: "Status field node ID" },
+                agentType:   { type: "string", enum: ["swe-agent"], description: "Which AI agent to run. Currently only 'swe-agent' is supported (OpenHands is disabled).", default: "swe-agent" },
             },
             required: ["issueNumber"],
         },
@@ -370,13 +371,14 @@ export const TOOLS: AgentTool[] = [
                 projectId: args.projectId ?? "",
                 itemId: args.itemId ?? "",
                 fieldId: args.fieldId ?? "",
+                agentType: args.agentType || "swe-agent",
                 phase: 1,
                 taskId: `${owner}-${repo}-${issue.number}-${Date.now()}`,
             };
 
             if (syncQueue) {
                 await syncQueue.send(job);
-                return { enqueued: true, taskId: job.taskId, issueNumber: issue.number };
+                return { enqueued: true, taskId: job.taskId, issueNumber: issue.number, agentType: job.agentType };
             }
             logger.warn("syncQueue not available — cannot enqueue AI implement job");
             return { error: true, message: "AI implementation queue is not configured. Contact the squad admin." };
