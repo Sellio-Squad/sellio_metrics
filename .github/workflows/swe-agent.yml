@@ -115,7 +115,7 @@ jobs:
           cache: npm
           cache-dependency-path: target_repo/package-lock.json
 
-      # ── 6. Setup Python & install mini-swe-agent (No pip cache to prevent requirements.txt error) ──
+      # ── 6. Setup Python & install mini-swe-agent ───────────────────────
       - name: "🐍 Setup Python 3.11"
         uses: actions/setup-python@v5
         with:
@@ -133,7 +133,7 @@ jobs:
           git config user.name "Sellio Bot"
           git checkout -b "${{ inputs.branch_name }}"
 
-      # ── 8. Build task description (stack-aware, no bash quoting issues) ─
+      # ── 8. Build task description ──────────────────────────────────────
       - name: "Build task description"
         env:
           STACK: ${{ steps.detect.outputs.stack }}
@@ -218,7 +218,6 @@ jobs:
         id: agent
         working-directory: target_repo
         env:
-          MINI_MODEL: "gemini/gemini-2.5-flash"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
@@ -226,7 +225,7 @@ jobs:
           GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          # Create config to bypass interactive setup
+          # Bypass interactive setup by creating the config file
           mkdir -p ~/.config/mini-swe-agent
           echo "MINI_MODEL=gemini/gemini-2.5-flash" > ~/.config/mini-swe-agent/.env
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> ~/.config/mini-swe-agent/.env
