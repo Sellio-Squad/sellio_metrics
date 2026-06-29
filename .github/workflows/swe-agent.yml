@@ -1,6 +1,15 @@
 name: 🧑‍💻 SWE-agent
 
-# This workflow runs the mini-swe-agent.
+# Session Checkpoint Architecture:
+# ─────────────────────────────────
+# When the agent fails mid-task (rate limits, crash), instead of committing
+# incomplete code, we save a structured "session state" as a GitHub Actions
+# artifact. On the next run, the artifact is downloaded and injected into the
+# task prompt so the agent skips exploration and resumes from its plan.
+#
+# Session state lives at /tmp/ai_session.md (written by the agent itself).
+# Artifact name: session-{owner}-{repo}-{issue_number}
+# Retention: 7 days (enough for retries, auto-cleaned after).
 
 on:
   workflow_dispatch:
@@ -58,7 +67,7 @@ jobs:
           ref: develop
           fetch-depth: 0
 
-      # ── 4. Fetch issue details directly from GitHub API ────────────────
+      # ── 4. Fetch issue details from GitHub API ─────────────────────────
       - name: "📋 Fetch issue details"
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -106,7 +115,7 @@ jobs:
           distribution: "temurin"
           cache: gradle
 
-      # ── 5c. Setup Node 22 (Avoid deprecated Node 20 warning) ───────────
+      # ── 5c. Setup Node 22 ─────────────────────────────────────────────
       - name: "Setup Node 22"
         if: steps.detect.outputs.stack == 'node'
         uses: actions/setup-node@v4
@@ -115,15 +124,14 @@ jobs:
           cache: npm
           cache-dependency-path: target_repo/package-lock.json
 
-      # ── 6. Setup Python & install mini-swe-agent (No pip cache to prevent requirements.txt error) ──
+      # ── 6. Setup Python & install mini-swe-agent ──────────────────────
       - name: "🐍 Setup Python 3.11"
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: "📦 Install mini-swe-agent"
-        run: |
-          pip install mini-swe-agent
+        run: pip install mini-swe-agent
 
       # ── 7. Configure git ───────────────────────────────────────────────
       - name: "Configure git"
@@ -133,20 +141,50 @@ jobs:
           git config user.name "Sellio Bot"
           git checkout -b "${{ inputs.branch_name }}"
 
-      # ── 8. Build task description (stack-aware, no bash quoting issues) ─
+      # ── 8. Download session state from previous run (if any) ──────────
+      # The session state file is a structured markdown document written by
+      # the agent itself. It records: exploration findings, implementation
+      # plan, completed steps, remaining steps, and known pitfalls.
+      # No incomplete code is ever committed — only the session plan is saved.
+      - name: "📥 Restore session state (if previous run exists)"
+        id: session
+        uses: actions/download-artifact@v4
+        with:
+          name: "session-${{ inputs.owner }}-${{ inputs.repo }}-${{ inputs.issue_number }}"
+          path: /tmp/session
+        continue-on-error: true   # silently skip if no prior session
+
+      - name: "📋 Check session state"
+        id: session_check
+        run: |
+          SESSION_FILE="/tmp/session/ai_session.md"
+          if [ -f "$SESSION_FILE" ]; then
+            SIZE=$(wc -c < "$SESSION_FILE")
+            echo "is_resume=true" >> $GITHUB_OUTPUT
+            echo "✅ Found session state from a previous run (${SIZE} bytes)"
+            echo "── Session preview ──"
+            head -60 "$SESSION_FILE"
+          else
+            echo "is_resume=false" >> $GITHUB_OUTPUT
+            echo "✨ No prior session found. Starting fresh."
+          fi
+
+      # ── 9. Build task description (stack-aware + session-aware) ───────
       - name: "Build task description"
         env:
-          STACK: ${{ steps.detect.outputs.stack }}
+          STACK:        ${{ steps.detect.outputs.stack }}
+          IS_RESUME:    ${{ steps.session_check.outputs.is_resume }}
           ISSUE_NUMBER: ${{ inputs.issue_number }}
-          OWNER: ${{ inputs.owner }}
-          REPO: ${{ inputs.repo }}
-          WORKSPACE: ${{ github.workspace }}/target_repo
+          OWNER:        ${{ inputs.owner }}
+          REPO:         ${{ inputs.repo }}
+          WORKSPACE:    ${{ github.workspace }}/target_repo
         run: |
           python3 << 'PYEOF'
           import os
           from pathlib import Path
 
           stack        = os.environ.get("STACK", "unknown")
+          is_resume    = os.environ.get("IS_RESUME", "false") == "true"
           issue_number = os.environ.get("ISSUE_NUMBER", "?")
           owner        = os.environ.get("OWNER", "")
           repo         = os.environ.get("REPO", "")
@@ -154,18 +192,18 @@ jobs:
           issue_title  = Path("/tmp/issue_title.txt").read_text().strip()
           issue_body   = Path("/tmp/issue_body.txt").read_text().strip()
 
+          # ── Stack-specific build/verify steps ─────────────────────────
           if stack == "flutter":
               lang = "Flutter/Dart"
               build_steps = """
           4. Find ALL Flutter app directories:
                find . -name "pubspec.yaml" -not -path "*/build/*" -not -path "*/.dart_tool/*"
-          5. For EACH Flutter app relevant to this issue, run:
-               flutter pub get
-          6. Analyze ONLY the files you created or modified (NEVER run analyze on the whole project):
-               dart analyze --fatal-warnings path/to/file1.dart path/to/file2.dart
-             Fix EVERY error AND warning in files you have touched. Remove unused imports.
+          5. For the relevant Flutter app, run: flutter pub get
+          6. Analyze ONLY the files you created or modified (NEVER the whole project):
+               dart analyze --fatal-warnings path/to/your/file.dart
+             Fix EVERY error AND warning. Remove unused imports.
           7. Run: flutter test --no-pub --reporter compact
-             Fix EVERY test failure. Repeat until both analyze and test are clean."""
+             Fix EVERY failure. Repeat until both analyze and tests pass."""
           elif stack == "kotlin":
               lang = "Kotlin/Spring Boot"
               build_steps = """
@@ -183,9 +221,71 @@ jobs:
           else:
               lang = "the project language"
               build_steps = """
-          4. Run the project's build command.
-          5. Fix any errors."""
+          4. Run the project's build command and fix any errors."""
 
+          # ── Session state instructions ────────────────────────────────
+          # The agent is instructed to maintain /tmp/ai_session.md so that
+          # if this run is interrupted, the next run can resume from the plan.
+          session_instructions = """
+          SESSION STATE — MANDATORY:
+          You MUST maintain a session state file at /tmp/ai_session.md.
+          Update it at each major step so another AI can resume if you are interrupted.
+
+          The file MUST follow this exact structure:
+          ```
+          # AI Session — Issue #<number>: <title>
+          **Status:** IN PROGRESS | COMPLETE
+          **Stack:** <detected stack>
+          **Last Updated:** <timestamp from: date -u +%Y-%m-%dT%H:%M:%SZ>
+
+          ## Exploration Findings
+          - Key files discovered with their full paths and purpose
+          - Navigation/routing patterns used
+          - Class names and method signatures you verified exist
+
+          ## Implementation Plan
+          - [ ] Step 1: description
+          - [x] Step 2: description (checked when done)
+          - [ ] Step 3: description
+
+          ## Completed Work
+          Describe what changes were made and to which files.
+
+          ## Remaining Work
+          What still needs to be done to fully complete the issue.
+
+          ## Known Pitfalls (Do NOT repeat these mistakes)
+          - e.g. "flutter analyze on whole project generates 300 warnings — use dart analyze <file> instead"
+          - Any other gotchas discovered during exploration
+          ```
+
+          Write the initial session state BEFORE writing any code.
+          Update it AFTER completing each step.
+          Mark **Status: COMPLETE** only when all tests pass and the issue is fully implemented."""
+
+          # ── Resume context (injected when picking up a previous session)
+          resume_context = ""
+          session_file = Path("/tmp/session/ai_session.md")
+          if is_resume and session_file.exists():
+              prior = session_file.read_text().strip()
+              resume_context = f"""
+          ═══════════════════════════════════════════════════════════════
+          RESUMING FROM PREVIOUS SESSION
+          ═══════════════════════════════════════════════════════════════
+          A previous AI agent worked on this issue but was interrupted.
+          The session state it saved is below.
+
+          READ IT CAREFULLY:
+          - Skip any steps already marked [x] — they are DONE.
+          - Start from the first unchecked [ ] step in the Implementation Plan.
+          - Do NOT re-explore files already listed in "Exploration Findings".
+          - Do NOT repeat mistakes listed in "Known Pitfalls".
+
+          {prior}
+          ═══════════════════════════════════════════════════════════════
+          """
+
+          # ── Full task prompt ──────────────────────────────────────────
           task = f"""You are implementing GitHub Issue #{issue_number} in a {lang} repository.
 
           Repository: {owner}/{repo}
@@ -195,30 +295,34 @@ jobs:
           {issue_body}
 
           Your working directory is: {workspace}
-
+          {resume_context}
           MANDATORY WORKFLOW — execute in this exact order:
 
           1. EXPLORE: List the project structure to understand WHERE the code lives.
           2. RESEARCH: Grep for classes/methods before writing code. Use only real verified APIs.
-          3. WRITE: Create or modify files using ONLY verified APIs.
+          3. Write the /tmp/ai_session.md session file with your exploration findings and plan.
+          4. WRITE: Create or modify files using ONLY verified APIs.
           {build_steps}
-          9. When all checks pass with no new errors, summarize what was done.
+          8. Update /tmp/ai_session.md: mark completed steps [x], update status to COMPLETE.
+          9. When all checks pass, summarize what was done.
+          {session_instructions}
 
           CRITICAL RULES:
           - NEVER invent class names, import paths, or constructor parameters.
           - Remove every unused import you introduce. Unused imports fail the workflow.
           - NEVER assume a file exists without checking with 'ls' or 'find'.
-          - If the build/analyze fails, read the error message carefully and fix it before trying again.
-          - NEVER run 'flutter analyze' on the whole project. Only analyze the specific files you touched.
-          - Keep command output SHORT. Use 'head -50' or '--reporter compact' to limit verbose output.
-          - Focus only on the issue. Do NOT fix pre-existing bugs in other files.
+          - If the build/analyze fails, read the error carefully and fix it before retrying.
+          - NEVER run 'flutter analyze' on the whole project. Only analyze files you touched.
+          - Keep command output SHORT. Use 'head -50' or '--reporter compact'.
+          - Focus ONLY on the issue. Do NOT fix pre-existing bugs in other files.
           """
 
           Path("/tmp/task.txt").write_text(task)
-          print(f"✅ Task written ({len(task)} bytes)")
+          mode = "RESUME" if is_resume else "FRESH"
+          print(f"✅ Task written ({len(task)} bytes) — Mode: {mode}")
           PYEOF
 
-      # ── 9. Run mini-swe-agent ──────────────────────────────────────────
+      # ── 10. Run mini-swe-agent ─────────────────────────────────────────
       - name: "🤖 Run mini-swe-agent"
         id: agent
         working-directory: target_repo
@@ -228,17 +332,15 @@ jobs:
           # Falls back to Gemini Flash if ANTHROPIC_API_KEY is not set.
           MSWEA_MODEL_NAME: ${{ secrets.ANTHROPIC_API_KEY != '' && 'claude-3-5-haiku-20241022' || 'gemini/gemini-2.5-flash' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
           GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
           GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
           CI: "true"
         run: |
-          # Bypass interactive setup by creating the config file and setting CONFIGURED=true
           mkdir -p ~/.config/mini-swe-agent
           echo "MSWEA_CONFIGURED=true" > ~/.config/mini-swe-agent/.env
-          # Use Claude if available, else Gemini Flash
           if [ -n "$ANTHROPIC_API_KEY" ]; then
             echo "MSWEA_MODEL_NAME=claude-3-5-haiku-20241022" >> ~/.config/mini-swe-agent/.env
             echo "✅ Using Anthropic Claude as primary model"
@@ -253,9 +355,23 @@ jobs:
             --yolo \
             --task "$(cat /tmp/task.txt)"
 
-      # ── 10. Final verification (safety net) ────────────────────────────
+      # ── 11. Save session state (always — success AND failure) ─────────
+      # The agent writes /tmp/ai_session.md during its run.
+      # We upload it as an artifact so the next run can resume from the plan.
+      # NO incomplete code is committed to the repo.
+      - name: "💾 Save session state"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: "session-${{ inputs.owner }}-${{ inputs.repo }}-${{ inputs.issue_number }}"
+          path: /tmp/ai_session.md
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: ignore   # silently skip if agent crashed before writing
+
+      # ── 12. Final verification (only runs if agent succeeded) ──────────
       - name: "✅ Final verification — Flutter"
-        if: steps.detect.outputs.stack == 'flutter'
+        if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'flutter'
         run: |
           find target_repo -name "pubspec.yaml" \
             -not -path "*/build/*" \
@@ -268,20 +384,17 @@ jobs:
                 (cd "$APP_DIR" && flutter test --no-pub) || true
               done
 
-      # ── 10b. Final verification — Kotlin ──────────────────────────────
       - name: "✅ Final verification — Kotlin"
-        if: steps.detect.outputs.stack == 'kotlin'
-        run: |
-          cd target_repo && ./gradlew compileKotlin test
+        if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'kotlin'
+        run: cd target_repo && ./gradlew compileKotlin test
 
-      # ── 10c. Final verification — Node ────────────────────────────────
       - name: "✅ Final verification — Node"
-        if: steps.detect.outputs.stack == 'node'
-        run: |
-          cd target_repo && npm run build && npm test
+        if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'node'
+        run: cd target_repo && npm run build && npm test
 
-      # ── 11. Push branch ───────────────────────────────────────────────
+      # ── 13. Push branch (only on clean success) ────────────────────────
       - name: "🚀 Push branch to ${{ inputs.repo }}"
+        if: success()
         run: |
           cd target_repo
           git add -A
@@ -289,7 +402,7 @@ jobs:
           git commit --allow-empty -m "feat(ai): implement #${{ inputs.issue_number }} [swe-agent]"
           git push origin "${{ inputs.branch_name }}"
 
-      # ── 12. Notify Cloudflare — SUCCESS ──────────────────────────────
+      # ── 14. Notify Cloudflare — SUCCESS ───────────────────────────────
       - name: "Notify Cloudflare (success)"
         if: success()
         run: |
@@ -315,7 +428,7 @@ jobs:
           cat /tmp/cf_response.json || true
           [ "$HTTP_CODE" -ge 200 ] && [ "$HTTP_CODE" -lt 300 ] || exit 1
 
-      # ── 13. Notify Cloudflare — FAILURE ──────────────────────────────
+      # ── 15. Notify Cloudflare — FAILURE ───────────────────────────────
       - name: "Notify Cloudflare (failure)"
         if: failure()
         run: |
@@ -331,7 +444,7 @@ jobs:
             --arg owner    "${{ inputs.owner }}" \
             --arg repo     "${{ inputs.repo }}" \
             --argjson issueNum "${{ inputs.issue_number }}" \
-            --arg error    "SWE-agent failed. Logs: $RUN_URL" \
+            --arg error    "SWE-agent failed. Session state saved. Logs: $RUN_URL" \
             '{taskId: $taskId, branch: $branch, status: $status, owner: $owner, repo: $repo, issueNumber: $issueNum, error: $error}')
 
           HTTP_CODE=$(curl -s -o /tmp/cf_response.json -w "%{http_code}" --retry 3 -X POST \
