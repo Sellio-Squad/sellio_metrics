@@ -206,6 +206,7 @@ jobs:
           CRITICAL RULES:
           - NEVER invent class names, import paths, or constructor parameters.
           - Remove every unused import you introduce. Unused imports fail the workflow.
+          - NEVER assume a file exists without checking with 'ls' or 'find'.
           """
 
           Path("/tmp/task.txt").write_text(task)
@@ -225,7 +226,7 @@ jobs:
           GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          # Create a dummy config to bypass interactive setup
+          # Create config to bypass interactive setup
           mkdir -p ~/.config/mini-swe-agent
           echo "MINI_MODEL=gemini/gemini-2.5-flash" > ~/.config/mini-swe-agent/.env
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> ~/.config/mini-swe-agent/.env
