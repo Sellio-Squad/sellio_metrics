@@ -4,12 +4,12 @@ run_mini_swe.py — Mini-SWE-Agent wrapper with multi-provider rate-limit fallba
 Intercepts all litellm.completion calls and automatically routes them to the next available slot.
 
 Fallback chain priority:
-  1. Anthropic Claude (anthropic/claude-3-5-haiku-20241022) — best for code, separate quota
+  1. Anthropic Claude (anthropic/claude-haiku-4-5-20251001) — best for code, separate quota
   2. Gemini 2.5 Flash — fast, generous free tier
   3. Gemini 2.5 Flash Lite — cheapest, lowest latency
 
 Known gotchas:
-- Claude model MUST use the 'anthropic/' prefix in litellm (e.g. anthropic/claude-3-5-haiku-20241022).
+- Claude model MUST use the 'anthropic/' prefix in litellm (e.g. anthropic/claude-haiku-4-5-20251001).
   Without it litellm raises "LLM Provider NOT provided" even if ANTHROPIC_API_KEY is set.
 - Gemini 'Cached content is too small' (400) is caused by litellm's auto prompt-caching
   trying to invoke Gemini's Context Cache API on requests < 2048 tokens. Fixed by disabling
@@ -52,7 +52,7 @@ FALLBACK_CHAIN: list[tuple[str, str]] = []
 if _anthropic_key:
     # MUST use the 'anthropic/' prefix — litellm uses this to identify the provider.
     # Without it you get: "LLM Provider NOT provided" even with ANTHROPIC_API_KEY set.
-    FALLBACK_CHAIN.append(("anthropic/claude-3-5-haiku-20241022", _anthropic_key))
+    FALLBACK_CHAIN.append(("anthropic/claude-haiku-4-5-20251001", _anthropic_key))
 
 for key in _gemini_keys:
     FALLBACK_CHAIN.append(("gemini/gemini-2.5-flash",      key))
