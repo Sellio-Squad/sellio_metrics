@@ -1,6 +1,6 @@
-name: 🧑‍💻 SWE-agent Implement
+name: 🧑‍💻 SWE-agent
 
-# This workflow executes the autonomous developer agent using mini-swe-agent.
+# This workflow runs the mini-swe-agent.
 
 on:
   workflow_dispatch:
@@ -217,6 +217,7 @@ jobs:
         id: agent
         working-directory: target_repo
         env:
+          MINI_MODEL: "gemini/gemini-2.5-flash"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
@@ -224,6 +225,10 @@ jobs:
           GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
+          # Create a dummy config to bypass interactive setup
+          mkdir -p ~/.config/mini-swe-agent
+          echo "MINI_MODEL=gemini/gemini-2.5-flash" > ~/.config/mini-swe-agent/.env
+
           python ../sellio_metrics/.github/scripts/run_mini_swe.py \
             --model gemini/gemini-2.5-flash \
             --yolo \
