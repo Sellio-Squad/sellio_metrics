@@ -212,6 +212,15 @@ jobs:
           print(f"✅ Task written ({len(task)} bytes)")
           PYEOF
 
+      - name: Configure mini-swe-agent
+        run: |
+          mkdir -p ~/.config/mini-swe-agent
+
+          cat > ~/.config/mini-swe-agent/.env <<EOF
+          MODEL=gemini/gemini-2.5-flash
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+          EOF
+
       # ── 9. Run mini-swe-agent ──────────────────────────────────────────
       - name: "🤖 Run mini-swe-agent"
         id: agent
