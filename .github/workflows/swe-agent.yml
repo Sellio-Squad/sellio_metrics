@@ -161,10 +161,11 @@ jobs:
                find . -name "pubspec.yaml" -not -path "*/build/*" -not -path "*/.dart_tool/*"
           5. For EACH Flutter app relevant to this issue, run:
                flutter pub get
-               flutter analyze --no-pub --fatal-warnings
-          6. Fix EVERY error AND warning in files you have touched. Remove unused imports.
-          7. Run: flutter test --no-pub
-          8. Fix EVERY test failure. Repeat until both analyze and test are clean."""
+          6. Analyze ONLY the files you created or modified (NEVER run analyze on the whole project):
+               dart analyze --fatal-warnings path/to/file1.dart path/to/file2.dart
+             Fix EVERY error AND warning in files you have touched. Remove unused imports.
+          7. Run: flutter test --no-pub --reporter compact
+             Fix EVERY test failure. Repeat until both analyze and test are clean."""
           elif stack == "kotlin":
               lang = "Kotlin/Spring Boot"
               build_steps = """
@@ -208,6 +209,9 @@ jobs:
           - Remove every unused import you introduce. Unused imports fail the workflow.
           - NEVER assume a file exists without checking with 'ls' or 'find'.
           - If the build/analyze fails, read the error message carefully and fix it before trying again.
+          - NEVER run 'flutter analyze' on the whole project. Only analyze the specific files you touched.
+          - Keep command output SHORT. Use 'head -50' or '--reporter compact' to limit verbose output.
+          - Focus only on the issue. Do NOT fix pre-existing bugs in other files.
           """
 
           Path("/tmp/task.txt").write_text(task)
