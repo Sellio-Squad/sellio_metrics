@@ -219,7 +219,8 @@ jobs:
         id: agent
         working-directory: target_repo
         env:
-          MINI_MODEL: "gemini/gemini-2.5-flash"
+          MSWEA_CONFIGURED: "true"
+          MSWEA_MODEL_NAME: "gemini/gemini-2.5-flash"
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
@@ -228,9 +229,10 @@ jobs:
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           CI: "true"
         run: |
-          # Bypass interactive setup by creating the config file
+          # Bypass interactive setup by creating the config file and setting CONFIGURED=true
           mkdir -p ~/.config/mini-swe-agent
-          echo "MSWEA_MODEL_NAME=gemini/gemini-2.5-flash" > ~/.config/mini-swe-agent/.env
+          echo "MSWEA_CONFIGURED=true" > ~/.config/mini-swe-agent/.env
+          echo "MSWEA_MODEL_NAME=gemini/gemini-2.5-flash" >> ~/.config/mini-swe-agent/.env
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> ~/.config/mini-swe-agent/.env
           echo "ANALYTICS_ENABLED=false" >> ~/.config/mini-swe-agent/.env
 
