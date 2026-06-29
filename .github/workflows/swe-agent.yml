@@ -224,24 +224,32 @@ jobs:
         working-directory: target_repo
         env:
           MSWEA_CONFIGURED: "true"
-          MSWEA_MODEL_NAME: "gemini/gemini-2.5-flash"
+          # Claude is primary: best at code, separate quota from Gemini.
+          # Falls back to Gemini Flash if ANTHROPIC_API_KEY is not set.
+          MSWEA_MODEL_NAME: ${{ secrets.ANTHROPIC_API_KEY != '' && 'claude-3-5-haiku-20241022' || 'gemini/gemini-2.5-flash' }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_API_KEY_2: ${{ secrets.GEMINI_API_KEY_2 }}
           GEMINI_API_KEY_3: ${{ secrets.GEMINI_API_KEY_3 }}
           GEMINI_API_KEY_4: ${{ secrets.GEMINI_API_KEY_4 }}
           GEMINI_API_KEY_5: ${{ secrets.GEMINI_API_KEY_5 }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           CI: "true"
         run: |
           # Bypass interactive setup by creating the config file and setting CONFIGURED=true
           mkdir -p ~/.config/mini-swe-agent
           echo "MSWEA_CONFIGURED=true" > ~/.config/mini-swe-agent/.env
-          echo "MSWEA_MODEL_NAME=gemini/gemini-2.5-flash" >> ~/.config/mini-swe-agent/.env
-          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> ~/.config/mini-swe-agent/.env
+          # Use Claude if available, else Gemini Flash
+          if [ -n "$ANTHROPIC_API_KEY" ]; then
+            echo "MSWEA_MODEL_NAME=claude-3-5-haiku-20241022" >> ~/.config/mini-swe-agent/.env
+            echo "✅ Using Anthropic Claude as primary model"
+          else
+            echo "MSWEA_MODEL_NAME=gemini/gemini-2.5-flash" >> ~/.config/mini-swe-agent/.env
+            echo "⚠️  ANTHROPIC_API_KEY not set — falling back to Gemini"
+          fi
           echo "ANALYTICS_ENABLED=false" >> ~/.config/mini-swe-agent/.env
 
           python ../sellio_metrics/.github/scripts/run_mini_swe.py \
-            --model gemini/gemini-2.5-flash \
+            --model "$MSWEA_MODEL_NAME" \
             --yolo \
             --task "$(cat /tmp/task.txt)"
 
