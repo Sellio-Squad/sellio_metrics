@@ -228,6 +228,7 @@ jobs:
           # Create a dummy config to bypass interactive setup
           mkdir -p ~/.config/mini-swe-agent
           echo "MINI_MODEL=gemini/gemini-2.5-flash" > ~/.config/mini-swe-agent/.env
+          echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> ~/.config/mini-swe-agent/.env
 
           python ../sellio_metrics/.github/scripts/run_mini_swe.py \
             --model gemini/gemini-2.5-flash \
