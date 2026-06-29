@@ -23,13 +23,7 @@ for i in range(1, 6):
     if k:
         _gemini_keys.append(k)
 
-_groq_key = os.environ.get("GROQ_API_KEY", "").strip()
-_groq_paid = os.environ.get("GROQ_PAID", "false").lower() == "true"
-
-# For Mini-SWE-agent, since the token requests are smaller (~10k-20k tokens),
-# Groq free tier (6,000 TPM limit) is STILL too small if the history grows past 6k tokens,
-# but it is much more viable than in OpenHands (where it starts at 75k).
-# We'll allow Groq on the fallback chain, but put it at the very end.
+# Gemini only fallback chain (Groq has schema compatibility issues with mini-swe-agent)
 FALLBACK_CHAIN: list[tuple[str, str]] = []
 
 for key in _gemini_keys:
@@ -38,12 +32,6 @@ for key in _gemini_keys:
 
 for key in _gemini_keys:
     FALLBACK_CHAIN.append(("gemini/gemini-2.5-pro", key))
-
-if _groq_key:
-    # If the user sets GROQ_PAID=true, we prioritize Groq, otherwise it's a last resort
-    # because of the 6k TPM free limit.
-    FALLBACK_CHAIN.append(("groq/llama-3.3-70b-versatile", _groq_key))
-    FALLBACK_CHAIN.append(("groq/llama-3.1-8b-instant", _groq_key))
 
 if not FALLBACK_CHAIN:
     print("❌ No API keys found for fallback chain! Set GEMINI_API_KEY in environment.")
