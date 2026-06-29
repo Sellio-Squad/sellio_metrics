@@ -230,7 +230,7 @@ jobs:
         run: |
           # Bypass interactive setup by creating the config file
           mkdir -p ~/.config/mini-swe-agent
-          echo "MINI_MODEL=gemini/gemini-2.5-flash" > ~/.config/mini-swe-agent/.env
+          echo "MSWEA_MODEL_NAME=gemini/gemini-2.5-flash" > ~/.config/mini-swe-agent/.env
           echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> ~/.config/mini-swe-agent/.env
           echo "ANALYTICS_ENABLED=false" >> ~/.config/mini-swe-agent/.env
 
