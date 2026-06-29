@@ -4,11 +4,16 @@ run_mini_swe.py — Mini-SWE-Agent wrapper with multi-provider rate-limit fallba
 Intercepts all litellm.completion calls and automatically routes them to the next available slot.
 
 Fallback chain priority:
-  1. Anthropic Claude (claude-3-5-haiku-20241022) — best for code, separate quota
+  1. Anthropic Claude (anthropic/claude-3-5-haiku-20241022) — best for code, separate quota
   2. Gemini 2.5 Flash — fast, generous free tier
   3. Gemini 2.5 Flash Lite — cheapest, lowest latency
 
-Notes:
+Known gotchas:
+- Claude model MUST use the 'anthropic/' prefix in litellm (e.g. anthropic/claude-3-5-haiku-20241022).
+  Without it litellm raises "LLM Provider NOT provided" even if ANTHROPIC_API_KEY is set.
+- Gemini 'Cached content is too small' (400) is caused by litellm's auto prompt-caching
+  trying to invoke Gemini's Context Cache API on requests < 2048 tokens. Fixed by disabling
+  litellm.cache and stripping any 'caching' kwarg before each call.
 - gemini-2.5-pro is EXCLUDED: hits daily free-tier quota immediately (limit: 0 RPM).
 - Groq is EXCLUDED: incompatible schema (rejects 'images' in assistant role).
 - On all-slots-rate-limited, waits 60s before cycling through again.
@@ -45,7 +50,9 @@ for i in range(1, 6):
 FALLBACK_CHAIN: list[tuple[str, str]] = []
 
 if _anthropic_key:
-    FALLBACK_CHAIN.append(("claude-3-5-haiku-20241022", _anthropic_key))
+    # MUST use the 'anthropic/' prefix — litellm uses this to identify the provider.
+    # Without it you get: "LLM Provider NOT provided" even with ANTHROPIC_API_KEY set.
+    FALLBACK_CHAIN.append(("anthropic/claude-3-5-haiku-20241022", _anthropic_key))
 
 for key in _gemini_keys:
     FALLBACK_CHAIN.append(("gemini/gemini-2.5-flash",      key))
@@ -64,6 +71,13 @@ _current_slot = 0
 
 # Save original completion function
 _original_completion = litellm.completion
+
+# Disable litellm's automatic prompt-caching.
+# litellm tries to use Gemini's Context Cache API for repeated content,
+# but Gemini rejects cache requests with < 2048 tokens (BadRequestError 400).
+# Since mini-swe-agent sends many small requests this would break every call.
+litellm.cache = None
+litellm.disable_cache = True
 
 def _should_try_next(err_str: str) -> bool:
     lower = err_str.lower()
@@ -91,7 +105,8 @@ def fallback_completion(*args, **kwargs):
         requested_model.startswith("gemini/")
         or requested_model.startswith("gemma/")
         or requested_model.startswith("groq/")
-        or requested_model.startswith("claude")
+        or requested_model.startswith("anthropic/")
+        or requested_model.startswith("claude")  # bare name fallback
     )
 
     if not is_managed:
@@ -106,8 +121,11 @@ def fallback_completion(*args, **kwargs):
         model, api_key = FALLBACK_CHAIN[slot_idx]
 
         try:
-            kwargs["model"] = model
+            kwargs["model"]   = model
             kwargs["api_key"] = api_key
+            # Strip caching flags — Gemini rejects cache requests for < 2048 tokens.
+            kwargs.pop("caching", None)
+            kwargs.pop("cache", None)
             res = _original_completion(*args, **kwargs)
             _current_slot = slot_idx
             return res
