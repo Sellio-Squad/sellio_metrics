@@ -65,7 +65,7 @@ export const TOOLS: AgentTool[] = [
     // ── 1. Create a single GitHub issue ──────────────────────
     {
         name: "create_github_issue",
-        description: "Create a single GitHub issue in the current repo and auto-add it to the matching project board.",
+        description: "Create a single GitHub issue in the current repo and auto-add it to the matching project board. Deduplicates automatically by title.",
         parameters: {
             type: "object",
             properties: {
@@ -77,6 +77,29 @@ export const TOOLS: AgentTool[] = [
         },
         execute: withErrorHandling("create_github_issue", async (args, deps) => {
             const { octokit, owner, repo, org, gqlClient, logger } = deps;
+            
+            // Deduplication check: check if an open issue with the same title already exists
+            const { data: existingIssues } = await octokit.issues.listForRepo({
+                owner,
+                repo,
+                state: "open",
+                per_page: 100,
+            });
+            const searchTitle = args.title.trim().toLowerCase();
+            const duplicate = existingIssues.find((issue: any) => issue.title.trim().toLowerCase() === searchTitle);
+            
+            if (duplicate) {
+                logger.info({ title: args.title, issueNumber: duplicate.number }, "Found duplicate issue by title, skipping creation");
+                return {
+                    issueNumber: duplicate.number,
+                    issueUrl: duplicate.html_url,
+                    title: duplicate.title,
+                    addedToProject: false,
+                    projectId: null,
+                    alreadyExists: true,
+                };
+            }
+
             const { data: issue } = await octokit.issues.create({
                 owner,
                 repo,
@@ -103,6 +126,7 @@ export const TOOLS: AgentTool[] = [
                 title: issue.title,
                 addedToProject,
                 projectId: projectId ?? null,
+                alreadyExists: false,
             };
         }),
     },
@@ -110,7 +134,7 @@ export const TOOLS: AgentTool[] = [
     // ── 2. Bulk create multiple GitHub issues ─────────────────
     {
         name: "bulk_create_issues",
-        description: "Create multiple GitHub issues at once from a list. Use when the user asks for several tickets in one request.",
+        description: "Create multiple GitHub issues at once from a list. Use when the user asks for several tickets in one request. Deduplicates automatically by title.",
         parameters: {
             type: "object",
             properties: {
@@ -134,8 +158,31 @@ export const TOOLS: AgentTool[] = [
             const { octokit, owner, repo, org, gqlClient, logger } = deps;
             const projectId = await resolveProjectNodeId(org, repo, gqlClient, logger);
 
+            // Fetch open issues once for the whole bulk run to save API calls
+            const { data: existingIssues } = await octokit.issues.listForRepo({
+                owner,
+                repo,
+                state: "open",
+                per_page: 100,
+            });
+
             const created: any[] = [];
+            const skipped: any[] = [];
+
             for (const issueArgs of args.issues) {
+                const searchTitle = issueArgs.title.trim().toLowerCase();
+                const duplicate = existingIssues.find((issue: any) => issue.title.trim().toLowerCase() === searchTitle);
+
+                if (duplicate) {
+                    logger.info({ title: issueArgs.title, issueNumber: duplicate.number }, "Skipping bulk creation of duplicate issue");
+                    skipped.push({
+                        issueNumber: duplicate.number,
+                        issueUrl: duplicate.html_url,
+                        title: duplicate.title,
+                    });
+                    continue;
+                }
+
                 const { data: issue } = await octokit.issues.create({
                     owner,
                     repo,
@@ -162,7 +209,7 @@ export const TOOLS: AgentTool[] = [
                 });
             }
 
-            return { created, total: created.length, projectId: projectId ?? null };
+            return { created, skipped, totalCreated: created.length, totalSkipped: skipped.length, projectId: projectId ?? null };
         }),
     },
 
@@ -449,6 +496,35 @@ export const TOOLS: AgentTool[] = [
                     createdAt: r.created_at,
                 })),
             };
+        }),
+    },
+    // ── 15. Get PR review comments ───────────────────────────
+    {
+        name: "get_pr_review_comments",
+        description: "Fetch all inline code review comments on a pull request. Use to understand what reviewers have flagged.",
+        parameters: {
+            type: "object",
+            properties: {
+                prNumber: { type: "number", description: "Pull request number" },
+            },
+            required: ["prNumber"],
+        },
+        execute: withErrorHandling("get_pr_review_comments", async (args, deps) => {
+            const { octokit, owner, repo } = deps;
+            const { data } = await octokit.pulls.listReviewComments({
+                owner,
+                repo,
+                pull_number: args.prNumber,
+            });
+            return data.map((c: any) => ({
+                id: c.id,
+                path: c.path,
+                line: c.line,
+                body: c.body,
+                author: c.user?.login,
+                diffHunk: c.diff_hunk,
+                url: c.html_url,
+            }));
         }),
     },
 ];

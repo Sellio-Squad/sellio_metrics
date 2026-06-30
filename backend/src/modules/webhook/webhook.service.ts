@@ -266,10 +266,23 @@ export class WebhookService {
                         `👋 Hi @${author}! I'm **Sellio Bot** — I only assist members of the **${this.org}** organization.`);
                     return;
                 }
+                const prNumber = payload.pull_request.number;
+                const fileContext = comment.path ? `📁 File: \`${comment.path}\`` : "";
+                const codeContext = comment.diff_hunk ? `📝 Code context:\n\`\`\`diff\n${comment.diff_hunk}\n\`\`\`` : "";
+                const reviewerMessage = comment.body.replace(/@sellio[\-\w]*/gi, "").trim();
+
+                const reviewPrompt = [
+                    `@sellio — you've been mentioned in an inline review comment on PR #${prNumber}.`,
+                    fileContext,
+                    codeContext,
+                    `💬 Reviewer's comment: "${reviewerMessage}"`,
+                    `\nPlease review this PR fully using the \`review_pr\` tool, then address the reviewer's specific concern about the file above in your response.`
+                ].filter(Boolean).join("\n\n");
+
                 await this.aiChatService.chatFromGitHub(
                     owner, repo, author,
-                    payload.pull_request.number,
-                    comment.body
+                    prNumber,
+                    reviewPrompt
                 );
             })().catch(err => {
                 this.logger.error({ err: err.message }, "Error in review comment bot mention");

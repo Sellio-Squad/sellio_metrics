@@ -55,7 +55,11 @@ export class ReviewService {
 
         // ── 1. Fetch cheap PR metadata to get head branch SHA ─────────
         const prMeta = await this.github.getPull(owner, repo, prNumber);
-        const headSha = prMeta.head.sha;
+        const headSha = prMeta?.head?.sha ?? "no-sha";
+
+        if (headSha === "no-sha") {
+            this.logger.warn({ owner, repo, prNumber }, "PR metadata missing head.sha structure; using 'no-sha' fallback");
+        }
 
         // ── 2. Build cache key using head SHA so cached result is
         //       automatically invalidated when new commits are pushed ─────
