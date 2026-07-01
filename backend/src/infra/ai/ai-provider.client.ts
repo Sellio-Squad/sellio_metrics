@@ -78,12 +78,13 @@ export class AiProviderClient {
     private readonly logger: Logger;
     private readonly cache: CacheService;
 
-    // Gemini models for premium tier — ordered by quality/cost
+    // Gemini models for premium tier — ordered by quality/cost.
+    // The 2.0-flash / 2.0-flash-lite models were removed: the free tier grants this
+    // project a hard "limit: 0" requests/day for them, so they ALWAYS 429 and only
+    // added latency to the fallback. Re-add them if the Google project gets billing.
     private readonly geminiModels = [
         "gemini-2.5-flash",
         "gemini-2.5-flash-lite",
-        "gemini-2.0-flash",
-        "gemini-2.0-flash-lite",
     ];
 
     // DeepSeek models for premium tier fallback
