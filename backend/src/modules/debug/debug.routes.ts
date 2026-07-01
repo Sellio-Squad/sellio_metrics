@@ -84,4 +84,13 @@ debug.get("/cache-quota", safe(async (c) => {
     });
 }));
 
+// GET /api/debug/ai-providers — live health check of every configured AI provider.
+// Sends a tiny throw-away prompt to each provider/model and reports ok/failed/skipped
+// plus latency. Use this to confirm which providers actually work right now.
+debug.get("/ai-providers", safe(async (c) => {
+    const { aiProviderClient } = useCradle(c);
+    const health = await aiProviderClient.pingProviders();
+    return c.json(health);
+}));
+
 export default debug;

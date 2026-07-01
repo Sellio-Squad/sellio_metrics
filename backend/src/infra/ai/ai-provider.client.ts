@@ -33,6 +33,28 @@ export interface AICompletionParams {
 
 export type AITier = "premium" | "fast";
 
+// ─── Provider health-check result shapes ────────────────────
+export interface AiProviderProbeResult {
+    provider: string;
+    model: string;
+    ok: boolean;
+    latencyMs: number;
+    sample?: string;
+    error?: string;
+}
+
+export interface AiProviderHealth {
+    checkedAt: string;
+    aiGateway: "enabled" | "direct";
+    totalProbed: number;
+    totalHealthy: number;
+    anyHealthy: boolean;
+    healthyProviders: string[];
+    skipped: string[];
+    results: AiProviderProbeResult[];
+    configuredProviders: string[];
+}
+
 // Cloudflare Workers AI binding interface
 export interface CloudflareAI {
     run(model: string, inputs: {
@@ -300,6 +322,94 @@ export class AiProviderClient {
             `All AI providers failed.\nDiagnostics:\n` +
             failureLogs.map(log => ` - ${log}`).join("\n");
         throw new AppError(combinedErrorMsg, 500, "AI_ALL_PROVIDERS_FAILED");
+    }
+
+    // ─── Provider health check ──────────────────────────────────
+    // Sends a tiny throw-away prompt to every configured provider/model and
+    // reports which ones actually work right now. Bypasses cooldown caches so
+    // it reflects live reachability, not cached rate-limit state.
+    // Intended for the /api/debug/ai-providers diagnostics endpoint.
+
+    async pingProviders(): Promise<AiProviderHealth> {
+        const probeParams: AICompletionParams = { userPrompt: "Reply with the single word: ok" };
+
+        // Build the probe list: one entry per configured provider/model.
+        const probes: { provider: string; model: string; run: () => Promise<string> }[] = [];
+
+        if (this.workersAI) {
+            for (const model of this.workersAIModels) {
+                probes.push({ provider: "workers-ai", model, run: () => this.executeWorkersAI(model, probeParams) });
+            }
+        }
+        if (this.geminiApiKey) {
+            for (const model of this.geminiModels) {
+                probes.push({ provider: "gemini", model, run: () => this.executeGemini(model, probeParams) });
+            }
+        }
+        if (this.openaiApiKey) {
+            probes.push({ provider: "openai", model: "gpt-4o", run: () => this.executeOpenAI("gpt-4o", probeParams) });
+        }
+        if (this.deepseekApiKey) {
+            for (const model of this.deepseekModels) {
+                probes.push({ provider: "deepseek", model, run: () => this.executeDeepSeek(model, probeParams) });
+            }
+        }
+        if (this.groqApiKey) {
+            probes.push({ provider: "groq", model: "llama-3.3-70b-versatile", run: () => this.executeGroq(probeParams) });
+        }
+        if (this.grokApiKey) {
+            for (const model of ["grok-beta", "grok-latest"]) {
+                probes.push({ provider: "grok", model, run: () => this.executeGrok(model, probeParams) });
+            }
+        }
+
+        // Run all probes concurrently — this is a diagnostics call, not the hot path.
+        const results: AiProviderProbeResult[] = await Promise.all(
+            probes.map(async (p) => {
+                const start = Date.now();
+                try {
+                    const text = await p.run();
+                    return {
+                        provider: p.provider,
+                        model: p.model,
+                        ok: true,
+                        latencyMs: Date.now() - start,
+                        sample: text.slice(0, 80),
+                    } as AiProviderProbeResult;
+                } catch (err: any) {
+                    return {
+                        provider: p.provider,
+                        model: p.model,
+                        ok: false,
+                        latencyMs: Date.now() - start,
+                        error: err?.message ?? String(err),
+                    } as AiProviderProbeResult;
+                }
+            })
+        );
+
+        // Note which providers were skipped entirely (no key / no binding)
+        const configured = new Set(results.map(r => r.provider));
+        const skipped: string[] = [];
+        if (!this.workersAI) skipped.push("workers-ai (binding not available)");
+        if (!this.geminiApiKey) skipped.push("gemini (GEMINI_API_KEY not set)");
+        if (!this.openaiApiKey) skipped.push("openai (OPENAI_API_KEY not set)");
+        if (!this.deepseekApiKey) skipped.push("deepseek (DEEPSEEK_API_KEY not set)");
+        if (!this.groqApiKey) skipped.push("groq (GROQ_API_KEY not set)");
+        if (!this.grokApiKey) skipped.push("grok (GROK_API_KEY not set)");
+
+        const healthy = results.filter(r => r.ok);
+        return {
+            checkedAt: new Date().toISOString(),
+            aiGateway: this.cfAccountId && this.aiGatewaySlug ? "enabled" : "direct",
+            totalProbed: results.length,
+            totalHealthy: healthy.length,
+            anyHealthy: healthy.length > 0,
+            healthyProviders: [...new Set(healthy.map(r => r.provider))],
+            skipped,
+            results,
+            configuredProviders: [...configured],
+        };
     }
 
     // ─── Workers AI ─────────────────────────────────────────────

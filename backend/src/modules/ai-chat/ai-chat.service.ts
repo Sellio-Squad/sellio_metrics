@@ -285,10 +285,14 @@ export class AiChatService {
         let finalMessage = "";
 
         for (let i = 0; i < MAX_TOOL_ITERATIONS; i++) {
+            // Use the "fast" tier: it tries Workers AI first (free, runs on Cloudflare's
+            // GPUs with its own quota) and automatically falls through to the premium
+            // providers (Gemini/OpenAI/…) if it fails. This preserves the scarce external
+            // free-tier quotas for when they're actually needed.
             const response = await this.ai.generateCompletion({
                 systemPrompt,
                 userPrompt: aiMessages.map(m => `${m.role}: ${m.content}`).join("\n\n"),
-            }, "premium");
+            }, "fast");
 
             // Parse tool call from response if AI wraps it in JSON
             const toolCall = this.extractToolCall(response);
