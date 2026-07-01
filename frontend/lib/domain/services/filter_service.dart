@@ -2,6 +2,7 @@
 ///
 /// Handles PR filtering by week, search, status, and developer.
 /// Also provides utility methods for available weeks/developers.
+library;
 
 import 'package:injectable/injectable.dart';
 

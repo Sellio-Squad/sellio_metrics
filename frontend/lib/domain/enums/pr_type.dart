@@ -2,6 +2,7 @@
 ///
 /// Pure domain enum — no framework dependencies.
 /// UI concerns (colors, icons) live in presentation extensions.
+library;
 
 import 'package:sellio_metrics/core/constants/app_constants.dart';
 

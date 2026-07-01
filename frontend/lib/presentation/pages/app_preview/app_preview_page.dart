@@ -251,7 +251,7 @@ class _AppTabBar extends StatelessWidget {
 
 class _EmulatorView extends StatefulWidget {
   final _AppInfo app;
-  const _EmulatorView({super.key, required this.app});
+  const _EmulatorView({required this.app});
 
   @override
   State<_EmulatorView> createState() => _EmulatorViewState();

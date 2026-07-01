@@ -2,6 +2,7 @@
 ///
 /// Abstract contract for member status data.
 /// Presentation layer depends ONLY on this interface — never on impl.
+library;
 
 import 'package:sellio_metrics/domain/entities/member_status_entity.dart';
 

@@ -1,6 +1,7 @@
 /// PR Details Header
 ///
 /// Displays the PR title, badges, creator info, and size category.
+library;
 
 import 'package:flutter/material.dart';
 

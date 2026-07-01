@@ -2,6 +2,7 @@
 ///
 /// Abstract contract for leaderboard data.
 /// Presentation layer depends ONLY on this interface — never on impl.
+library;
 
 import 'package:sellio_metrics/domain/entities/leaderboard_entry.dart';
 

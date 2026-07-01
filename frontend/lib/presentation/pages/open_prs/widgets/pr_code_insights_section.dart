@@ -1,6 +1,7 @@
 /// PR Code Insights Section
 ///
 /// Displays file-type breakdown and actionable insights from PR analysis.
+library;
 
 import 'package:flutter/material.dart';
 

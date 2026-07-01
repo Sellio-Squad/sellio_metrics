@@ -1,6 +1,7 @@
 /// Sellio Metrics — ICS Calendar Generator
 ///
 /// Pure Dart utility to generate RFC 5545 compliant `.ics` content.
+library;
 
 import 'package:intl/intl.dart';
 

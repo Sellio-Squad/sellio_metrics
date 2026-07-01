@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:sellio_metrics/design_system/design_system.dart';
 
 /// Reusable brand-mark logo used in the sidebar header and splash screen.
 ///

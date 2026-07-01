@@ -3,6 +3,7 @@
 /// Manages leaderboard filter state: date range (since/until) and
 /// selected repo IDs (multi-select). Quick preset labels are
 /// converted to ISO dates client-side before sending to the API.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';

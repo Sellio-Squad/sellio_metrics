@@ -1,6 +1,7 @@
 /// Sellio Metrics — Bottleneck Service
 ///
 /// Identifies PRs stuck in review too long.
+library;
 
 import 'package:injectable/injectable.dart';
 

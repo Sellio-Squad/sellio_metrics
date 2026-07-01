@@ -2,6 +2,7 @@
 ///
 /// Detects and displays linked tickets (Jira, GitHub issues).
 /// Shows a warning if no ticket is detected.
+library;
 
 import 'package:flutter/material.dart';
 

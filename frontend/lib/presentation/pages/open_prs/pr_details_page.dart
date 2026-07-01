@@ -2,6 +2,7 @@
 ///
 /// Full-page view for a single PR, accessed via `/prs/:prNumber`.
 /// Uses breadcrumbs for navigation back to the Open PRs list.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

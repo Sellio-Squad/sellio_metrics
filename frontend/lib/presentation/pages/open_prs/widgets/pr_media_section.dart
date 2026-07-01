@@ -1,6 +1,7 @@
 /// PR Media Section
 ///
 /// Detects images and videos in the PR body and displays bonus scoring.
+library;
 
 import 'package:flutter/material.dart';
 

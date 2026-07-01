@@ -3,6 +3,7 @@
 /// Manages app-wide settings: theme, locale, and selected repositories.
 /// Depends on [ReposRepository] (interface) for repo loading — NOT on
 /// MetricsRepository or any concrete class.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';

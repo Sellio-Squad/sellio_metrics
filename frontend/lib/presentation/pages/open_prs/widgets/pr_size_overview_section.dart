@@ -2,6 +2,7 @@
 ///
 /// Top-level section on the Open PRs page (like bottlenecks).
 /// Highlights large PRs (L/XL) with size hints and split suggestions.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';

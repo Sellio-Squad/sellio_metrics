@@ -2,6 +2,7 @@
 ///
 /// Depends on [MembersRepository] (interface, not concrete).
 /// Fetches server-computed member active/inactive status.
+library;
 
 import 'package:flutter/material.dart';
 import 'package:injectable/injectable.dart';

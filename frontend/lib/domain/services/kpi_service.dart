@@ -1,6 +1,7 @@
-/// Sellio Metrics — KPI Service
+  /// Sellio Metrics — KPI Service
 ///
 /// Calculates KPI metrics and spotlight analytics from PR data.
+library;
 
 import 'package:injectable/injectable.dart';
 

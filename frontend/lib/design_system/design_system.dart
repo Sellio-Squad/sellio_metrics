@@ -2,6 +2,7 @@
 ///
 /// Barrel file that re-exports all design system components and tokens.
 /// Presentation layer imports ONLY this file — never hux directly.
+library;
 
 // ─── Tokens (theme, colors, spacing, etc.) ──────────────────
 export '../core/theme/sellio_colors.dart';
