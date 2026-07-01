@@ -95,9 +95,11 @@ export class AiProviderClient {
     // Workers AI models for fast/free tier
     // @cf/qwen/qwen2.5-coder-32b-instruct: specialized for code tasks
     // deepseek-r1-distill-qwen-32b: strong reasoning
+    // Note: @cf/qwen/qwen3-30b-a3b-fp8 was removed — it consistently returns an empty
+    // response and hangs ~40s before doing so, stalling the fast-tier fallback chain.
+    // deepseek-r1-distill is kept last: it works but emits <think> reasoning preamble.
     private readonly workersAIModels = [
         "@cf/qwen/qwen2.5-coder-32b-instruct",
-        "@cf/qwen/qwen3-30b-a3b-fp8",
         "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b",
     ];
 
@@ -236,47 +238,9 @@ export class AiProviderClient {
             failureLogs.push("Gemini: skipped (key not set)");
         }
 
-        // 2. Try OpenAI GPT-4o (via AI Gateway)
-        if (this.openaiApiKey) {
-            try {
-                const cooldownKey = "ai:cooldown:openai:gpt-4o";
-                const cooldown = await this.cache.get<number>(cooldownKey);
-                if (!cooldown?.data || Date.now() >= cooldown.data) {
-                    this.logger.info({ tier: "premium" }, "Trying OpenAI gpt-4o");
-                    return await this.executeOpenAI("gpt-4o", params);
-                }
-                failureLogs.push("OpenAI (gpt-4o): skipped (cooldown active)");
-            } catch (error: any) {
-                failureLogs.push(`OpenAI (gpt-4o): ${error.message}`);
-                this.logger.warn({ error: error.message }, "OpenAI call failed");
-            }
-        } else {
-            failureLogs.push("OpenAI: skipped (key not set)");
-        }
-
-        // 3. Try DeepSeek Models (via AI Gateway)
-        if (this.deepseekApiKey) {
-            for (const model of this.deepseekModels) {
-                try {
-                    const cooldownKey = `ai:cooldown:deepseek:${model}`;
-                    const cooldown = await this.cache.get<number>(cooldownKey);
-                    if (cooldown?.data && Date.now() < cooldown.data) {
-                        failureLogs.push(`DeepSeek (${model}): skipped (cooldown active)`);
-                        this.logger.info({ model }, "DeepSeek model in cooldown, skipping");
-                        continue;
-                    }
-
-                    this.logger.info({ model, tier: "premium" }, "Trying DeepSeek model");
-                    return await this.executeDeepSeek(model, params);
-                } catch (error: any) {
-                    failureLogs.push(`DeepSeek (${model}): ${error.message}`);
-                    this.logger.warn({ model, error: error.message }, "DeepSeek model call failed");
-                    continue;
-                }
-            }
-        } else {
-            failureLogs.push("DeepSeek: skipped (key not set)");
-        }
+        // OpenAI (gpt-4o) and DeepSeek were removed from the chain — both accounts are
+        // out of quota/balance and only added latency + noise to the fallback. Re-add
+        // them here (with a funded key) if they come back online.
 
         // 4. Try Groq (if not already used in fast tier)
         if (this.groqApiKey && tier !== "fast") {
@@ -294,20 +258,15 @@ export class AiProviderClient {
             }
         }
 
-        // 5. Try Grok (xAI)
+        // 5. Try Grok (xAI) — use "grok-latest" only; "grok-beta" is a retired model id
+        //    that always 400s ("Model not found").
         if (this.grokApiKey) {
             try {
-                const cooldownKey = "ai:cooldown:grok:grok-beta";
+                const cooldownKey = "ai:cooldown:grok:grok-latest";
                 const cooldown = await this.cache.get<number>(cooldownKey);
                 if (!cooldown?.data || Date.now() >= cooldown.data) {
-                    try {
-                        this.logger.info({ tier: "premium" }, "Trying Grok grok-beta");
-                        return await this.executeGrok("grok-beta", params);
-                    } catch (grokBetaErr: any) {
-                        failureLogs.push(`Grok (grok-beta): ${grokBetaErr.message}`);
-                        this.logger.warn({ error: grokBetaErr.message }, "Grok-beta failed, trying grok-latest");
-                        return await this.executeGrok("grok-latest", params);
-                    }
+                    this.logger.info({ tier: "premium" }, "Trying Grok grok-latest");
+                    return await this.executeGrok("grok-latest", params);
                 }
                 failureLogs.push("Grok: skipped (cooldown active)");
             } catch (error: any) {
@@ -330,8 +289,18 @@ export class AiProviderClient {
     // it reflects live reachability, not cached rate-limit state.
     // Intended for the /api/debug/ai-providers diagnostics endpoint.
 
-    async pingProviders(): Promise<AiProviderHealth> {
+    async pingProviders(timeoutMs: number = 12_000): Promise<AiProviderHealth> {
         const probeParams: AICompletionParams = { userPrompt: "Reply with the single word: ok" };
+
+        // Bound each probe so one hanging/slow model can't stall the whole check.
+        // (Probes run concurrently, so total time ≈ slowest probe — cap it.)
+        const withTimeout = <T>(p: Promise<T>): Promise<T> =>
+            Promise.race([
+                p,
+                new Promise<T>((_, reject) =>
+                    setTimeout(() => reject(new Error(`probe timed out after ${timeoutMs}ms`)), timeoutMs)
+                ),
+            ]);
 
         // Build the probe list: one entry per configured provider/model.
         const probes: { provider: string; model: string; run: () => Promise<string> }[] = [];
@@ -346,21 +315,12 @@ export class AiProviderClient {
                 probes.push({ provider: "gemini", model, run: () => this.executeGemini(model, probeParams) });
             }
         }
-        if (this.openaiApiKey) {
-            probes.push({ provider: "openai", model: "gpt-4o", run: () => this.executeOpenAI("gpt-4o", probeParams) });
-        }
-        if (this.deepseekApiKey) {
-            for (const model of this.deepseekModels) {
-                probes.push({ provider: "deepseek", model, run: () => this.executeDeepSeek(model, probeParams) });
-            }
-        }
+        // OpenAI and DeepSeek are intentionally not probed — removed from the live chain.
         if (this.groqApiKey) {
             probes.push({ provider: "groq", model: "llama-3.3-70b-versatile", run: () => this.executeGroq(probeParams) });
         }
         if (this.grokApiKey) {
-            for (const model of ["grok-beta", "grok-latest"]) {
-                probes.push({ provider: "grok", model, run: () => this.executeGrok(model, probeParams) });
-            }
+            probes.push({ provider: "grok", model: "grok-latest", run: () => this.executeGrok("grok-latest", probeParams) });
         }
 
         // Run all probes concurrently — this is a diagnostics call, not the hot path.
@@ -368,7 +328,7 @@ export class AiProviderClient {
             probes.map(async (p) => {
                 const start = Date.now();
                 try {
-                    const text = await p.run();
+                    const text = await withTimeout(p.run());
                     return {
                         provider: p.provider,
                         model: p.model,
@@ -393,8 +353,6 @@ export class AiProviderClient {
         const skipped: string[] = [];
         if (!this.workersAI) skipped.push("workers-ai (binding not available)");
         if (!this.geminiApiKey) skipped.push("gemini (GEMINI_API_KEY not set)");
-        if (!this.openaiApiKey) skipped.push("openai (OPENAI_API_KEY not set)");
-        if (!this.deepseekApiKey) skipped.push("deepseek (DEEPSEEK_API_KEY not set)");
         if (!this.groqApiKey) skipped.push("groq (GROQ_API_KEY not set)");
         if (!this.grokApiKey) skipped.push("grok (GROK_API_KEY not set)");
 

@@ -89,7 +89,9 @@ debug.get("/cache-quota", safe(async (c) => {
 // plus latency. Use this to confirm which providers actually work right now.
 debug.get("/ai-providers", safe(async (c) => {
     const { aiProviderClient } = useCradle(c);
-    const health = await aiProviderClient.pingProviders();
+    const timeoutRaw = parseInt(c.req.query("timeout") ?? "", 10);
+    const timeoutMs = Number.isFinite(timeoutRaw) ? Math.min(Math.max(timeoutRaw, 1000), 30_000) : undefined;
+    const health = await aiProviderClient.pingProviders(timeoutMs);
     return c.json(health);
 }));
 
