@@ -28,6 +28,24 @@ class ReviewDataSourceImpl implements ReviewDataSource {
   }
 
   @override
+  Future<Map<String, dynamic>> postReviewComment({
+    required String owner,
+    required String repo,
+    required int prNumber,
+  }) async {
+    return await _apiClient.post<Map<String, dynamic>>(
+      ApiEndpoints.reviewPrComment,
+      tag: 'review-pr-comment',
+      data: {
+        'owner': owner,
+        'repo': repo,
+        'prNumber': prNumber,
+      },
+      parser: (data) => data as Map<String, dynamic>,
+    );
+  }
+
+  @override
   Future<Map<String, dynamic>> fetchMeta() async {
     return await _apiClient.get<Map<String, dynamic>>(
       ApiEndpoints.reviewMeta,

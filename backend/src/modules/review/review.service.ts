@@ -28,6 +28,7 @@ export class ReviewService {
     private readonly geminiClient: GeminiClient;
     private readonly cacheService: CacheService;
     private readonly github: CachedGitHubClient;
+    private readonly gitOps: any;
     private readonly logger: Logger;
 
     constructor({
@@ -35,18 +36,21 @@ export class ReviewService {
         geminiClient,
         cacheService,
         cachedGithubClient,
+        gitOpsService,
         logger,
     }: {
         prContextFetcher: PrContextFetcher;
         geminiClient: GeminiClient;
         cacheService: CacheService;
         cachedGithubClient: CachedGitHubClient;
+        gitOpsService: any;
         logger: Logger;
     }) {
         this.contextFetcher = prContextFetcher;
         this.geminiClient   = geminiClient;
         this.cacheService   = cacheService;
         this.github         = cachedGithubClient;
+        this.gitOps         = gitOpsService;
         this.logger         = logger.child({ module: "review" });
     }
 
@@ -104,5 +108,57 @@ export class ReviewService {
         await this.cacheService.set(cacheKey, response, REVIEW_CACHE_TTL);
 
         return response;
+    }
+
+    /**
+     * Run (or reuse the cached) review for a PR and post it as a comment on the PR.
+     * Returns the review plus a flag indicating the comment was posted.
+     */
+    async postReviewToPr(owner: string, repo: string, prNumber: number): Promise<ReviewResponse & { posted: boolean }> {
+        const review = await this.reviewPr(owner, repo, prNumber);
+        const markdown = this.formatReviewComment(review);
+        await this.gitOps.commentOnIssue(owner, repo, prNumber, markdown);
+        this.logger.info({ owner, repo, prNumber }, "Posted AI review comment to PR");
+        return { ...review, posted: true };
+    }
+
+    /** Render a ReviewResponse as a GitHub-flavored markdown comment. */
+    private formatReviewComment(review: ReviewResponse): string {
+        const r = review.review;
+        const totalIssues = r.bugs.length + r.bestPractices.length + r.security.length + r.performance.length;
+
+        const sevEmoji = (s: string) => (s === "critical" ? "🔴" : s === "warning" ? "🟠" : "🔵");
+
+        const section = (title: string, emoji: string, findings: typeof r.bugs): string => {
+            if (!findings.length) return "";
+            const rows = findings.map((f) => {
+                const loc = f.line ? `\`${f.file}:${f.line}\`` : `\`${f.file}\``;
+                const suggestion = f.suggestion ? `\n  - 💡 ${f.suggestion}` : "";
+                return `- ${sevEmoji(f.severity)} **${f.title}** — ${loc}\n  - ${f.description}${suggestion}`;
+            }).join("\n");
+            return `\n### ${emoji} ${title} (${findings.length})\n${rows}\n`;
+        };
+
+        const header = totalIssues === 0
+            ? "✅ **No issues found** — this PR looks good!"
+            : `Found **${totalIssues}** item(s) across ${review.reviewMeta.filesReviewed}/${review.reviewMeta.totalFiles} files reviewed.`;
+
+        const body = [
+            `## 🤖 Sellio AI Code Review`,
+            ``,
+            `> ${r.prSummary}`,
+            ``,
+            header,
+            section("Bugs", "🐛", r.bugs),
+            section("Security", "🛡️", r.security),
+            section("Performance", "⚡", r.performance),
+            section("Best Practices", "✨", r.bestPractices),
+            ``,
+            `---`,
+            `<sub>Automated review${review.fromCache ? " (from cache)" : ""} · reviewed ${review.reviewMeta.filesReviewed}/${review.reviewMeta.totalFiles} files. Not a substitute for human review.</sub>`,
+        ].join("\n");
+
+        // Collapse any run of 3+ newlines (from empty sections) down to a clean paragraph break.
+        return body.replace(/\n{3,}/g, "\n\n");
     }
 }

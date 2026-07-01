@@ -48,6 +48,17 @@ class FakeReviewDataSource implements ReviewDataSource {
   }
 
   @override
+  Future<Map<String, dynamic>> postReviewComment({
+    required String owner,
+    required String repo,
+    required int prNumber,
+  }) async {
+    await Future.delayed(const Duration(seconds: 1)); // Simulate posting to GitHub
+    final result = await reviewPr(owner: owner, repo: repo, prNumber: prNumber);
+    return {...result, 'posted': true};
+  }
+
+  @override
   Future<Map<String, dynamic>> reviewPr({
     required String owner,
     required String repo,

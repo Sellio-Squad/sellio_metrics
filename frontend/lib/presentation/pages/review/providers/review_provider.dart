@@ -9,6 +9,9 @@ export 'review_provider.dart' show SlimPrEntry;
 
 enum ReviewStatus { idle, loading, loaded, error }
 
+/// State of posting the current review as a comment on the GitHub PR.
+enum PostStatus { idle, posting, posted, error }
+
 @lazySingleton
 class ReviewProvider extends ChangeNotifier {
   final ReviewRepository _repository;
@@ -19,6 +22,10 @@ class ReviewProvider extends ChangeNotifier {
   ReviewStatus _status = ReviewStatus.idle;
   ReviewEntity? _review;
   String _errorMessage = '';
+
+  // Post-to-GitHub state
+  PostStatus _postStatus = PostStatus.idle;
+  String _postError = '';
 
   // Repos + PRs for dropdowns (loaded via single /api/review/meta request)
   List<RepoInfo> _repos = [];
@@ -51,6 +58,13 @@ class ReviewProvider extends ChangeNotifier {
   bool get hasResult => _status == ReviewStatus.loaded && _review != null;
   bool get hasError => _status == ReviewStatus.error;
   bool get canReview => _selectedRepo != null && _selectedPr != null && !isLoading;
+
+  // ─── Post-to-GitHub getters ─────────────────────────────────
+  PostStatus get postStatus => _postStatus;
+  String get postError => _postError;
+  bool get isPosting => _postStatus == PostStatus.posting;
+  bool get hasPosted => _postStatus == PostStatus.posted;
+  bool get canPost => hasResult && !isPosting;
 
   // ─── ONE request — load repos + PRs for dropdowns ───────────
   Future<void> loadMeta() async {
@@ -142,6 +156,8 @@ class ReviewProvider extends ChangeNotifier {
     _status = ReviewStatus.loading;
     _review = null;
     _errorMessage = '';
+    _postStatus = PostStatus.idle; // reset post state for the new review
+    _postError = '';
     notifyListeners();
 
     try {
@@ -167,10 +183,43 @@ class ReviewProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ─── Post review as a comment on the GitHub PR ──────────────
+  Future<void> postReviewToGitHub() async {
+    if (!hasResult || _selectedPr == null) return;
+    if (_postStatus == PostStatus.posting) return;
+
+    _postStatus = PostStatus.posting;
+    _postError = '';
+    notifyListeners();
+
+    try {
+      final owner = _selectedPr!.owner.isNotEmpty
+          ? _selectedPr!.owner
+          : _selectedRepo!.fullName.split('/').first;
+      final repo = _selectedPr!.repo.isNotEmpty
+          ? _selectedPr!.repo
+          : _selectedRepo!.name;
+
+      _review = await _repository.postReviewComment(
+        owner: owner,
+        repo: repo,
+        prNumber: _selectedPr!.prNumber,
+      );
+      _postStatus = PostStatus.posted;
+    } catch (e, stack) {
+      _postStatus = PostStatus.error;
+      _postError = e.toString().replaceFirst('Exception: ', '');
+      appLogger.error('ReviewProvider', 'Error posting review to GitHub: $e', stack);
+    }
+    notifyListeners();
+  }
+
   void reset() {
     _status = ReviewStatus.idle;
     _review = null;
     _errorMessage = '';
+    _postStatus = PostStatus.idle;
+    _postError = '';
     notifyListeners();
   }
 }

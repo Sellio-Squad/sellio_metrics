@@ -55,6 +55,8 @@ class ReviewSelectionPanel extends StatelessWidget {
           _AnalyzeButton(provider: provider, tabController: tabController),
 
           if (provider.hasResult) ...[
+            const SizedBox(height: AppSpacing.md),
+            _PostToGitHubButton(provider: provider),
             const SizedBox(height: AppSpacing.xl),
             _SectionLabel('Results', scheme),
             const SizedBox(height: AppSpacing.sm),
@@ -421,6 +423,114 @@ class _AnalyzeButton extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─── Post-to-GitHub button ────────────────────────────────────
+
+class _PostToGitHubButton extends StatelessWidget {
+  final ReviewProvider provider;
+  const _PostToGitHubButton({required this.provider});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final posting = provider.isPosting;
+    final posted = provider.hasPosted;
+    final hasError = provider.postStatus == PostStatus.error;
+
+    // Once posted, show a static success confirmation instead of a tappable button.
+    if (posted) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            height: 44,
+            decoration: BoxDecoration(
+              color: scheme.green.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(AppRadius.sm),
+              border: Border.all(color: scheme.green.withValues(alpha: 0.35)),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(LucideIcons.checkCircle2, size: 16, color: scheme.green),
+                const SizedBox(width: AppSpacing.sm),
+                Text('Posted to PR',
+                    style: AppTypography.body.copyWith(
+                        color: scheme.green,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13)),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          TextButton.icon(
+            onPressed: provider.postReviewToGitHub,
+            icon: Icon(LucideIcons.refreshCw, size: 12, color: scheme.hint),
+            label: Text('Post again',
+                style: AppTypography.caption.copyWith(color: scheme.hint, fontSize: 11)),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Material(
+          borderRadius: BorderRadius.circular(AppRadius.sm),
+          color: scheme.surface,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(AppRadius.sm),
+            onTap: posting ? null : provider.postReviewToGitHub,
+            child: Container(
+              height: 44,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppRadius.sm),
+                border: Border.all(color: scheme.primary.withValues(alpha: 0.4)),
+              ),
+              child: Center(
+                child: posting
+                    ? Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: scheme.primary)),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text('Posting to PR…',
+                              style: AppTypography.body.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13)),
+                        ],
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(LucideIcons.gitPullRequest, size: 16, color: scheme.primary),
+                          const SizedBox(width: AppSpacing.sm),
+                          Text('Post review to PR',
+                              style: AppTypography.body.copyWith(
+                                  color: scheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13)),
+                        ],
+                      ),
+              ),
+            ),
+          ),
+        ),
+        if (hasError) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(provider.postError,
+              style: AppTypography.caption.copyWith(color: scheme.red, fontSize: 11)),
+        ],
+      ],
     );
   }
 }

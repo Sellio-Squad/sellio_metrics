@@ -61,6 +61,14 @@ review.post("/pr", zValidator("json", reviewBodySchema), safe(async (c) => {
     return c.json(result);
 }));
 
+// ─── Run AI review and post it as a comment on the PR ────────
+review.post("/pr/comment", zValidator("json", reviewBodySchema), safe(async (c) => {
+    const { reviewService } = useCradle(c);
+    const body = c.req.valid("json") as z.infer<typeof reviewBodySchema>;
+    const result = await reviewService.postReviewToPr(body.owner, body.repo, body.prNumber);
+    return c.json(result);
+}));
+
 // ─── Gemini usage stats ──────────────────────────────────────
 review.get("/usage", safe(async (c) => {
     const { geminiClient } = useCradle(c);

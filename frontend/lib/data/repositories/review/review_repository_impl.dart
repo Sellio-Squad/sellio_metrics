@@ -23,6 +23,20 @@ class ReviewRepositoryImpl implements ReviewRepository {
     return _mapToEntity(data);
   }
 
+  @override
+  Future<ReviewEntity> postReviewComment({
+    required String owner,
+    required String repo,
+    required int prNumber,
+  }) async {
+    final data = await _dataSource.postReviewComment(
+      owner: owner,
+      repo: repo,
+      prNumber: prNumber,
+    );
+    return _mapToEntity(data);
+  }
+
   ReviewEntity _mapToEntity(Map<String, dynamic> data) {
     final prMap = data['pr'] as Map<String, dynamic>;
     final reviewMap = data['review'] as Map<String, dynamic>;
