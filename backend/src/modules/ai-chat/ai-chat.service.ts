@@ -327,8 +327,6 @@ export class AiChatService {
     // ─── Tool call extraction ────────────────────────────────
 
     private extractToolCall(response: string): { name: string; args: unknown } | null {
-        // Try to parse a JSON tool call if the AI outputs one in the format:
-        // {"tool":"name","args":{...}}  or  ```json\n{"tool":"name","args":{...}}
         try {
             const jsonMatch = response.match(/```(?:json)?\s*(\{[\s\S]*?"tool"[\s\S]*?\})\s*```/);
             if (jsonMatch) {
