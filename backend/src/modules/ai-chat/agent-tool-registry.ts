@@ -22,11 +22,16 @@ function withErrorHandling(
         } catch (err: any) {
             const status = err.status ?? err.statusCode;
             let hint = err.message;
-            if (status === 403) hint = `Permission denied. The GitHub App may need 'issues: write' or 'projects: write' permission on this repo.`;
-            if (status === 404) hint = `Resource not found. Check that the repo '${deps.repo}' exists and the GitHub App is installed there.`;
-            if (status === 422) hint = `Validation failed: ${err.message}`;
+            // Keep hints factual: report the raw status/message and the exact resource that
+            // was requested. Do NOT assert a specific cause (e.g. "the app isn't installed")
+            // that we cannot verify — the LLM tends to amplify guessed causes into confident,
+            // false explanations to the user.
+            const resource = `${deps.owner}/${deps.repo}`;
+            if (status === 403) hint = `GitHub returned 403 (forbidden) for '${resource}' while running '${name}'. Raw message: ${err.message}`;
+            if (status === 404) hint = `GitHub returned 404 (not found) for '${resource}' while running '${name}'. This usually means the specific PR/issue/file number does not exist. Raw message: ${err.message}`;
+            if (status === 422) hint = `GitHub returned 422 (validation failed) while running '${name}': ${err.message}`;
             deps.logger.warn({ tool: name, err: err.message, status }, "Tool execution error");
-            return { error: true, message: hint };
+            return { error: true, status: status ?? null, message: hint };
         }
     };
 }
@@ -78,13 +83,17 @@ export const TOOLS: AgentTool[] = [
         execute: withErrorHandling("create_github_issue", async (args, deps) => {
             const { octokit, owner, repo, org, gqlClient, logger } = deps;
             
-            // Deduplication check: check if an open issue with the same title already exists
-            const { data: existingIssues } = await octokit.issues.listForRepo({
+            // Deduplication check: check if an open issue with the same title already exists.
+            // NOTE: issues.listForRepo also returns pull requests (GitHub models PRs as issues).
+            // We filter out anything with a `pull_request` field so a PR is never treated as a
+            // duplicate issue — this previously caused create_github_issue to "match" the PR itself.
+            const { data: existingItems } = await octokit.issues.listForRepo({
                 owner,
                 repo,
                 state: "open",
                 per_page: 100,
             });
+            const existingIssues = existingItems.filter((item: any) => !item.pull_request);
             const searchTitle = args.title.trim().toLowerCase();
             const duplicate = existingIssues.find((issue: any) => issue.title.trim().toLowerCase() === searchTitle);
             
@@ -158,13 +167,16 @@ export const TOOLS: AgentTool[] = [
             const { octokit, owner, repo, org, gqlClient, logger } = deps;
             const projectId = await resolveProjectNodeId(org, repo, gqlClient, logger);
 
-            // Fetch open issues once for the whole bulk run to save API calls
-            const { data: existingIssues } = await octokit.issues.listForRepo({
+            // Fetch open issues once for the whole bulk run to save API calls.
+            // Filter out pull requests — issues.listForRepo returns PRs too, and a PR must
+            // never be matched as a duplicate issue.
+            const { data: existingItems } = await octokit.issues.listForRepo({
                 owner,
                 repo,
                 state: "open",
                 per_page: 100,
             });
+            const existingIssues = existingItems.filter((item: any) => !item.pull_request);
 
             const created: any[] = [];
             const skipped: any[] = [];
@@ -274,6 +286,73 @@ export const TOOLS: AgentTool[] = [
                 state_reason: args.reason ?? "completed",
             });
             return { closed: true, issueNumber: data.number, url: data.html_url };
+        }),
+    },
+
+    // ── 5b. Close a pull request ─────────────────────────────
+    {
+        name: "close_pr",
+        description: "Close a pull request without merging it, by its number. Use this when asked to close (not merge) a PR.",
+        parameters: {
+            type: "object",
+            properties: {
+                prNumber: { type: "number", description: "Pull request number" },
+                comment:  { type: "string", description: "Optional comment to post before closing (e.g. reason for closing)" },
+            },
+            required: ["prNumber"],
+        },
+        execute: withErrorHandling("close_pr", async (args, deps) => {
+            const { octokit, owner, repo } = deps;
+            if (args.comment) {
+                await deps.gitOpsService.commentOnIssue(owner, repo, args.prNumber, args.comment);
+            }
+            const { data } = await octokit.pulls.update({
+                owner, repo,
+                pull_number: args.prNumber,
+                state: "closed",
+            });
+            return { closed: true, prNumber: data.number, url: data.html_url, state: data.state };
+        }),
+    },
+
+    // ── 5c. Link an issue to a pull request ──────────────────
+    {
+        name: "link_issue_to_pr",
+        description: "Link a GitHub issue to a pull request so merging the PR auto-closes the issue. Appends a 'Closes #<issue>' reference to the PR body.",
+        parameters: {
+            type: "object",
+            properties: {
+                prNumber:    { type: "number", description: "Pull request number" },
+                issueNumber: { type: "number", description: "Issue number to link (the PR will close it on merge)" },
+                keyword:     { type: "string", enum: ["Closes", "Fixes", "Resolves"], description: "Closing keyword (default: Closes)" },
+            },
+            required: ["prNumber", "issueNumber"],
+        },
+        execute: withErrorHandling("link_issue_to_pr", async (args, deps) => {
+            const { octokit, owner, repo } = deps;
+            const keyword = args.keyword ?? "Closes";
+            const reference = `${keyword} #${args.issueNumber}`;
+
+            // Fetch the current PR body so we can append the link without clobbering it
+            const { data: pr } = await octokit.pulls.get({ owner, repo, pull_number: args.prNumber });
+            const currentBody = pr.body ?? "";
+
+            // Skip if the exact reference is already present (idempotent)
+            const linkRegex = new RegExp(`\\b(clos|fix|resolv)\\w*\\s+#${args.issueNumber}\\b`, "i");
+            if (linkRegex.test(currentBody)) {
+                return { linked: true, alreadyLinked: true, prNumber: args.prNumber, issueNumber: args.issueNumber, reference };
+            }
+
+            const newBody = currentBody.trim().length > 0
+                ? `${currentBody.trim()}\n\n${reference}`
+                : reference;
+
+            await octokit.pulls.update({
+                owner, repo,
+                pull_number: args.prNumber,
+                body: newBody,
+            });
+            return { linked: true, alreadyLinked: false, prNumber: args.prNumber, issueNumber: args.issueNumber, reference };
         }),
     },
 
