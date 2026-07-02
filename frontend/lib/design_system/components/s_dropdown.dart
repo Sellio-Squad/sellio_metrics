@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:hux/hux.dart';
 
-import 's_button.dart';
+import 'package:sellio_metrics/design_system/components/s_button.dart';
 
 class SDropdownItem<T> {
   final T value;
