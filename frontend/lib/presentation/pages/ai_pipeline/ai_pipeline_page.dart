@@ -926,7 +926,6 @@ class _AgentLogBubble extends StatelessWidget {
     );
   }
 }
-}
 
 // ─── Custom Premium Widgets ──────────────────────────────────────────────────
 
