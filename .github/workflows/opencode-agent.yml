@@ -120,9 +120,8 @@ jobs:
         with:
           python-version: "3.11"
 
-      # ── 5. Install OpenCode ───────────────────────────────────────────
-      - name: "📦 Install OpenCode"
-        run: npm install -g opencode
+      # OpenCode CLI is pre-installed on the runner (v1.18.23+).
+      # Skip npm install — opencode is available directly.
 
       # ── 6. Configure git ──────────────────────────────────────────────
       - name: "Configure git"
