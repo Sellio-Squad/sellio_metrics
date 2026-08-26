@@ -1,0 +1,262 @@
+name: 🔧 OpenCode Agent
+
+# Autonomous agent: receives a ticket, implements it, and opens a PR.
+# Uses OpenCode CLI with built-in model (no API keys required).
+
+on:
+  workflow_dispatch:
+    inputs:
+      owner:
+        description: "Target repo owner (e.g. Sellio-Squad)"
+        required: true
+        type: string
+      repo:
+        description: "Target repo name (e.g. sellio_metrics)"
+        required: true
+        type: string
+      issue_number:
+        description: "Issue number"
+        required: true
+        type: string
+      task_id:
+        description: "Unique task ID from Cloudflare KV"
+        required: true
+        type: string
+      branch_name:
+        description: "Branch to create and push to (e.g. ai/42-fix-login)"
+        required: true
+        type: string
+      timeout:
+        description: "Timeout in minutes"
+        required: false
+        type: number
+        default: 40
+
+jobs:
+  opencode-agent:
+    name: "🔧 OpenCode Issue #${{ inputs.issue_number }} in ${{ inputs.repo }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      # ── 1. Generate GitHub App installation token ──────────────────────
+      - name: "Generate App token"
+        uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: ${{ inputs.owner }}
+
+      # ── 2. Checkout the TARGET repo ────────────────────────────────────
+      - name: "📦 Checkout ${{ inputs.owner }}/${{ inputs.repo }}"
+        uses: actions/checkout@v4
+        with:
+          repository: "${{ inputs.owner }}/${{ inputs.repo }}"
+          token: ${{ steps.app-token.outputs.token }}
+          ref: develop
+          fetch-depth: 0
+
+      # ── 3. Fetch issue details ─────────────────────────────────────────
+      - name: "📋 Fetch issue details"
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api /repos/${{ inputs.owner }}/${{ inputs.repo }}/issues/${{ inputs.issue_number }} \
+            --jq '.title' > /tmp/issue_title.txt
+          gh api /repos/${{ inputs.owner }}/${{ inputs.repo }}/issues/${{ inputs.issue_number }} \
+            --jq '.body'  > /tmp/issue_body.txt
+          echo "📋 Issue: $(cat /tmp/issue_title.txt)"
+
+      # ── 4. Auto-detect stack ───────────────────────────────────────────
+      - name: "🔍 Detect stack"
+        id: detect
+        run: |
+          if find . -name "pubspec.yaml" -not -path "*/build/*" | grep -q .; then
+            echo "stack=flutter" >> $GITHUB_OUTPUT
+          elif find . -name "build.gradle*" | grep -q .; then
+            echo "stack=kotlin" >> $GITHUB_OUTPUT
+          elif [ -f "package.json" ]; then
+            echo "stack=node" >> $GITHUB_OUTPUT
+          elif [ -f "requirements.txt" ] || [ -f "pyproject.toml" ]; then
+            echo "stack=python" >> $GITHUB_OUTPUT
+          else
+            echo "stack=unknown" >> $GITHUB_OUTPUT
+          fi
+
+      # ── 4a. Setup Flutter ──────────────────────────────────────────────
+      - name: "Setup Flutter"
+        if: steps.detect.outputs.stack == 'flutter'
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.x"
+          channel: "stable"
+          cache: true
+
+      # ── 4b. Setup Java 17 ─────────────────────────────────────────────
+      - name: "Setup Java 17"
+        if: steps.detect.outputs.stack == 'kotlin'
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      # ── 4c. Setup Node 22 ─────────────────────────────────────────────
+      - name: "Setup Node 22"
+        if: steps.detect.outputs.stack == 'node'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      # ── 4d. Setup Python 3.11 ─────────────────────────────────────────
+      - name: "🐍 Setup Python 3.11"
+        if: steps.detect.outputs.stack == 'python' || steps.detect.outputs.stack == 'unknown'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ── 5. Install OpenCode ───────────────────────────────────────────
+      - name: "📦 Install OpenCode"
+        run: npm install -g opencode
+
+      # ── 6. Configure git ──────────────────────────────────────────────
+      - name: "Configure git"
+        run: |
+          git config user.email "sellio-bot@sellio.app"
+          git config user.name "Sellio Bot"
+          git checkout -b "${{ inputs.branch_name }}"
+
+      # ── 7. Run OpenCode ───────────────────────────────────────────────
+      - name: "🤖 Run OpenCode Agent"
+        id: agent
+        env:
+          CI: "true"
+        run: |
+          ISSUE_TITLE=$(cat /tmp/issue_title.txt)
+          ISSUE_BODY=$(cat /tmp/issue_body.txt)
+
+          TASK="You are implementing GitHub Issue #${{ inputs.issue_number }}.
+
+          Issue: ${ISSUE_TITLE}
+
+          Requirements:
+          ${ISSUE_BODY}
+
+          MANDATORY WORKFLOW:
+
+          1. EXPLORE the project structure to understand where code lives.
+          2. RESEARCH before writing code — grep for classes/methods, read files, use only verified APIs.
+          3. IMPLEMENT the changes using only real code you have read.
+          4. VERIFY by running the project's build and test commands. Fix all errors.
+          5. CLEANUP — remove any unused imports you introduced.
+
+          CRITICAL RULES:
+          - NEVER invent class names, import paths, or method signatures.
+          - NEVER write an import without verifying the file exists.
+          - Focus ONLY on this issue. Do NOT fix unrelated bugs."
+          EOF
+
+          opencode run \
+            --auto \
+            --dir . \
+            "$TASK"
+
+      # ── 8. Final verification ─────────────────────────────────────────
+      - name: "✅ Final verification — Flutter"
+        if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'flutter'
+        run: |
+          find . -name "pubspec.yaml" \
+            -not -path "*/build/*" \
+            -not -path "*/.dart_tool/*" \
+            | xargs -I{} dirname {} \
+            | while read APP_DIR; do
+                echo "── Verifying: $APP_DIR ──"
+                (cd "$APP_DIR" && flutter pub get) || exit 1
+                (cd "$APP_DIR" && flutter analyze --no-fatal-warnings) || exit 1
+                (cd "$APP_DIR" && flutter test --no-pub) || true
+              done
+
+      - name: "✅ Final verification — Kotlin"
+        if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'kotlin'
+        run: ./gradlew compileKotlin test
+
+      - name: "✅ Final verification — Node"
+        if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'node'
+        run: npm run build && npm test
+
+      - name: "✅ Final verification — Python"
+        if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'python'
+        run: |
+          pip install -r requirements.txt 2>/dev/null || true
+          pytest 2>/dev/null || true
+
+      # ── 9. Push branch ────────────────────────────────────────────────
+      - name: "🚀 Push branch"
+        if: success()
+        run: |
+          git add -A
+          git diff --staged --stat
+          git commit --allow-empty -m "feat(ai): implement #${{ inputs.issue_number }} [opencode-agent]"
+          git push origin "${{ inputs.branch_name }}"
+
+      # ── 10. Create PR ─────────────────────────────────────────────────
+      - name: "🔀 Create Pull Request"
+        if: success()
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr create \
+            --base develop \
+            --head "${{ inputs.branch_name }}" \
+            --title "feat(ai): implement #${{ inputs.issue_number }}" \
+            --body "## 🤖 AI-Generated PR
+
+          **Issue:** #${{ inputs.issue_number }}
+          **Agent:** OpenCode (built-in model)
+
+          Auto-generated by the OpenCode AI agent. Review changes before merging."
+
+      # ── 11. Notify Cloudflare — SUCCESS ───────────────────────────────
+      - name: "Notify Cloudflare (success)"
+        if: success()
+        run: |
+          if [ -z "${{ secrets.SELLIO_WORKER_URL }}" ]; then exit 0; fi
+          PAYLOAD=$(jq -n \
+            --arg taskId "${{ inputs.task_id }}" \
+            --arg branch "${{ inputs.branch_name }}" \
+            --arg status "success" \
+            --arg owner  "${{ inputs.owner }}" \
+            --arg repo   "${{ inputs.repo }}" \
+            --argjson issueNum "${{ inputs.issue_number }}" \
+            '{taskId:$taskId, branch:$branch, status:$status, owner:$owner, repo:$repo, issueNumber:$issueNum}')
+          curl -s -o /dev/null -w "%{http_code}" --retry 3 -X POST \
+            "${{ secrets.SELLIO_WORKER_URL }}/api/ai-pipeline/result" \
+            -H "Content-Type: application/json" \
+            -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
+            -d "$PAYLOAD"
+
+      # ── 12. Notify Cloudflare — FAILURE ───────────────────────────────
+      - name: "Notify Cloudflare (failure)"
+        if: failure()
+        run: |
+          if [ -z "${{ secrets.SELLIO_WORKER_URL }}" ]; then exit 0; fi
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          PAYLOAD=$(jq -n \
+            --arg taskId "${{ inputs.task_id }}" \
+            --arg branch "${{ inputs.branch_name }}" \
+            --arg status "failed" \
+            --arg owner  "${{ inputs.owner }}" \
+            --arg repo   "${{ inputs.repo }}" \
+            --argjson issueNum "${{ inputs.issue_number }}" \
+            --arg error  "OpenCode failed. Logs: $RUN_URL" \
+            '{taskId:$taskId, branch:$branch, status:$status, owner:$owner, repo:$repo, issueNumber:$issueNum, error:$error}')
+          curl -s -o /dev/null -w "%{http_code}" --retry 3 -X POST \
+            "${{ secrets.SELLIO_WORKER_URL }}/api/ai-pipeline/result" \
+            -H "Content-Type: application/json" \
+            -H "X-Sellio-Signature: ${{ secrets.SELLIO_WEBHOOK_SECRET }}" \
+            -d "$PAYLOAD"
