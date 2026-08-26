@@ -15,7 +15,7 @@ export interface AiImplementJob {
     phase: 1 | 2 | 3;
     taskId: string;          // Unique task identifier (e.g. repo-issue-timestamp)
     retryCount?: number;     // Number of CI failure correction attempts
-    agentType?: "openhands" | "swe-agent";
+    agentType?: "opencode";
 }
 
 export interface RepoContext {

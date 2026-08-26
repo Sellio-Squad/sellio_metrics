@@ -481,7 +481,7 @@ export const TOOLS: AgentTool[] = [
                 projectId:   { type: "string", description: "Project node ID for moving the card" },
                 itemId:      { type: "string", description: "Project item node ID" },
                 fieldId:     { type: "string", description: "Status field node ID" },
-                agentType:   { type: "string", enum: ["openhands", "swe-agent"], description: "Which AI agent to run. 'swe-agent' is more token-efficient and fits better in free tier quotas. 'openhands' is standard.", default: "swe-agent" },
+                agentType:   { type: "string", enum: ["opencode"], description: "Which AI agent to run. 'opencode' uses the built-in OpenCode CLI.", default: "opencode" },
             },
             required: ["issueNumber"],
         },
@@ -497,7 +497,7 @@ export const TOOLS: AgentTool[] = [
                 projectId: args.projectId ?? "",
                 itemId: args.itemId ?? "",
                 fieldId: args.fieldId ?? "",
-                agentType: args.agentType || "swe-agent",
+                agentType: args.agentType || "opencode",
                 phase: 1,
                 taskId: `${owner}-${repo}-${issue.number}-${Date.now()}`,
             };

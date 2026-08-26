@@ -669,7 +669,7 @@ export class WebhookService {
                         projectId,
                         itemId,
                         fieldId,
-                        agentType: "swe-agent",
+                        agentType: "opencode",
                         phase: 1,
                         taskId: `${owner}-${repo}-${issue.number}-${Date.now()}`,
                     };

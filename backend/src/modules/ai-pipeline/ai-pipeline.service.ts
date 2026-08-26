@@ -111,8 +111,8 @@ export class AiPipelineService {
     //   4. Dispatch GitHub Actions (OpenHands runs inside)
 
     private async executePhase1(job: AiImplementJob): Promise<void> {
-        const agentName = job.agentType === "openhands" ? "OpenHands" : "SWE-agent";
-        const workflowFile = job.agentType === "openhands" ? "openhands-agent.yml" : "swe-agent.yml";
+        const agentName = "OpenCode";
+        const workflowFile = "opencode-agent.yml";
         
         this.logger.info({ taskId: job.taskId, agentName }, `Phase 1: Dispatching ${agentName} via GitHub Actions`);
 
@@ -146,8 +146,8 @@ export class AiPipelineService {
             .slice(0, 40);
         const branchName = `ai/${job.issueNumber}-${slug}`;
         
-        const agentName = job.agentType === "openhands" ? "OpenHands" : "SWE-agent";
-        const workflowFile = job.agentType === "openhands" ? "openhands-agent.yml" : "swe-agent.yml";
+        const agentName = "OpenCode";
+        const workflowFile = "opencode-agent.yml";
 
         // Save pending state for the callback handler
         await this.cache.set(`ai:task:${job.taskId}:phase2_pending`, {
@@ -230,17 +230,9 @@ export class AiPipelineService {
             await this.emitEvent(job, "phase2", "Agent Completed", `Agent pushed branch \`${branch}\` successfully.`, "done");
             await this.emitEvent(job, "phase2", "Code Validation Passed", "Build and tests passed in GitHub Actions.", "done");
 
-            // Enqueue Phase 3 with the branch already created by the agent
-            if (this.syncQueue) {
-                await this.syncQueue.send({
-                    ...job,
-                    phase: 3,
-                    agentBranch: branch, // signals Phase 3 to skip branch creation
-                });
-                this.logger.info({ taskId, branch }, "Enqueued Phase 3 from agent result");
-            } else {
-                await this.executePhase3({ ...job, phase: 3, agentBranch: branch } as any);
-            }
+            // OpenCode workflow already creates the PR — skip Phase 3.
+            // Phase 3 would create a duplicate PR.
+            this.logger.info({ taskId, branch }, "Skipping Phase 3 — OpenCode workflow already created the PR");
         } else {
             const errMsg = error ?? "GitHub Actions agent failed (no error detail)";
             this.logger.error({ taskId, errMsg }, "Agent reported failure");
