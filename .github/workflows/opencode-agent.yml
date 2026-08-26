@@ -136,6 +136,10 @@ jobs:
         id: agent
         env:
           CI: "true"
+          TASK_ID: ${{ inputs.task_id }}
+          ISSUE_NUM: ${{ inputs.issue_number }}
+          SELLIO_WORKER_URL: ${{ secrets.SELLIO_WORKER_URL }}
+          SELLIO_WEBHOOK_SECRET: ${{ secrets.SELLIO_WEBHOOK_SECRET }}
         run: |
           ISSUE_TITLE=$(cat /tmp/issue_title.txt)
           ISSUE_BODY=$(cat /tmp/issue_body.txt)
@@ -160,10 +164,31 @@ jobs:
           - NEVER write an import without verifying the file exists.
           - Focus ONLY on this issue. Do NOT fix unrelated bugs."
 
+          OC_STREAM=/tmp/opencode_stream.jsonl
           opencode run \
             --auto \
+            --format json \
             --dir . \
-            "$TASK"
+            "$TASK" > "$OC_STREAM" 2>/tmp/opencode_err.log &
+          OC_PID=$!
+
+          if [ -n "$SELLIO_WORKER_URL" ]; then
+            echo "📡 Streaming agent events to dashboard: $SELLIO_WORKER_URL/api/ai-pipeline/stream"
+            tail -n +1 -F "$OC_STREAM" | while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              curl -s -o /dev/null --max-time 5 -X POST \
+                "$SELLIO_WORKER_URL/api/ai-pipeline/stream" \
+                -H "Content-Type: application/json" \
+                -H "X-Sellio-Signature: $SELLIO_WEBHOOK_SECRET" \
+                -d "$(jq -nc --arg t "$TASK_ID" --argjson i "$ISSUE_NUM" --arg e "$line" \
+                  '{taskId:$t, issueNumber:$i, event:$e}')" &
+            done &
+          fi
+
+          wait $OC_PID
+          OC_EXIT=$?
+          echo "opencode exit code: $OC_EXIT"
+          exit $OC_EXIT
 
       # ── 8. Final verification ─────────────────────────────────────────
       - name: "✅ Final verification — Flutter"
