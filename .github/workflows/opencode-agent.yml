@@ -140,8 +140,7 @@ jobs:
           ISSUE_TITLE=$(cat /tmp/issue_title.txt)
           ISSUE_BODY=$(cat /tmp/issue_body.txt)
 
-          TASK=$(cat <<'EOFTASK'
-          You are implementing GitHub Issue #${{ inputs.issue_number }}.
+          TASK="You are implementing GitHub Issue #${{ inputs.issue_number }}.
 
           Issue: ${ISSUE_TITLE}
 
@@ -159,9 +158,7 @@ jobs:
           CRITICAL RULES:
           - NEVER invent class names, import paths, or method signatures.
           - NEVER write an import without verifying the file exists.
-          - Focus ONLY on this issue. Do NOT fix unrelated bugs.
-          EOFTASK
-          )
+          - Focus ONLY on this issue. Do NOT fix unrelated bugs."
 
           opencode run \
             --auto \
