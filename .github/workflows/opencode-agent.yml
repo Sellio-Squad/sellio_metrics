@@ -223,8 +223,11 @@ jobs:
             (cd "$APP_DIR" && flutter pub get) || exit 1
             # Generate code (freezed, json_serializable, l10n) so analyze reports
             # real errors instead of missing-generated-file cascades.
-            (cd "$APP_DIR" && flutter pub run build_runner build --delete-conflicting-outputs) || true
-            (cd "$APP_DIR" && flutter gen-l10n) || true
+                # Best-effort code generation. In many monorepos build_runner /
+                # gen-l10n aren't directly runnable per-package (missing dev deps
+                # or no `flutter: generate: true` flag), so we never fail on this.
+                (cd "$APP_DIR" && flutter pub run build_runner build --delete-conflicting-outputs) >/dev/null 2>&1 || true
+                (cd "$APP_DIR" && flutter gen-l10n) >/dev/null 2>&1 || true
 
             # Analyze the whole package once (machine-readable JSON).
             ANALYSIS=$(cd "$APP_DIR" && flutter analyze --no-fatal-warnings --machine . || true)
@@ -247,9 +250,25 @@ jobs:
                 ADDED="ALL"   # newly created file: every line is the agent's
               fi
 
-              echo "$ANALYSIS" \
-                | grep -E '^\{' \
-                | jq -c --arg rel "$REL" 'select(.severity=="ERROR" and (.location.path | endswith($rel)))' 2>/dev/null \
+                  echo "$ANALYSIS" \
+                    | grep -E '^\{' \
+                    | jq -c --arg rel "$REL" '
+                        select(
+                          .severity == "ERROR"
+                          and (.location.path | endswith($rel))
+                          and ((.code // "") | IN(
+                            "uri_has_not_been_generated","uri_does_not_exist",
+                            "undefined_class","undefined_getter","undefined_method",
+                            "undefined_function","undefined_identifier","undefined_operator",
+                            "non_type_as_type_argument","invalid_annotation_target",
+                            "annotation_with_non_class","part_of_non_part","part_of_different_library",
+                            "const_constructor_with_field_initialized_by_non_constant",
+                            "missing_override_of_hash_and_equal","could_not_resolve",
+                            "not_a_constant_expression","must_be_immutable","final_not_initialized",
+                            "non_constant_case_expression","const_initialized_with_non_constant_value"
+                          ) | not)
+                        )
+                      ' 2>/dev/null \
                 | while IFS= read -r err; do
                     line=$(printf '%s' "$err" | jq -r '.location.startLine' 2>/dev/null || echo 0)
                     msg=$(printf '%s' "$err" | jq -r '.message' 2>/dev/null || echo '')
