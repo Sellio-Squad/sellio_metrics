@@ -185,6 +185,17 @@ jobs:
             done &
           fi
 
+          # Human-readable live log in the Actions UI
+          echo "📜 Agent activity (live):"
+          tail -n +1 -F "$OC_STREAM" | while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            echo "🤖 $(echo "$line" | jq -r '
+              (.type // .event // "event") as $t
+              | (.role // .name // .tool // "") as $w
+              | (.content // .message // .text // .description // "") as $b
+              | [$t, (if $w != "" then "(\($w))" else "" end), $b] | join(" ")')"
+          done &
+
           wait $OC_PID
           OC_EXIT=$?
           echo "opencode exit code: $OC_EXIT"
