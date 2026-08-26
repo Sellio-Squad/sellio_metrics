@@ -943,7 +943,8 @@ ${context.fileTree.join("\n")}
                         detail,
                         timestamp: nowStr,
                         status
-                    }]
+                    }],
+                    logs: []
                 };
 
                 await this.updateRunsIndex(taskId);
@@ -1037,7 +1038,21 @@ ${context.fileTree.join("\n")}
             const record = existingVal.data;
             const nowStr = new Date().toISOString();
 
-            // Find the "Agent Dispatched" event to update its detail
+            // 1. Initialize logs if missing (for legacy records)
+            if (!record.logs) record.logs = [];
+
+            // 2. Append to chronological history
+            record.logs.push({
+                message: line,
+                timestamp: nowStr
+            });
+
+            // 3. Limit log size to prevent KV bloat (keep last 500 lines)
+            if (record.logs.length > 500) {
+                record.logs = record.logs.slice(-500);
+            }
+
+            // 4. Update the "latest line" in the summary event detail
             const logEvent = record.events.find(e => e.label === "Agent Dispatched");
             if (logEvent) {
                 logEvent.detail = `🤖 ${line}`;

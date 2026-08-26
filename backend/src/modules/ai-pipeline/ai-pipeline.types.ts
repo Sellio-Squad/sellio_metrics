@@ -66,6 +66,7 @@ export interface AiRunRecord {
     startedAt: string;        // ISO-8601
     updatedAt: string;
     events: AiRunEvent[];
+    logs?: AiRunLog[];
 }
 
 export interface AiRunEvent {
@@ -74,5 +75,10 @@ export interface AiRunEvent {
     detail?: string;
     timestamp: string;
     status: "running" | "done" | "failed";
+}
+
+export interface AiRunLog {
+    message: string;
+    timestamp: string;
 }
 
