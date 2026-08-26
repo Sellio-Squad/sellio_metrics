@@ -762,7 +762,7 @@ class _AgentChatViewState extends State<_AgentChatView> {
     return Container(
       height: 400,
       decoration: BoxDecoration(
-        color: scheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        color: scheme.surfaceHigh.withValues(alpha: 0.3),
         borderRadius: AppRadius.mdAll,
         border: Border.all(color: scheme.stroke),
       ),
