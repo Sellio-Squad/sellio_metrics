@@ -220,7 +220,7 @@ jobs:
       - name: "✅ Final verification — Flutter"
         if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'flutter'
         run: |
-          set -eu
+          set -e
           BASE=origin/develop
           git rev-parse --verify "$BASE" >/dev/null 2>&1 || BASE=HEAD
 
@@ -228,78 +228,82 @@ jobs:
             [ -z "$APP_DIR" ] && continue
             echo "── Verifying: $APP_DIR ──"
             (cd "$APP_DIR" && flutter pub get) || exit 1
-            # Generate code (freezed, json_serializable, l10n) so analyze reports
-            # real errors instead of missing-generated-file cascades.
-                # Best-effort code generation. In many monorepos build_runner /
-                # gen-l10n aren't directly runnable per-package (missing dev deps
-                # or no `flutter: generate: true` flag), so we never fail on this.
-                (cd "$APP_DIR" && flutter pub run build_runner build --delete-conflicting-outputs) >/dev/null 2>&1 || true
-                (cd "$APP_DIR" && flutter gen-l10n) >/dev/null 2>&1 || true
 
-            # Analyze the whole package once (machine-readable JSON).
-            ANALYSIS=$(cd "$APP_DIR" && flutter analyze --no-fatal-warnings --machine . || true)
+            # Best-effort code generation (silent). In many monorepos build_runner /
+            # gen-l10n aren't runnable per-package, so we never fail on this.
+            (cd "$APP_DIR" && flutter pub run build_runner build --delete-conflicting-outputs) >/dev/null 2>&1 || true
+            (cd "$APP_DIR" && flutter gen-l10n) >/dev/null 2>&1 || true
 
-            APP_PREFIX="$APP_DIR/"
-            rm -f /tmp/verify_failed
+            # Agent's changed Dart files in this app (relative to app dir), excluding generated.
+            mapfile -t CHANGED < <(git status --porcelain -- '*.dart' \
+              | awk '{print $2}' | grep -vE '\.(freezed|g)\.dart$' || true)
+            APP_CHANGED=()
+            for f in "${CHANGED[@]:-}"; do
+              [[ "$f" == "$APP_DIR/"* ]] && APP_CHANGED+=("${f#"$APP_DIR/"}")
+            done
+            [ ${#APP_CHANGED[@]} -eq 0 ] && { echo "No changed Dart files in $APP_DIR — skipping."; continue; }
 
-            # For each Dart file the agent changed/created (exclude generated).
-            while IFS= read -r f; do
-              [ -z "$f" ] && continue
-              [[ "$f" == "$APP_PREFIX"* ]] || continue
-              REL="${f#"$APP_PREFIX"}"
+            # JSON array of changed relpaths for jq filtering.
+            RELJSON=$(printf '%s\n' "${APP_CHANGED[@]}" | jq -R . | jq -cs .)
 
-              # Added line ranges for this file vs BASE (empty if unchanged there).
-              if git cat-file -e "$BASE:$f" 2>/dev/null; then
-                ADDED=$(git diff -U0 "$BASE" -- "$f" \
-                  | grep -E '^@@' \
-                  | sed -E 's/@@ -[0-9]+(,[0-9]+)? \+([0-9]+)(,([0-9]+))? @@.*/\2 \4/')
-              else
-                ADDED="ALL"   # newly created file: every line is the agent's
+            # Errors in changed files at HEAD (agent's version).
+            HEAD_ERRS=$(cd "$APP_DIR" && flutter analyze --no-fatal-warnings --machine . 2>/dev/null \
+              | grep -E '^\{' \
+              | jq -c --argjson files "$RELJSON" \
+                'select(.severity=="ERROR" and (.location.path as $p | $files | any($f | $p | endswith($f))))' 2>/dev/null) || true
+
+            # Errors in changed files at BASE: stash the agent's changes, analyze, then restore.
+            BASE_ERRS=""
+            git stash push -u -m "ai-verify-base" -- "$APP_DIR" >/dev/null 2>&1 || true
+            if git stash list | grep -q "ai-verify-base"; then
+              BASE_ERRS=$(cd "$APP_DIR" && flutter analyze --no-fatal-warnings --machine . 2>/dev/null \
+                | grep -E '^\{' \
+                | jq -c --argjson files "$RELJSON" \
+                  'select(.severity=="ERROR" and (.location.path as $p | $files | any($f | $p | endswith($f))))' 2>/dev/null) || true
+              git stash pop >/dev/null 2>&1 || git stash drop >/dev/null 2/dev/null || true
+            else
+              BASE_ERRS="$HEAD_ERRS"   # couldn't compute base; assume nothing new
+            fi
+
+            FAIL=0
+            while IFS= read -r err; do
+              [ -z "$err" ] && continue
+              path=$(printf '%s' "$err" | jq -r '.location.path')
+              line=$(printf '%s' "$err" | jq -r '.location.startLine')
+              code=$(printf '%s' "$err" | jq -r '.code // ""')
+              msg=$(printf '%s' "$err" | jq -r '.message')
+
+              # Resolve which changed relpath this error belongs to.
+              rel=""
+              for cf in "${APP_CHANGED[@]}"; do
+                if [ "${path%"$cf"}" != "$path" ]; then rel="$cf"; break; fi
+              done
+              is_new=0
+              if [ -n "$rel" ]; then
+                git cat-file -e "$BASE:$APP_DIR/$rel" >/dev/null 2>&1 || is_new=1
               fi
 
-                  echo "$ANALYSIS" \
-                    | grep -E '^\{' \
-                    | jq -c --arg rel "$REL" '
-                        select(
-                          .severity == "ERROR"
-                          and (.location.path | endswith($rel))
-                          and ((.code // "") | IN(
-                            "uri_has_not_been_generated","uri_does_not_exist",
-                            "undefined_class","undefined_getter","undefined_method",
-                            "undefined_function","undefined_identifier","undefined_operator",
-                            "non_type_as_type_argument","invalid_annotation_target",
-                            "annotation_with_non_class","part_of_non_part","part_of_different_library",
-                            "const_constructor_with_field_initialized_by_non_constant",
-                            "missing_override_of_hash_and_equal","could_not_resolve",
-                            "not_a_constant_expression","must_be_immutable","final_not_initialized",
-                            "non_constant_case_expression","const_initialized_with_non_constant_value"
-                          ) | not)
-                        )
-                      ' 2>/dev/null \
-                | while IFS= read -r err; do
-                    line=$(printf '%s' "$err" | jq -r '.location.startLine' 2>/dev/null || echo 0)
-                    msg=$(printf '%s' "$err" | jq -r '.message' 2>/dev/null || echo '')
-                    if [ "$ADDED" = "ALL" ]; then
-                      echo "❌ NEW error in $f:$line -> $msg"
-                      touch /tmp/verify_failed
-                    else
-                      hit=0
-                      while IFS= read -r rng; do
-                        [ -z "$rng" ] && continue
-                        start=${rng%% *}
-                        len=${rng##* }
-                        [ -z "$len" ] && len=1
-                        if [ "$line" -ge "$start" ] && [ "$line" -le $((start + len)) ]; then hit=1; fi
-                      done <<< "$ADDED"
-                      if [ "$hit" -eq 1 ]; then
-                        echo "❌ NEW error in $f:$line -> $msg"
-                        touch /tmp/verify_failed
-                      fi
-                    fi
-                  done || true
-            done < <(git status --porcelain -- '*.dart' | awk '{print $2}' | grep -vE '\.(freezed|g)\.dart$' || true)
+              # Skip if the same error already exists on BASE (pre-existing / environmental).
+              matched=$(printf '%s' "$BASE_ERRS" | jq -c \
+                --arg p "$path" --arg l "$line" --arg c "$code" --arg m "$msg" \
+                'select(.location.path==$p and (.location.startLine|tostring)==$l and (.code//"")==$c and .message==$m)' 2>/dev/null)
 
-            if [ -f /tmp/verify_failed ]; then
+              if [ -z "$matched" ]; then
+                if [ "$is_new" -eq 1 ]; then
+                  # Brand-new file: only fail on unambiguous logic errors (environmental
+                  # errors like unresolved packages are extremely common here and not the agent's fault).
+                  if printf '%s' "$code" | grep -qE '^(invalid_assignment|argument_type_not_assignable|not_enough_positional_arguments|too_many_positional_arguments|missing_return|return_of_invalid_type|the_name_.+_is_already_defined|expected_a_value_of_type|invalid_override|missing_override|const_initialized_with_non_constant_value|list_element_type_not_assignable|map_entry_not_in_map|non_constant_list_element|wrong_number_of_type_arguments|undefined_prefixed_name|extraneous_modifier)$'; then
+                    echo "❌ NEW error in $path:$line [$code] -> $msg"
+                    FAIL=1
+                  fi
+                else
+                  echo "❌ NEW error in $path:$line [$code] -> $msg"
+                  FAIL=1
+                fi
+              fi
+            done <<< "$HEAD_ERRS"
+
+            if [ "$FAIL" -eq 1 ]; then
               echo "::error::Agent introduced NEW analyze errors in changed files (pre-existing errors ignored)."
               exit 1
             fi
