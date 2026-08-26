@@ -139,26 +139,28 @@ jobs:
           ISSUE_TITLE=$(cat /tmp/issue_title.txt)
           ISSUE_BODY=$(cat /tmp/issue_body.txt)
 
-          TASK="You are implementing GitHub Issue #${{ inputs.issue_number }}.
+          TASK=$(cat <<'EOFTASK'
+You are implementing GitHub Issue #${{ inputs.issue_number }}.
 
-          Issue: ${ISSUE_TITLE}
+Issue: ${ISSUE_TITLE}
 
-          Requirements:
-          ${ISSUE_BODY}
+Requirements:
+${ISSUE_BODY}
 
-          MANDATORY WORKFLOW:
+MANDATORY WORKFLOW:
 
-          1. EXPLORE the project structure to understand where code lives.
-          2. RESEARCH before writing code — grep for classes/methods, read files, use only verified APIs.
-          3. IMPLEMENT the changes using only real code you have read.
-          4. VERIFY by running the project's build and test commands. Fix all errors.
-          5. CLEANUP — remove any unused imports you introduced.
+1. EXPLORE the project structure to understand where code lives.
+2. RESEARCH before writing code — grep for classes/methods, read files, use only verified APIs.
+3. IMPLEMENT the changes using only real code you have read.
+4. VERIFY by running the project's build and test commands. Fix all errors.
+5. CLEANUP — remove any unused imports you introduced.
 
-          CRITICAL RULES:
-          - NEVER invent class names, import paths, or method signatures.
-          - NEVER write an import without verifying the file exists.
-          - Focus ONLY on this issue. Do NOT fix unrelated bugs."
-          EOF
+CRITICAL RULES:
+- NEVER invent class names, import paths, or method signatures.
+- NEVER write an import without verifying the file exists.
+- Focus ONLY on this issue. Do NOT fix unrelated bugs.
+EOFTASK
+)
 
           opencode run \
             --auto \
