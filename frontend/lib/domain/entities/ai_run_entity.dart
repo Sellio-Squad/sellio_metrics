@@ -79,6 +79,7 @@ class AiRunEntity {
   final DateTime startedAt;
   final DateTime updatedAt;
   final List<AiRunEventEntity> events;
+  final List<String> logs;
 
   const AiRunEntity({
     required this.taskId,
@@ -94,6 +95,7 @@ class AiRunEntity {
     required this.startedAt,
     required this.updatedAt,
     required this.events,
+    this.logs = const [],
   });
 
   factory AiRunEntity.fromJson(Map<String, dynamic> json) {
@@ -114,6 +116,43 @@ class AiRunEntity {
       startedAt: DateTime.parse(json['startedAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       events: eventList,
+      // Live agent logs stream separately via `agent_log` WS events and are
+      // accumulated on the client; run records from the worker don't store them.
+      logs: const [],
+    );
+  }
+
+  AiRunEntity copyWith({
+    String? taskId,
+    String? owner,
+    String? repo,
+    int? issueNumber,
+    String? issueTitle,
+    String? issueUrl,
+    AiRunStatus? status,
+    int? prNumber,
+    String? prUrl,
+    String? branchName,
+    DateTime? startedAt,
+    DateTime? updatedAt,
+    List<AiRunEventEntity>? events,
+    List<String>? logs,
+  }) {
+    return AiRunEntity(
+      taskId: taskId ?? this.taskId,
+      owner: owner ?? this.owner,
+      repo: repo ?? this.repo,
+      issueNumber: issueNumber ?? this.issueNumber,
+      issueTitle: issueTitle ?? this.issueTitle,
+      issueUrl: issueUrl ?? this.issueUrl,
+      status: status ?? this.status,
+      prNumber: prNumber ?? this.prNumber,
+      prUrl: prUrl ?? this.prUrl,
+      branchName: branchName ?? this.branchName,
+      startedAt: startedAt ?? this.startedAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      events: events ?? this.events,
+      logs: logs ?? this.logs,
     );
   }
 

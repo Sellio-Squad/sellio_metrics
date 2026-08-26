@@ -22,6 +22,19 @@ class AiRunsClearedUpdate extends AiRunsUpdate {
   AiRunsClearedUpdate();
 }
 
+class AiRunLogUpdate extends AiRunsUpdate {
+  final String taskId;
+  final int issueNumber;
+  final String line;
+  final DateTime timestamp;
+  AiRunLogUpdate({
+    required this.taskId,
+    required this.issueNumber,
+    required this.line,
+    required this.timestamp,
+  });
+}
+
 abstract class AiRunsRepository {
   Stream<AiRunsUpdate> watchAiRuns();
   Stream<WsConnectionStatus> watchConnectionStatus();

@@ -349,6 +349,7 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
                       _buildRunHeader(context, run, isActive: true),
                       const Divider(height: AppSpacing.xl),
                       _buildTimeline(context, run.events),
+                      _buildLiveConsole(context, run.logs),
                     ],
                   ),
                 ),
@@ -514,6 +515,7 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
                             _buildRunHeader(context, run, isActive: false),
                             const Divider(height: AppSpacing.lg),
                             _buildTimeline(context, run.events),
+                            _buildLiveConsole(context, run.logs),
                           ],
                         ),
                       ),
@@ -690,6 +692,59 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildLiveConsole(BuildContext context, List<String> logs) {
+    final scheme = context.colors;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: AppSpacing.md),
+        Row(
+          children: [
+            Icon(LucideIcons.terminal, size: 14, color: scheme.primary),
+            const SizedBox(width: AppSpacing.xs),
+            Text(
+              'Live Agent Console',
+              style: AppTypography.body.copyWith(
+                color: scheme.title,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Container(
+          height: 220,
+          decoration: BoxDecoration(
+            color: scheme.surface,
+            borderRadius: AppRadius.mdAll,
+            border: Border.all(color: scheme.stroke),
+          ),
+          child: logs.isEmpty
+              ? Center(
+                  child: Text(
+                    'Waiting for agent output…',
+                    style: AppTypography.caption.copyWith(color: scheme.hint),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  itemCount: logs.length,
+                  itemBuilder: (context, index) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 1),
+                    child: Text(
+                      logs[index],
+                      style: AppTypography.caption.copyWith(
+                        fontFamily: 'monospace',
+                        color: scheme.title,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+      ],
     );
   }
 

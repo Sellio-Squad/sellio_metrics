@@ -46,6 +46,23 @@ class AiRunsRepositoryImpl implements AiRunsRepository {
               }
             } else if (type == 'runs_cleared') {
               sink.add(AiRunsClearedUpdate());
+            } else if (type == 'agent_log') {
+              final taskId = json['taskId'] as String?;
+              final line = json['line'] as String?;
+              final issueNumber = (json['issueNumber'] as int?) ?? 0;
+              final tsStr = json['timestamp'] as String?;
+              if (taskId != null && line != null) {
+                sink.add(
+                  AiRunLogUpdate(
+                    taskId: taskId,
+                    issueNumber: issueNumber,
+                    line: line,
+                    timestamp: tsStr != null
+                        ? DateTime.parse(tsStr)
+                        : DateTime.now(),
+                  ),
+                );
+              }
             }
           } catch (_) {
             // ignore parsing errors

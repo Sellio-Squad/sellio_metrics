@@ -55,11 +55,23 @@ class AiPipelineProvider extends ChangeNotifier with WidgetsBindingObserver {
       } else if (update is AiRunSingleUpdate) {
         final index = _runs.indexWhere((r) => r.taskId == update.run.taskId);
         if (index != -1) {
-          _runs[index] = update.run;
+          // Preserve any live logs already accumulated via agent_log events.
+          _runs[index] = update.run.copyWith(logs: _runs[index].logs);
         } else {
           _runs.insert(0, update.run);
         }
         _isLoaded = true;
+      } else if (update is AiRunLogUpdate) {
+        final index = _runs.indexWhere((r) => r.taskId == update.taskId);
+        if (index != -1) {
+          _runs[index] = _runs[index].copyWith(
+            logs: [..._runs[index].logs, update.line],
+          );
+        }
+        // Live logs update frequently — just notify, don't re-sort (would jump
+        // the card around) and don't wait for a run_update.
+        notifyListeners();
+        return;
       } else if (update is AiRunDeleteUpdate) {
         _runs.removeWhere((r) => r.taskId == update.taskId);
       } else if (update is AiRunsClearedUpdate) {
