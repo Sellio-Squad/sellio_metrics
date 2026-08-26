@@ -62,7 +62,7 @@ export function aiPipelineRoutes(aiPipelineHub: CFDurableObjectNamespace) {
     // all connected frontend WebSocket clients in real time.
     // Header: X-Sellio-Signature must match SELLIO_WEBHOOK_SECRET.
     app.post("/stream", async (c) => {
-        const { logger } = c.get("cradle");
+        const { aiPipelineService, logger } = c.get("cradle");
         const webhookSecret = process.env.SELLIO_WEBHOOK_SECRET ?? "";
 
         const sig = c.req.header("X-Sellio-Signature");
@@ -83,6 +83,10 @@ export function aiPipelineRoutes(aiPipelineHub: CFDurableObjectNamespace) {
         }
 
         try {
+            // 1. Update the persistent run record in KV
+            await aiPipelineService.handleAgentLog(body.taskId, body.line);
+
+            // 2. Forward to Durable Object for live WebSocket broadcasting
             const doId = aiPipelineHub.idFromName("global");
             const doStub = aiPipelineHub.get(doId);
             await doStub.fetch(

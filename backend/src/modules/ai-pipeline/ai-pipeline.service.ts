@@ -239,6 +239,10 @@ export class AiPipelineService {
 
             // Move card to For Review
             await this.gitOps.moveProjectCardByName(job.projectId, job.itemId, job.fieldId, "For Review");
+
+            // Mark as completed in the pipeline view
+            await this.emitEvent(job, "phase3", "Pipeline Finished", "Task successfully implemented.", "done");
+
             await this.cleanupTask(taskId);
         } else {
             const errMsg = error ?? "GitHub Actions agent failed (no error detail)";
@@ -914,6 +918,8 @@ ${context.fileTree.join("\n")}
                     }
                 } else if (phase === "ci_poll" && status === "done") {
                     record.status = "completed";
+                } else if (phase === "phase3" && status === "done") {
+                    record.status = "completed";
                 } else if (phase === "ci_poll" && status === "running") {
                     record.status = "ci_polling";
                 } else {
@@ -1014,6 +1020,46 @@ ${context.fileTree.join("\n")}
         } catch (err: any) {
             this.logger.error({ taskId, err: err?.message }, "Failed to delete run");
             throw err;
+        }
+    }
+
+    /**
+     * Updates the persistent AI run record with the latest log line from the agent.
+     * This ensures that the "Agent Dispatched" event in the UI shows the current
+     * activity even if the WebSocket connection is unstable.
+     */
+    async handleAgentLog(taskId: string, line: string): Promise<void> {
+        try {
+            const recordKey = `ai:runs:${taskId}`;
+            const existingVal = await this.cache.get<AiRunRecord>(recordKey);
+            if (!existingVal || !existingVal.data) return;
+
+            const record = existingVal.data;
+            const nowStr = new Date().toISOString();
+
+            // Find the "Agent Dispatched" event to update its detail
+            const logEvent = record.events.find(e => e.label === "Agent Dispatched");
+            if (logEvent) {
+                logEvent.detail = `🤖 ${line}`;
+                logEvent.timestamp = nowStr;
+                record.updatedAt = nowStr;
+
+                // Update KV
+                await this.cache.set(recordKey, record, 7 * 24 * 3600);
+
+                // Also broadcast the updated record via Pipeline Hub DO for UI synchronization
+                if (this.aiPipelineHub) {
+                    const doId = this.aiPipelineHub.idFromName("global");
+                    const doStub = this.aiPipelineHub.get(doId);
+                    await doStub.fetch(new Request("https://ai-pipeline-hub/event", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify(record)
+                    })).catch(() => {});
+                }
+            }
+        } catch (err: any) {
+            this.logger.error({ taskId, err: err.message }, "Failed to handle agent log");
         }
     }
 
