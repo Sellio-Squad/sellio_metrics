@@ -98,6 +98,39 @@ export class AiPipelineHub {
             return new Response("OK", { status: 200 });
         }
 
+        // Path: /agent-log — Live agent output line pushed from the CI workflow.
+        // Broadcast to all connected frontend clients as an "agent_log" event.
+        if (url.pathname === "/agent-log" && request.method === "POST") {
+            let payload: { taskId?: string; issueNumber?: number; line?: string };
+            try {
+                payload = (await request.json()) as {
+                    taskId?: string;
+                    issueNumber?: number;
+                    line?: string;
+                };
+            } catch {
+                return new Response("Bad Request", { status: 400 });
+            }
+
+            if (!payload.taskId || typeof payload.line !== "string") {
+                return new Response("Bad Request", { status: 400 });
+            }
+
+            const message = JSON.stringify({
+                type: "agent_log",
+                taskId: payload.taskId,
+                issueNumber: payload.issueNumber ?? 0,
+                line: payload.line,
+                timestamp: new Date().toISOString(),
+            });
+            const result = this.connectionManager.broadcast(message);
+            this.logger.debug(
+                { taskId: payload.taskId, sent: result.sent, failed: result.failed },
+                "Broadcasted agent log line to clients"
+            );
+            return new Response("OK", { status: 200 });
+        }
+
         return new Response("Not Found", { status: 404 });
     }
 

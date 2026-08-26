@@ -56,6 +56,53 @@ export function aiPipelineRoutes(aiPipelineHub: CFDurableObjectNamespace) {
         }
     });
 
+    // ─── GitHub Actions agent live log stream ───────────────
+    // Called by .github/workflows/opencode-agent.yml for every line of agent
+    // output. Forwards the line to the Pipeline Hub DO, which broadcasts it to
+    // all connected frontend WebSocket clients in real time.
+    // Header: X-Sellio-Signature must match SELLIO_WEBHOOK_SECRET.
+    app.post("/stream", async (c) => {
+        const { logger } = c.get("cradle");
+        const webhookSecret = process.env.SELLIO_WEBHOOK_SECRET ?? "";
+
+        const sig = c.req.header("X-Sellio-Signature");
+        if (!sig || sig !== webhookSecret) {
+            logger.warn({ sig }, "ai-pipeline /stream: invalid signature");
+            return c.json({ error: "Unauthorized" }, 401);
+        }
+
+        let body: { taskId?: string; issueNumber?: number; line?: string };
+        try {
+            body = await c.req.json();
+        } catch {
+            return c.json({ error: "Invalid JSON body" }, 400);
+        }
+
+        if (!body.taskId || typeof body.line !== "string") {
+            return c.json({ error: "Missing taskId or line" }, 400);
+        }
+
+        try {
+            const doId = aiPipelineHub.idFromName("global");
+            const doStub = aiPipelineHub.get(doId);
+            await doStub.fetch(
+                new Request("http://do/agent-log", {
+                    method: "POST",
+                    headers: { "content-type": "application/json" },
+                    body: JSON.stringify({
+                        taskId: body.taskId,
+                        issueNumber: body.issueNumber ?? 0,
+                        line: body.line,
+                    }),
+                })
+            );
+            return c.json({ ok: true });
+        } catch (err: any) {
+            logger.error({ taskId: body.taskId, err: err?.message }, "Failed to forward agent log line");
+            return c.json({ error: err?.message }, 500);
+        }
+    });
+
     // REST list for debugging or fallback
     app.get("/runs", async (c) => {
         const { cacheService, logger } = c.get("cradle");

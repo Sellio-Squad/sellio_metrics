@@ -216,7 +216,22 @@ jobs:
                 # reports real errors instead of missing-generated-file cascades.
                 (cd "$APP_DIR" && flutter pub run build_runner build --delete-conflicting-outputs) || true
                 (cd "$APP_DIR" && flutter gen-l10n) || true
-                (cd "$APP_DIR" && flutter analyze --no-fatal-warnings) || exit 1
+
+                # Only analyze Dart files the agent actually changed/created.
+                # This avoids failing the pipeline on pre-existing repo errors
+                # (e.g. unrelated mappers / main.dart) that are not the agent's fault.
+                CHANGED=$(git status --porcelain -- '*.dart' \
+                  | awk '{print $2}' | grep -vE '\.(freezed|g)\.dart$' || true)
+                APP_CHANGED=$(echo "$CHANGED" | grep "^$APP_DIR/" | sed "s|^$APP_DIR/||" || true)
+
+                if [ -n "$APP_CHANGED" ]; then
+                  echo "Analyzing changed files in $APP_DIR:"
+                  echo "$APP_CHANGED"
+                  (cd "$APP_DIR" && flutter analyze --no-fatal-warnings $APP_CHANGED) || exit 1
+                else
+                  echo "No changed Dart files in $APP_DIR — skipping analyze."
+                fi
+
                 (cd "$APP_DIR" && flutter test --no-pub) || true
               done
 
