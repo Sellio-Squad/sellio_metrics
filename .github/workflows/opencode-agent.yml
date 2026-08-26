@@ -202,10 +202,16 @@ jobs:
           done &
           STREAM_PID=$!
 
+          # The step runs under `set -e` (GitHub default shell). OpenCode may
+          # exit non-zero because its own `flutter analyze` self-check fails on
+          # the missing-codegen cascade, so we must NOT let `wait` abort the
+          # script. Disable errexit around wait/kill, then always continue.
+          set +e
           wait $OC_PID
           OC_EXIT=$?
           kill "$STREAM_PID" 2>/dev/null
           pkill -f "tail -n +1 -F $OC_STREAM" 2>/dev/null
+          set -e
           echo "opencode exit code: $OC_EXIT"
 
           # IMPORTANT: Do NOT fail the job on opencode's exit code.
