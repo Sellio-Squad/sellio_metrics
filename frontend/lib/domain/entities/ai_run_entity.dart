@@ -79,7 +79,7 @@ class AiRunEntity {
   final DateTime startedAt;
   final DateTime updatedAt;
   final List<AiRunEventEntity> events;
-  final List<String> logs;
+  final List<AiRunLogEntity> logs;
 
   const AiRunEntity({
     required this.taskId,
@@ -102,6 +102,11 @@ class AiRunEntity {
     final eventList = (json['events'] as List? ?? [])
         .map((e) => AiRunEventEntity.fromJson(e as Map<String, dynamic>))
         .toList();
+
+    final logList = (json['logs'] as List? ?? [])
+        .map((l) => AiRunLogEntity.fromJson(l as Map<String, dynamic>))
+        .toList();
+
     return AiRunEntity(
       taskId: json['taskId'] as String,
       owner: json['owner'] as String,
@@ -116,9 +121,7 @@ class AiRunEntity {
       startedAt: DateTime.parse(json['startedAt'] as String),
       updatedAt: DateTime.parse(json['updatedAt'] as String),
       events: eventList,
-      // Live agent logs stream separately via `agent_log` WS events and are
-      // accumulated on the client; run records from the worker don't store them.
-      logs: const [],
+      logs: logList,
     );
   }
 
@@ -136,7 +139,7 @@ class AiRunEntity {
     DateTime? startedAt,
     DateTime? updatedAt,
     List<AiRunEventEntity>? events,
-    List<String>? logs,
+    List<AiRunLogEntity>? logs,
   }) {
     return AiRunEntity(
       taskId: taskId ?? this.taskId,
@@ -164,5 +167,22 @@ class AiRunEntity {
       case 'ci_polling': return AiRunStatus.ciPolling;
       default: return AiRunStatus.failed;
     }
+  }
+}
+
+class AiRunLogEntity {
+  final String message;
+  final DateTime timestamp;
+
+  const AiRunLogEntity({
+    required this.message,
+    required this.timestamp,
+  });
+
+  factory AiRunLogEntity.fromJson(Map<String, dynamic> json) {
+    return AiRunLogEntity(
+      message: json['message'] as String,
+      timestamp: DateTime.parse(json['timestamp'] as String),
+    );
   }
 }

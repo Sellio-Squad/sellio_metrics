@@ -348,8 +348,7 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
                     children: [
                       _buildRunHeader(context, run, isActive: true),
                       const Divider(height: AppSpacing.xl),
-                      _buildTimeline(context, run.events),
-                      _buildLiveConsole(context, run.logs),
+                      _AgentChatView(run: run),
                     ],
                   ),
                 ),
@@ -514,8 +513,7 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
                           children: [
                             _buildRunHeader(context, run, isActive: false),
                             const Divider(height: AppSpacing.lg),
-                            _buildTimeline(context, run.events),
-                            _buildLiveConsole(context, run.logs),
+                            _AgentChatView(run: run),
                           ],
                         ),
                       ),
@@ -613,186 +611,6 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
     }
   }
 
-  Widget _buildTimeline(BuildContext context, List<AiRunEventEntity> events) {
-    final scheme = context.colors;
-
-    if (events.isEmpty) {
-      return Center(
-        child: Text(
-          'No event trace logs yet',
-          style: AppTypography.caption.copyWith(color: scheme.hint),
-        ),
-      );
-    }
-
-    return ListView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      itemCount: events.length,
-      itemBuilder: (context, index) {
-        final event = events[index];
-        final isLast = index == events.length - 1;
-
-        return IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Column(
-                children: [
-                  _buildEventIndicator(context, event.status),
-                  if (!isLast)
-                    Expanded(
-                      child: Container(
-                        width: 2,
-                        color: scheme.stroke,
-                      ),
-                    ),
-                ],
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              event.label,
-                              style: AppTypography.body.copyWith(
-                                color: scheme.title,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                          Text(
-                            DateFormat.jm().format(event.timestamp),
-                            style: AppTypography.caption.copyWith(
-                              color: scheme.hint,
-                            ),
-                          ),
-                        ],
-                      ),
-                      if (event.detail != null && event.detail!.isNotEmpty) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          event.detail!,
-                          style: AppTypography.caption.copyWith(
-                            color: scheme.hint,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildLiveConsole(BuildContext context, List<String> logs) {
-    final scheme = context.colors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: AppSpacing.md),
-        Row(
-          children: [
-            Icon(LucideIcons.terminal, size: 14, color: scheme.primary),
-            const SizedBox(width: AppSpacing.xs),
-            Text(
-              'Live Agent Console',
-              style: AppTypography.body.copyWith(
-                color: scheme.title,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Container(
-          height: 220,
-          decoration: BoxDecoration(
-            color: scheme.surface,
-            borderRadius: AppRadius.mdAll,
-            border: Border.all(color: scheme.stroke),
-          ),
-          child: logs.isEmpty
-              ? Center(
-                  child: Text(
-                    'Waiting for agent output…',
-                    style: AppTypography.caption.copyWith(color: scheme.hint),
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(AppSpacing.sm),
-                  itemCount: logs.length,
-                  itemBuilder: (context, index) => Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 1),
-                    child: Text(
-                      logs[index],
-                      style: AppTypography.caption.copyWith(
-                        fontFamily: 'monospace',
-                        color: scheme.title,
-                      ),
-                    ),
-                  ),
-                ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildEventIndicator(BuildContext context, AiRunEventStatus status) {
-    final scheme = context.colors;
-
-    switch (status) {
-      case AiRunEventStatus.done:
-        return Container(
-          width: 18,
-          height: 18,
-          decoration: const BoxDecoration(
-            color: Color(0xFF10B981),
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.check, size: 12, color: Colors.white),
-        );
-      case AiRunEventStatus.failed:
-        return Container(
-          width: 18,
-          height: 18,
-          decoration: const BoxDecoration(
-            color: Colors.red,
-            shape: BoxShape.circle,
-          ),
-          child: const Icon(Icons.close, size: 12, color: Colors.white),
-        );
-      case AiRunEventStatus.running:
-        return Container(
-          width: 18,
-          height: 18,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: scheme.primary.withValues(alpha: 0.1),
-            shape: BoxShape.circle,
-          ),
-          child: SizedBox(
-            width: 10,
-            height: 10,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
-            ),
-          ),
-        );
-    }
-  }
-
   Widget _buildLoadingState(BuildContext context) {
     final scheme = context.colors;
 
@@ -863,6 +681,251 @@ class _AiPipelinePageState extends State<AiPipelinePage> {
       ),
     );
   }
+}
+
+// ─── Chat Implementation ─────────────────────────────────────────────────────
+
+class _AgentChatView extends StatefulWidget {
+  final AiRunEntity run;
+  const _AgentChatView({required this.run});
+
+  @override
+  State<_AgentChatView> createState() => _AgentChatViewState();
+}
+
+class _AgentChatViewState extends State<_AgentChatView> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(_AgentChatView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.run.logs.length > oldWidget.run.logs.length) {
+      _scrollToBottom();
+    }
+  }
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
+    // Combine events and logs into a single chronological stream
+    final items = <_ChatItem>[];
+
+    for (final event in widget.run.events) {
+      items.add(_ChatItem(
+        timestamp: event.timestamp,
+        type: _ChatItemType.event,
+        data: event,
+      ));
+    }
+
+    for (final log in widget.run.logs) {
+      items.add(_ChatItem(
+        timestamp: log.timestamp,
+        type: _ChatItemType.log,
+        data: log,
+      ));
+    }
+
+    // Sort chronologically
+    items.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+
+    if (items.isEmpty) {
+      return Container(
+        height: 100,
+        alignment: Alignment.center,
+        child: Text(
+          'Waiting for agent activity…',
+          style: AppTypography.caption.copyWith(color: scheme.hint),
+        ),
+      );
+    }
+
+    return Container(
+      height: 400,
+      decoration: BoxDecoration(
+        color: scheme.surfaceContainerHighest.withValues(alpha: 0.3),
+        borderRadius: AppRadius.mdAll,
+        border: Border.all(color: scheme.stroke),
+      ),
+      child: ClipRRect(
+        borderRadius: AppRadius.mdAll,
+        child: ListView.builder(
+          controller: _scrollController,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            if (item.type == _ChatItemType.event) {
+              return _SystemEventBubble(event: item.data as AiRunEventEntity);
+            } else {
+              return _AgentLogBubble(log: item.data as AiRunLogEntity);
+            }
+          },
+        ),
+      ),
+    );
+  }
+}
+
+enum _ChatItemType { event, log }
+
+class _ChatItem {
+  final DateTime timestamp;
+  final _ChatItemType type;
+  final dynamic data;
+  const _ChatItem({required this.timestamp, required this.type, required this.data});
+}
+
+class _SystemEventBubble extends StatelessWidget {
+  final AiRunEventEntity event;
+  const _SystemEventBubble({required this.event});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.md),
+      child: Row(
+        children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildIndicator(context, event.status),
+                const SizedBox(width: AppSpacing.xs),
+                Text(
+                  event.label.toUpperCase(),
+                  style: AppTypography.overline.copyWith(
+                    color: scheme.hint,
+                    letterSpacing: 1.2,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Expanded(child: Divider()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIndicator(BuildContext context, AiRunEventStatus status) {
+    final scheme = context.colors;
+    switch (status) {
+      case AiRunEventStatus.done:
+        return Icon(Icons.check_circle, size: 14, color: scheme.primary);
+      case AiRunEventStatus.failed:
+        return const Icon(Icons.error, size: 14, color: Colors.red);
+      case AiRunEventStatus.running:
+        return SizedBox(
+          width: 12,
+          height: 12,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            valueColor: AlwaysStoppedAnimation<Color>(scheme.primary),
+          ),
+        );
+    }
+  }
+}
+
+class _AgentLogBubble extends StatelessWidget {
+  final AiRunLogEntity log;
+  const _AgentLogBubble({required this.log});
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = context.colors;
+    final isCode = log.message.startsWith('diff') || 
+                   log.message.startsWith('git') || 
+                   log.message.contains('/') ||
+                   log.message.contains('File:');
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(4),
+            decoration: BoxDecoration(
+              color: scheme.primary.withValues(alpha: 0.1),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(LucideIcons.bot, size: 14, color: scheme.primary),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.sm,
+                  ),
+                  decoration: BoxDecoration(
+                    color: isCode 
+                        ? scheme.surface 
+                        : scheme.surface.withValues(alpha: 0.5),
+                    borderRadius: const BorderRadius.only(
+                      topRight: Radius.circular(16),
+                      bottomLeft: Radius.circular(16),
+                      bottomRight: Radius.circular(16),
+                    ),
+                    border: Border.all(
+                      color: isCode ? scheme.primary.withValues(alpha: 0.2) : scheme.stroke,
+                    ),
+                  ),
+                  child: Text(
+                    log.message,
+                    style: AppTypography.body.copyWith(
+                      color: scheme.title,
+                      height: 1.4,
+                      fontSize: 13,
+                      fontFamily: isCode ? 'monospace' : null,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  DateFormat.jm().format(log.timestamp),
+                  style: AppTypography.caption.copyWith(
+                    fontSize: 10,
+                    color: scheme.hint.withValues(alpha: 0.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 }
 
 // ─── Custom Premium Widgets ──────────────────────────────────────────────────

@@ -65,7 +65,13 @@ class AiPipelineProvider extends ChangeNotifier with WidgetsBindingObserver {
         final index = _runs.indexWhere((r) => r.taskId == update.taskId);
         if (index != -1) {
           _runs[index] = _runs[index].copyWith(
-            logs: [..._runs[index].logs, update.line],
+            logs: [
+              ..._runs[index].logs,
+              AiRunLogEntity(
+                message: update.line,
+                timestamp: update.timestamp,
+              ),
+            ],
           );
         }
         // Live logs update frequently — just notify, don't re-sort (would jump
