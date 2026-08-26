@@ -207,7 +207,14 @@ jobs:
           kill "$STREAM_PID" 2>/dev/null
           pkill -f "tail -n +1 -F $OC_STREAM" 2>/dev/null
           echo "opencode exit code: $OC_EXIT"
-          exit $OC_EXIT
+
+          # IMPORTANT: Do NOT fail the job on opencode's exit code.
+          # In this CI environment the agent cannot run codegen (build_runner /
+          # gen-l10n aren't runnable per-package), so `flutter analyze` always
+          # reports pre-existing generated-code errors and the agent may exit 1.
+          # The "Final verification" step is the real, tolerant gate — it only
+          # fails on genuine new errors the agent introduced. Always continue.
+          exit 0
 
       # ── 8. Final verification ─────────────────────────────────────────
       - name: "✅ Final verification — Flutter"
@@ -317,16 +324,23 @@ jobs:
 
       # ── 9. Push branch ────────────────────────────────────────────────
       - name: "🚀 Push branch"
+        id: push
         if: success()
         run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "pushed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes produced by the agent — skipping push/PR."
+            exit 0
+          fi
           git add -A
           git diff --staged --stat
-          git commit --allow-empty -m "feat(ai): implement #${{ inputs.issue_number }} [opencode-agent]"
+          git commit -m "feat(ai): implement #${{ inputs.issue_number }} [opencode-agent]"
           git push origin "${{ inputs.branch_name }}"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
 
       # ── 10. Create PR ─────────────────────────────────────────────────
       - name: "🔀 Create Pull Request"
-        if: success()
+        if: success() && steps.push.outputs.pushed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
