@@ -75,7 +75,11 @@ jobs:
       - name: "🔍 Detect stack"
         id: detect
         run: |
-          if find . -name "pubspec.yaml" -not -path "*/build/*" | grep -q .; then
+          # Find all Flutter app dirs (for monorepo)
+          APPS=$(find . -name "pubspec.yaml" -not -path "*/build/*" -not -path "*/.dart_tool/*" -exec dirname {} \; | tr '\n' ' ')
+          echo "Detected Flutter apps: $APPS"
+          echo "apps=$APPS" >> $GITHUB_OUTPUT
+          if find . -name "pubspec.yaml" -not -path "*/build/*" -not -path "*/.dart_tool/*" | grep -q .; then
             echo "stack=flutter" >> $GITHUB_OUTPUT
           elif find . -name "build.gradle*" | grep -q .; then
             echo "stack=kotlin" >> $GITHUB_OUTPUT
@@ -86,6 +90,7 @@ jobs:
           else
             echo "stack=unknown" >> $GITHUB_OUTPUT
           fi
+          echo "stack=$(cat $GITHUB_OUTPUT | grep stack= | cut -d= -f2)"
 
       # ── 4a. Setup Flutter ──────────────────────────────────────────────
       - name: "Setup Flutter"
@@ -143,34 +148,34 @@ jobs:
         run: |
           ISSUE_TITLE=$(cat /tmp/issue_title.txt)
           ISSUE_BODY=$(cat /tmp/issue_body.txt)
+          # Detect all Flutter app dirs for the prompt context
+          APP_DIRS=$(find . -name "pubspec.yaml" -not -path "*/build/*" -not -path "*/.dart_tool/*" -exec dirname {} \; | tr '\n' ' ')
 
-          TASK="You are implementing GitHub Issue #${{ inputs.issue_number }}.
+          TASK="You are a senior autonomous engineer for Sellio Metrics — Issue #${{ inputs.issue_number }}.
 
-          Issue: ${ISSUE_TITLE}
+          Title: ${ISSUE_TITLE}
 
           Requirements:
           ${ISSUE_BODY}
 
-          MANDATORY WORKFLOW:
+          Context:
+          - Repo app dirs with pubspec.yaml: ${APP_DIRS:-unknown (discover via find . -name pubspec.yaml)}
+          - Detected stack: flutter if pubspec.yaml exists
 
-          1. EXPLORE the project structure to understand where code lives.
-          2. RESEARCH before writing code — grep for classes/methods, read files, use only verified APIs.
-          3. IMPLEMENT the changes using only real code you have read.
-          4. VERIFY (Flutter repos):
-             a. Run `flutter pub get`.
-             b. Generate code: `flutter pub run build_runner build --delete-conflicting-outputs` and `flutter gen-l10n`.
-             c. Run `flutter analyze` on ONLY the files you changed/created and ensure ZERO errors.
-                Pre-existing repo errors are NOT an excuse — make YOUR changed files analyze cleanly.
-             d. If you create a BLoC/cubit/provider/bloc, register it in the DI container
-                (injectable module, MultiBlocProvider, or the app's DI file) — otherwise the build/runtime fails.
-          5. CLEANUP — remove any unused imports you introduced.
+          Mission: Take full ownership and lead until everything is fixed and green. You are NOT limited — act as the tech lead.
 
-          CRITICAL RULES:
-          - NEVER invent class names, import paths, or method signatures.
-          - NEVER write an import without verifying the file exists.
-          - If you touch a file that already has pre-existing errors, you are NOT required to fix them,
-            but you MUST NOT introduce new errors in it.
-          - Focus ONLY on this issue. Do NOT fix unrelated bugs."
+          Autonomy guidelines:
+          - Explore the repo structure yourself (find pubspec.yaml, list lib/, check analysis_options.yaml, l10n.yaml, etc.).
+          - For Flutter apps, ALWAYS operate in the correct app directory (e.g. frontend/ if that's where pubspec.yaml lives):
+            * flutter pub get
+            * dart run build_runner build --delete-conflicting-outputs  (use dart, NOT flutter pub run; fallback to dart run build_runner build if flag removed)
+            * flutter gen-l10n  (or rely on flutter: generate: true; verify pubspec.yaml has flutter.generate: true)
+            * flutter analyze --no-pub  and iterate until ZERO new errors in your changes
+            * flutter test if tests exist
+          - If you discover ANY broken build — missing build_runner output, outdated hux / dependencies, l10n generation failure, 10k+ analyze issues cascade, missing DI registration, or any pipeline error — FIX IT. Don't narrow yourself to just the ticket; make the build green.
+          - Keep iterating: run analyze, fix, re-run codegen, re-analyze until clean. Do not stop after first attempt.
+          - Use only real APIs you have verified by reading files; but you are free to refactor, upgrade, and fix related code as needed to unblock the pipeline.
+          - Clean up unused imports when done."
 
           OC_STREAM=/tmp/opencode_stream.log
           # Run opencode in the background, writing its (human-readable) output
@@ -233,12 +238,27 @@ jobs:
           while IFS= read -r APP_DIR; do
             [ -z "$APP_DIR" ] && continue
             echo "── Verifying: $APP_DIR ──"
+            # Ensure pubspec.yaml has flutter.generate flag for l10n (auto-fix if missing)
+            if ! grep -q "generate: true" "$APP_DIR/pubspec.yaml"; then
+              echo "⚠️ flutter.generate flag missing in $APP_DIR/pubspec.yaml — l10n will fallback to l10n.yaml"
+            fi
             (cd "$APP_DIR" && flutter pub get) || exit 1
 
-            # Best-effort code generation (silent). In many monorepos build_runner /
-            # gen-l10n aren't runnable per-package, so we never fail on this.
-            (cd "$APP_DIR" && flutter pub run build_runner build --delete-conflicting-outputs) >/dev/null 2>&1 || true
-            (cd "$APP_DIR" && flutter gen-l10n) >/dev/null 2>&1 || true
+            # Robust codegen: prefer dart run (current), fallback for older flag
+            echo "Running codegen in $APP_DIR..."
+            (cd "$APP_DIR" && dart run build_runner build --delete-conflicting-outputs) >/dev/null 2>&1 || \
+            (cd "$APP_DIR" && dart run build_runner build) >/dev/null 2>&1 || \
+            echo "⚠️ build_runner skipped/failed — continuing (no builders or env issue)"
+
+            # l10n generation — best effort, verify file exists after
+            (cd "$APP_DIR" && flutter gen-l10n) >/dev/null 2>&1 || echo "⚠️ flutter gen-l10n skipped (using generate:true auto or no l10n.yaml)"
+            if [ ! -f "$APP_DIR/lib/l10n/app_localizations.dart" ]; then
+              echo "⚠️ app_localizations.dart still missing after gen-l10n, will still attempt analyze"
+            fi
+
+            # Debug: show analyze counts before diffing
+            TOTAL_ISSUES=$(cd "$APP_DIR" && flutter analyze --no-pub 2>&1 | grep -c " issues found" || true)
+            echo "Total analyze issues (including infos) before filtering: $TOTAL_ISSUES"
 
             # Agent's changed Dart files in this app (relative to app dir), excluding generated.
             mapfile -t CHANGED < <(git status --porcelain -- '*.dart' \

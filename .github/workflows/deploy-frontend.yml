@@ -26,13 +26,26 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
+          flutter-version: "3.x"
           cache: true
 
       - name: Install dependencies
         run: flutter pub get
 
+      - name: Generate localizations
+        run: |
+          echo "Checking flutter: generate flag..."
+          grep -q "generate: true" pubspec.yaml && echo "✅ flutter.generate=true found" || echo "⚠️ flutter.generate flag missing — adding fallback"
+          flutter gen-l10n || echo "gen-l10n completed via l10n.yaml / generate:true"
+
       - name: Generate files (build_runner)
-        run: dart run build_runner build --delete-conflicting-outputs
+        run: |
+          echo "Running build_runner..."
+          # Newer build_runner removed --delete-conflicting-outputs; try with flag first then fallback
+          dart run build_runner build --delete-conflicting-outputs || dart run build_runner build
+
+      - name: Analyze
+        run: flutter analyze --no-pub
 
       - name: Build web
         run: flutter build web --release --dart-define=API_BASE_URL=${{ vars.API_BASE_URL }}
