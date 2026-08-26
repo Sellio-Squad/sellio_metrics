@@ -144,10 +144,13 @@ export class AiPipelineService {
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/(^-|-$)/g, "")
             .slice(0, 40);
-        const branchName = `ai/${job.issueNumber}-${slug}`;
+        const branchName = `ai/implement-#${job.issueNumber}-${slug}`;
         
         const agentName = "OpenCode";
         const workflowFile = "opencode-agent.yml";
+
+        // Fetch the default branch of the TARGET repo to clone it
+        const { branch: defaultBranch } = await this.gitOps.getDefaultBranchHead(job.owner, job.repo);
 
         // Save pending state for the callback handler
         await this.cache.set(`ai:task:${job.taskId}:phase2_pending`, {
@@ -164,13 +167,14 @@ export class AiPipelineService {
                     owner:       "Sellio-Squad",
                     repo:        "sellio_metrics",
                     workflow_id: workflowFile,
-                    ref:         "develop",
+                    ref:         "develop", // The workflow itself is on develop in sellio_metrics
                     inputs: {
                         owner:        job.owner,
                         repo:         job.repo,
                         issue_number: String(job.issueNumber),
                         task_id:      job.taskId,
                         branch_name:  branchName,
+                        base_branch:  defaultBranch,
                     },
                 }
             );
@@ -257,7 +261,7 @@ export class AiPipelineService {
             .replace(/[^a-z0-9]+/g, "-")
             .replace(/(^-|-$)/g, "")
             .slice(0, 40);
-        const branchName = `ai/${job.issueNumber}-${slug}`;
+        const branchName = `ai/implement-#${job.issueNumber}-${slug}`;
 
         await this.emitEvent(job, "phase3", "Shipping Changes", "Creating branch and committing files...", "running", { branchName });
 

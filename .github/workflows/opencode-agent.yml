@@ -26,6 +26,11 @@ on:
         description: "Branch to create and push to (e.g. ai/42-fix-login)"
         required: true
         type: string
+      base_branch:
+        description: "Default branch to clone and PR into (e.g. main)"
+        required: false
+        type: string
+        default: "develop"
       timeout:
         description: "Timeout in minutes"
         required: false
@@ -42,6 +47,13 @@ jobs:
       pull-requests: write
 
     steps:
+      - name: "📊 Log environment"
+        run: |
+          echo "Target Repo: ${{ inputs.owner }}/${{ inputs.repo }}"
+          echo "Base Branch: ${{ inputs.base_branch }}"
+          echo "Feature Branch: ${{ inputs.branch_name }}"
+          echo "Issue: #${{ inputs.issue_number }}"
+
       # ── 1. Generate GitHub App installation token ──────────────────────
       - name: "Generate App token"
         uses: actions/create-github-app-token@v1
@@ -57,7 +69,7 @@ jobs:
         with:
           repository: "${{ inputs.owner }}/${{ inputs.repo }}"
           token: ${{ steps.app-token.outputs.token }}
-          ref: develop
+          ref: ${{ inputs.base_branch }}
           fetch-depth: 0
 
       # ── 3. Fetch issue details ─────────────────────────────────────────
@@ -178,9 +190,9 @@ jobs:
           - Clean up unused imports when done."
 
           OC_STREAM=/tmp/opencode_stream.log
-          # Run opencode in the background, writing its (human-readable) output
-          # to a file. We tail that file for both the live Actions UI log and
-          # the live dashboard stream (version-agnostic: no JSON parsing needed).
+          touch "$OC_STREAM"
+
+          # Run opencode in the background
           opencode run \
             --auto \
             --dir . \
@@ -190,33 +202,26 @@ jobs:
           if [ -n "$SELLIO_WORKER_URL" ]; then
             echo "📡 Streaming agent output live to: $SELLIO_WORKER_URL/api/ai-pipeline/stream"
           else
-            echo "⚠️  SELLIO_WORKER_URL secret is not set — streaming to dashboard disabled (live log still shown below)."
+            echo "⚠️  SELLIO_WORKER_URL secret is not set — streaming to dashboard disabled."
           fi
 
-          tail -n +1 -F "$OC_STREAM" | while IFS= read -r line; do
+          # Stream to dashboard and local console
+          tail -n +1 -F "$OC_STREAM" --pid=$OC_PID | while IFS= read -r line; do
             [ -z "$line" ] && continue
             echo "🤖 $line"
             if [ -n "$SELLIO_WORKER_URL" ]; then
-              curl -s -o /dev/null -w "[stream -> %{http_code}]" --max-time 5 -X POST \
+              # Send line to dashboard asynchronously
+              (curl -s -o /dev/null -m 2 -X POST \
                 "$SELLIO_WORKER_URL/api/ai-pipeline/stream" \
                 -H "Content-Type: application/json" \
                 -H "X-Sellio-Signature: $SELLIO_WEBHOOK_SECRET" \
                 -d "$(jq -nc --arg t "$TASK_ID" --arg i "$ISSUE_NUM" --arg l "$line" \
-                  '{taskId:$t, issueNumber:$i, line:$l}')" &
+                  '{taskId:$t, issueNumber:$i, line:$l}')" || true) &
             fi
-          done &
-          STREAM_PID=$!
+          done
 
-          # The step runs under `set -e` (GitHub default shell). OpenCode may
-          # exit non-zero because its own `flutter analyze` self-check fails on
-          # the missing-codegen cascade, so we must NOT let `wait` abort the
-          # script. Disable errexit around wait/kill, then always continue.
-          set +e
           wait $OC_PID
           OC_EXIT=$?
-          kill "$STREAM_PID" 2>/dev/null
-          pkill -f "tail -n +1 -F $OC_STREAM" 2>/dev/null
-          set -e
           echo "opencode exit code: $OC_EXIT"
 
           # IMPORTANT: Do NOT fail the job on opencode's exit code.
@@ -232,7 +237,7 @@ jobs:
         if: steps.agent.outcome == 'success' && steps.detect.outputs.stack == 'flutter'
         run: |
           set -e
-          BASE=origin/develop
+          BASE=origin/${{ inputs.base_branch }}
           git rev-parse --verify "$BASE" >/dev/null 2>&1 || BASE=HEAD
 
           while IFS= read -r APP_DIR; do
@@ -375,7 +380,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh pr create \
-            --base develop \
+            --base "${{ inputs.base_branch }}" \
             --head "${{ inputs.branch_name }}" \
             --title "feat(ai): implement #${{ inputs.issue_number }}" \
             --body "## 🤖 AI-Generated PR

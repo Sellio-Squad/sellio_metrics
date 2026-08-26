@@ -429,9 +429,16 @@ export class WebhookService {
         const affectedDevelopers: string[] = [];
         const action = payload.action;
         const item = payload.projects_v2_item;
+        const sender = payload.sender;
 
         if (!item) return { affectedDevelopers };
-        
+
+        // 1. Bot check: Ignore actions performed by the bot itself to prevent infinite loops
+        if (sender && isBot(sender.login, sender.type)) {
+            this.logger.info({ sender: sender.login, action }, "Ignoring project item event triggered by bot");
+            return { affectedDevelopers };
+        }
+
         // Supported actions: 'edited' (when moved), 'converted' (when draft is converted to repository issue), and 'created' (when added directly to column)
         if (action !== "edited" && action !== "converted" && action !== "created") {
             return { affectedDevelopers };

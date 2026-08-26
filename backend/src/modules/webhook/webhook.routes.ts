@@ -54,6 +54,9 @@ webhook.post("/github", async (c) => {
         if (existing) {
             return c.json({ ok: true, duplicate: true, deliveryId });
         }
+        // Mark as "processing" immediately to prevent retries from triggering double dispatches
+        await cradle.cache.general.set(`webhook:delivery:${deliveryId}`, "1", DEDUP_TTL_SECONDS)
+            .catch((err) => cradle.logger.error({ err: (err as Error).message }, "Failed to store delivery dedup key"));
     }
 
     // ─── Parse raw JSON ────────────────────────────────────
@@ -123,16 +126,6 @@ webhook.post("/github", async (c) => {
             if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(p);
             else await p;
         }
-    }
-
-    // ─── Mark delivery as processed (deduplication) ────────
-    if (deliveryId) {
-        const dedupPromise = cradle.cache.general
-            .set(`webhook:delivery:${deliveryId}`, "1", DEDUP_TTL_SECONDS)
-            .catch((err) => cradle.logger.error({ err: (err as Error).message }, "Failed to store delivery dedup key"));
-
-        if (c.executionCtx?.waitUntil) c.executionCtx.waitUntil(dedupPromise);
-        else await dedupPromise;
     }
 
     // ─── Queue background work (score recomputation) ───────
