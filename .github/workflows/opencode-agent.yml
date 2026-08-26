@@ -122,7 +122,7 @@ jobs:
 
       # ── 5. Install OpenCode ───────────────────────────────────────────
       - name: "📦 Install OpenCode"
-        run: npm install -g opencode
+        run: npm install -g opencode-ai@latest
 
       # ── 6. Configure git ──────────────────────────────────────────────
       - name: "Configure git"
