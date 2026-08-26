@@ -212,6 +212,10 @@ jobs:
             | while read APP_DIR; do
                 echo "── Verifying: $APP_DIR ──"
                 (cd "$APP_DIR" && flutter pub get) || exit 1
+                # Generate code (freezed, json_serializable, l10n) first so analyze
+                # reports real errors instead of missing-generated-file cascades.
+                (cd "$APP_DIR" && flutter pub run build_runner build --delete-conflicting-outputs) || true
+                (cd "$APP_DIR" && flutter gen-l10n) || true
                 (cd "$APP_DIR" && flutter analyze --no-fatal-warnings) || exit 1
                 (cd "$APP_DIR" && flutter test --no-pub) || true
               done
