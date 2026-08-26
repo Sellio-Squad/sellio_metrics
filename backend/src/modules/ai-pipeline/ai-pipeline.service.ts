@@ -235,8 +235,11 @@ export class AiPipelineService {
             await this.emitEvent(job, "phase2", "Code Validation Passed", "Build and tests passed in GitHub Actions.", "done");
 
             // OpenCode workflow already creates the PR — skip Phase 3.
-            // Phase 3 would create a duplicate PR.
             this.logger.info({ taskId, branch }, "Skipping Phase 3 — OpenCode workflow already created the PR");
+
+            // Move card to For Review
+            await this.gitOps.moveProjectCardByName(job.projectId, job.itemId, job.fieldId, "For Review");
+            await this.cleanupTask(taskId);
         } else {
             const errMsg = error ?? "GitHub Actions agent failed (no error detail)";
             this.logger.error({ taskId, errMsg }, "Agent reported failure");
