@@ -108,7 +108,7 @@ class _AiChatPageState extends State<AiChatPage> {
         if (provider.error != null)
           Container(
             padding: const EdgeInsets.all(AppSpacing.sm),
-            color: scheme.red.withOpacity(0.1),
+            color: scheme.red.withValues(alpha: 0.1),
             width: double.infinity,
             child: Text(
               provider.error!,
@@ -260,13 +260,13 @@ class _AiChatPageState extends State<AiChatPage> {
         constraints: const BoxConstraints(maxWidth: 800),
         padding: const EdgeInsets.all(AppSpacing.lg),
         decoration: BoxDecoration(
-          color: isUser ? scheme.primary.withOpacity(0.1) : scheme.surfaceHigh,
+          color: isUser ? scheme.primary.withValues(alpha: 0.1) : scheme.surfaceHigh,
           borderRadius: BorderRadius.circular(12).copyWith(
             bottomRight: isUser ? Radius.zero : const Radius.circular(12),
             bottomLeft: isUser ? const Radius.circular(12) : Radius.zero,
           ),
           border: Border.all(
-            color: isUser ? scheme.primary.withOpacity(0.2) : scheme.stroke,
+            color: isUser ? scheme.primary.withValues(alpha: 0.2) : scheme.stroke,
           ),
         ),
         child: Column(

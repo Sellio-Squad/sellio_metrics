@@ -260,7 +260,7 @@ class _CreateSchedulePanelState extends State<CreateSchedulePanel> {
           Wrap(
             spacing: AppSpacing.sm,
             children: _colorOptions.map((c) {
-              final selected = c.value == _selectedColor.value;
+              final selected = c.toARGB32() == _selectedColor.toARGB32();
               return GestureDetector(
                 onTap: () => setState(() => _selectedColor = c),
                 child: AnimatedContainer(

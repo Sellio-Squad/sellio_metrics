@@ -88,14 +88,14 @@ class _CreateMeetingPanelState extends State<CreateMeetingPanel>
       opacity: _fadeAnimation,
       child: SlideTransition(
         position: _slideAnimation,
-        child: Container(
+          child: Container(
           decoration: BoxDecoration(
             color: scheme.surface,
             borderRadius: AppRadius.lgAll,
-            border: Border.all(color: scheme.primary.withOpacity(0.2)),
+            border: Border.all(color: scheme.primary.withValues(alpha: 0.2)),
             boxShadow: [
               BoxShadow(
-                color: scheme.primary.withOpacity(0.05),
+                color: scheme.primary.withValues(alpha: 0.05),
                 blurRadius: 24,
                 offset: const Offset(0, 8),
               ),
@@ -113,7 +113,7 @@ class _CreateMeetingPanelState extends State<CreateMeetingPanel>
                   gradient: LinearGradient(
                     colors: [
                       scheme.primary,
-                      scheme.primary.withOpacity(0.3),
+                      scheme.primary.withValues(alpha: 0.3),
                     ],
                   ),
                 ),
@@ -131,7 +131,7 @@ class _CreateMeetingPanelState extends State<CreateMeetingPanel>
                           Container(
                             padding: const EdgeInsets.all(AppSpacing.sm),
                             decoration: BoxDecoration(
-                              color: scheme.primary.withOpacity(0.1),
+                              color: scheme.primary.withValues(alpha: 0.1),
                               borderRadius: AppRadius.smAll,
                             ),
                             child: Icon(
@@ -320,14 +320,12 @@ class _ErrorBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = context.colors;
-
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: SellioColors.red.withOpacity(0.06),
+        color: SellioColors.red.withValues(alpha: 0.06),
         borderRadius: AppRadius.mdAll,
-        border: Border.all(color: SellioColors.red.withOpacity(0.2)),
+        border: Border.all(color: SellioColors.red.withValues(alpha: 0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

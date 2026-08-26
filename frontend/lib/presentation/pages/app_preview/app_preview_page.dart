@@ -297,7 +297,7 @@ class _EmulatorViewState extends State<_EmulatorView>
                   border: Border.all(color: scheme.stroke, width: 2),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.22),
+                      color: Colors.black.withValues(alpha: 0.22),
                       blurRadius: 40,
                       offset: const Offset(0, 12),
                     ),
