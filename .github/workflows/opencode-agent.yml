@@ -141,6 +141,25 @@ jobs:
       - name: "📦 Install OpenCode"
         run: npm install -g opencode-ai@latest
 
+      # ── 5x. Capture BEFORE Screenshots ───────────────────────────────
+      - name: "📸 Capture BEFORE Screenshots"
+        run: |
+          mkdir -p /tmp/before_screenshots
+          for APP_DIR in ${{ steps.detect.outputs.apps }}; do
+            if [ -d "$APP_DIR" ]; then
+              echo "🔍 Capturing BEFORE state for $APP_DIR"
+              if [ "${{ steps.detect.outputs.stack }}" == "flutter" ]; then
+                (cd "$APP_DIR" && flutter test --update-goldens || true)
+                # Save goldens with relative paths to /tmp/before_screenshots
+                find "$APP_DIR" -name "*.png" -path "*/goldens/*" | while read f; do
+                  dest="/tmp/before_screenshots/${f#./}"
+                  mkdir -p "$(dirname "$dest")"
+                  cp "$f" "$dest"
+                done
+              fi
+            fi
+          done
+
       # ── 6. Configure git ──────────────────────────────────────────────
       - name: "Configure git"
         run: |
@@ -175,6 +194,11 @@ jobs:
           - Detected stack: flutter if pubspec.yaml exists
 
           Mission: Take full ownership and lead until everything is fixed and green. You are NOT limited — act as the tech lead.
+
+          UI Verification & Screenshots:
+          - If you modify or create any UI components (screens, widgets, views), you MUST ensure there is a visual way to verify them.
+          - If the project has a screenshot tool or golden tests, run them to capture the updates.
+          - If no screenshot tool exists, you are encouraged to create a temporary test that renders the modified component and saves it to a `screenshots/` directory at the root of the app.
 
           Autonomy guidelines:
           - Explore the repo structure yourself (find pubspec.yaml, list lib/, check analysis_options.yaml, l10n.yaml, etc.).
@@ -357,17 +381,63 @@ jobs:
           pip install -r requirements.txt 2>/dev/null || true
           pytest 2>/dev/null || true
 
+      # ── 8d. Generate UI Screenshots ──────────────────────────────────
+      - name: "📸 Capture AFTER Screenshots"
+        if: success()
+        run: |
+          mkdir -p /tmp/after_screenshots
+          for APP_DIR in ${{ steps.detect.outputs.apps }}; do
+            if [ -d "$APP_DIR" ]; then
+              echo "🔍 Capturing AFTER state for $APP_DIR"
+              if [ "${{ steps.detect.outputs.stack }}" == "flutter" ]; then
+                (cd "$APP_DIR" && flutter test --update-goldens || true)
+                find "$APP_DIR" -name "*.png" -path "*/goldens/*" | while read f; do
+                  dest="/tmp/after_screenshots/${f#./}"
+                  mkdir -p "$(dirname "$dest")"
+                  cp "$f" "$dest"
+                done
+              fi
+            fi
+          done
+
+      # ── 8e. 🏗️ Prepare Visual Diff ────────────────────────────────────
+      - name: "🏗️ Prepare Visual Diff"
+        if: success()
+        run: |
+          # The repo now contains the 'after' state. We want to place 'before' alongside.
+          # We'll create a dedicated visual diff folder in the root of the repo.
+          mkdir -p .ai/visual_diff
+          
+          # Find all 'after' screenshots
+          find /tmp/after_screenshots -name "*.png" | while read after_path; do
+            rel_path=${after_path#/tmp/after_screenshots/}
+            filename=$(basename "$after_path")
+            safe_name=$(echo "$rel_path" | tr '/' '_')
+            
+            before_path="/tmp/before_screenshots/$rel_path"
+            
+            if [ -f "$before_path" ]; then
+              cp "$before_path" ".ai/visual_diff/before_$safe_name"
+              cp "$after_path" ".ai/visual_diff/after_$safe_name"
+            else
+              cp "$after_path" ".ai/visual_diff/new_$safe_name"
+            fi
+          done
+
       # ── 9. Push branch ────────────────────────────────────────────────
       - name: "🚀 Push branch"
         id: push
         if: success()
         run: |
+          # Stage all changes including newly generated screenshots
+          git add -A
+          
           if git diff --quiet && git diff --cached --quiet; then
             echo "pushed=false" >> "$GITHUB_OUTPUT"
             echo "No changes produced by the agent — skipping push/PR."
             exit 0
           fi
-          git add -A
+          
           git diff --staged --stat
           git commit -m "feat(ai): implement #${{ inputs.issue_number }} [opencode-agent]"
           git push origin "${{ inputs.branch_name }}"
@@ -379,16 +449,62 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          PR_BODY="## 🤖 AI-Generated PR
+
+          **Issue:** #${{ inputs.issue_number }}
+          **Agent:** OpenCode
+
+          ### 🏗️ Changes Overview
+          This implementation was generated autonomously. Review changes and verified UI updates below.
+
+          ### 📸 UI Verification (Before vs After)"
+
+          HAS_SCREENSHOTS=false
+          
+          # Detect visual diffs
+          if [ -d ".ai/visual_diff" ]; then
+            # We use a Markdown table for side-by-side comparison
+            PR_BODY="$PR_BODY\n\n| Component | Before | After |\n| :--- | :---: | :---: |"
+            
+            # Find and add paired screenshots
+            # We sort to keep the order consistent
+            for f in $(ls .ai/visual_diff/after_*.png 2>/dev/null | sort); do
+              filename=$(basename "$f")
+              safe_name=${filename#after_}
+              before_file=".ai/visual_diff/before_$safe_name"
+              
+              if [ -f "$before_file" ]; then
+                BEFORE_URL="https://github.com/${{ inputs.owner }}/${{ inputs.repo }}/raw/${{ inputs.branch_name }}/.ai/visual_diff/before_$safe_name"
+                AFTER_URL="https://github.com/${{ inputs.owner }}/${{ inputs.repo }}/raw/${{ inputs.branch_name }}/.ai/visual_diff/after_$safe_name"
+                
+                # Human-friendly label (replace underscores with spaces, remove .png)
+                label=$(echo "$safe_name" | sed 's/_/ /g' | sed 's/\.png$//')
+                PR_BODY="$PR_BODY\n| **$label** | ![]($BEFORE_URL) | ![]($AFTER_URL) |"
+                HAS_SCREENSHOTS=true
+              fi
+            done
+            
+            # Find and add new screenshots (no 'before' state)
+            for f in $(ls .ai/visual_diff/new_*.png 2>/dev/null | sort); do
+              filename=$(basename "$f")
+              safe_name=${filename#new_}
+              NEW_URL="https://github.com/${{ inputs.owner }}/${{ inputs.repo }}/raw/${{ inputs.branch_name }}/.ai/visual_diff/$filename"
+              
+              label=$(echo "$safe_name" | sed 's/_/ /g' | sed 's/\.png$//')
+              PR_BODY="$PR_BODY\n| **$label (NEW)** | - | ![]($NEW_URL) |"
+              HAS_SCREENSHOTS=true
+            done
+          fi
+
+          if [ "$HAS_SCREENSHOTS" = false ]; then
+            PR_BODY="$PR_BODY\n\n*No visual changes detected by automated tests.*"
+          fi
+
           gh pr create \
             --base "${{ inputs.base_branch }}" \
             --head "${{ inputs.branch_name }}" \
             --title "feat(ai): implement #${{ inputs.issue_number }}" \
-            --body "## 🤖 AI-Generated PR
-
-          **Issue:** #${{ inputs.issue_number }}
-          **Agent:** OpenCode (built-in model)
-
-          Auto-generated by the OpenCode AI agent. Review changes before merging."
+            --body "$PR_BODY"
 
       # ── 11. Notify Cloudflare — SUCCESS ───────────────────────────────
       - name: "Notify Cloudflare (success)"
