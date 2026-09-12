@@ -162,6 +162,14 @@ jobs:
                   mkdir -p "$(dirname "$dest")"
                   cp "$f" "$dest"
                 done
+                # Also check for any manually saved screenshots in the app root
+                if [ -d "$APP_DIR/screenshots" ]; then
+                  find "$APP_DIR/screenshots" -name "*.png" | while read f; do
+                    dest="/tmp/before_screenshots/${f#./}"
+                    mkdir -p "$(dirname "$dest")"
+                    cp "$f" "$dest"
+                  done
+                fi
               fi
             fi
           done
@@ -203,8 +211,10 @@ jobs:
 
           UI Verification & Screenshots:
           - If you modify or create any UI components (screens, widgets, views), you MUST ensure there is a visual way to verify them.
+          - Use mock data or real integrations to show the UI in its "ready" state.
           - If the project has a screenshot tool or golden tests, run them to capture the updates.
-          - If no screenshot tool exists, you are encouraged to create a temporary test that renders the modified component and saves it to a "screenshots/" directory at the root of the app.
+          - If no screenshot tool exists, you MUST create a temporary test (e.g., "test/visual_verification_test.dart") that renders the modified component with mock data and saves the resulting image to a "screenshots/" directory at the root of the app.
+          - These screenshots are CRITICAL for the PR review. Show the user exactly what you built.
 
           Autonomy guidelines:
           - Explore the repo structure yourself (find pubspec.yaml, list lib/, check analysis_options.yaml, l10n.yaml, etc.).
@@ -406,6 +416,14 @@ jobs:
                   mkdir -p "$(dirname "$dest")"
                   cp "$f" "$dest"
                 done
+                # Also check for any manually saved screenshots by the agent
+                if [ -d "$APP_DIR/screenshots" ]; then
+                  find "$APP_DIR/screenshots" -name "*.png" | while read f; do
+                    dest="/tmp/after_screenshots/${f#./}"
+                    mkdir -p "$(dirname "$dest")"
+                    cp "$f" "$dest"
+                  done
+                fi
               fi
             fi
           done
@@ -468,13 +486,16 @@ jobs:
           ### 🏗️ Changes Overview
           This implementation was generated autonomously. Review changes and verified UI updates below.
 
-          ### 📸 UI Verification (Before vs After)"
+          ### 📸 UI Verification
+          "
 
           HAS_SCREENSHOTS=false
           
           if [ -d ".ai/visual_diff" ]; then
-            PR_BODY="$PR_BODY\n\n| Component | Before | After |\n| :--- | :---: | :---: |"
+            PR_BODY="$PR_BODY\n\n#### ✨ New & Updated Screens\n"
+            PR_BODY="$PR_BODY\n| Screen | Before | After |\n| :--- | :---: | :---: |"
             
+            # 1. Process Updates (Before and After)
             for f in $(find .ai/visual_diff -name "after_*.png" | sort); do
               filename=$(basename "$f")
               safe_name=${filename#after_}
@@ -490,19 +511,20 @@ jobs:
               fi
             done
             
+            # 2. Process New Screens (After only)
             for f in $(find .ai/visual_diff -name "new_*.png" | sort); do
               filename=$(basename "$f")
               safe_name=${filename#new_}
               NEW_URL="https://github.com/${{ inputs.owner }}/${{ inputs.repo }}/raw/${{ inputs.branch_name }}/.ai/visual_diff/$filename"
               
               label=$(echo "$safe_name" | sed 's/_/ /g' | sed 's/\.png$//')
-              PR_BODY="$PR_BODY\n| **$label (NEW)** | - | ![]($NEW_URL) |"
+              PR_BODY="$PR_BODY\n| **$label** | *(New Screen)* | ![]($NEW_URL) |"
               HAS_SCREENSHOTS=true
             done
           fi
 
           if [ "$HAS_SCREENSHOTS" = false ]; then
-            PR_BODY="$PR_BODY\n\n*No visual changes detected by automated tests.*"
+            PR_BODY="$PR_BODY\n\n*No visual changes were captured during the implementation.*"
           fi
 
           # Use a temporary file for the PR body to avoid shell escaping issues
