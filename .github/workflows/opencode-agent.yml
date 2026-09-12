@@ -147,6 +147,12 @@ jobs:
           mkdir -p /tmp/before_screenshots
           for APP_DIR in ${{ steps.detect.outputs.apps }}; do
             if [ -d "$APP_DIR" ]; then
+              echo "── Preparing $APP_DIR ──"
+              (cd "$APP_DIR" && flutter pub get) || true
+              
+              echo "Running codegen in $APP_DIR..."
+              (cd "$APP_DIR" && dart run build_runner build --delete-conflicting-outputs) >/dev/null 2>&1 || true
+              
               echo "🔍 Capturing BEFORE state for $APP_DIR"
               if [ "${{ steps.detect.outputs.stack }}" == "flutter" ]; then
                 (cd "$APP_DIR" && flutter test --update-goldens || true)
@@ -198,7 +204,7 @@ jobs:
           UI Verification & Screenshots:
           - If you modify or create any UI components (screens, widgets, views), you MUST ensure there is a visual way to verify them.
           - If the project has a screenshot tool or golden tests, run them to capture the updates.
-          - If no screenshot tool exists, you are encouraged to create a temporary test that renders the modified component and saves it to a `screenshots/` directory at the root of the app.
+          - If no screenshot tool exists, you are encouraged to create a temporary test that renders the modified component and saves it to a "screenshots/" directory at the root of the app.
 
           Autonomy guidelines:
           - Explore the repo structure yourself (find pubspec.yaml, list lib/, check analysis_options.yaml, l10n.yaml, etc.).
@@ -388,6 +394,10 @@ jobs:
           mkdir -p /tmp/after_screenshots
           for APP_DIR in ${{ steps.detect.outputs.apps }}; do
             if [ -d "$APP_DIR" ]; then
+              echo "── Preparing $APP_DIR ──"
+              (cd "$APP_DIR" && flutter pub get) || true
+              (cd "$APP_DIR" && dart run build_runner build --delete-conflicting-outputs) >/dev/null 2>&1 || true
+              
               echo "🔍 Capturing AFTER state for $APP_DIR"
               if [ "${{ steps.detect.outputs.stack }}" == "flutter" ]; then
                 (cd "$APP_DIR" && flutter test --update-goldens || true)
@@ -449,6 +459,7 @@ jobs:
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
+          PR_TITLE="feat(ai): implement #${{ inputs.issue_number }}"
           PR_BODY="## 🤖 AI-Generated PR
 
           **Issue:** #${{ inputs.issue_number }}
@@ -461,14 +472,10 @@ jobs:
 
           HAS_SCREENSHOTS=false
           
-          # Detect visual diffs
           if [ -d ".ai/visual_diff" ]; then
-            # We use a Markdown table for side-by-side comparison
             PR_BODY="$PR_BODY\n\n| Component | Before | After |\n| :--- | :---: | :---: |"
             
-            # Find and add paired screenshots
-            # We sort to keep the order consistent
-            for f in $(ls .ai/visual_diff/after_*.png 2>/dev/null | sort); do
+            for f in $(find .ai/visual_diff -name "after_*.png" | sort); do
               filename=$(basename "$f")
               safe_name=${filename#after_}
               before_file=".ai/visual_diff/before_$safe_name"
@@ -477,15 +484,13 @@ jobs:
                 BEFORE_URL="https://github.com/${{ inputs.owner }}/${{ inputs.repo }}/raw/${{ inputs.branch_name }}/.ai/visual_diff/before_$safe_name"
                 AFTER_URL="https://github.com/${{ inputs.owner }}/${{ inputs.repo }}/raw/${{ inputs.branch_name }}/.ai/visual_diff/after_$safe_name"
                 
-                # Human-friendly label (replace underscores with spaces, remove .png)
                 label=$(echo "$safe_name" | sed 's/_/ /g' | sed 's/\.png$//')
                 PR_BODY="$PR_BODY\n| **$label** | ![]($BEFORE_URL) | ![]($AFTER_URL) |"
                 HAS_SCREENSHOTS=true
               fi
             done
             
-            # Find and add new screenshots (no 'before' state)
-            for f in $(ls .ai/visual_diff/new_*.png 2>/dev/null | sort); do
+            for f in $(find .ai/visual_diff -name "new_*.png" | sort); do
               filename=$(basename "$f")
               safe_name=${filename#new_}
               NEW_URL="https://github.com/${{ inputs.owner }}/${{ inputs.repo }}/raw/${{ inputs.branch_name }}/.ai/visual_diff/$filename"
@@ -500,11 +505,14 @@ jobs:
             PR_BODY="$PR_BODY\n\n*No visual changes detected by automated tests.*"
           fi
 
+          # Use a temporary file for the PR body to avoid shell escaping issues
+          echo -e "$PR_BODY" > pr_body.txt
+
           gh pr create \
             --base "${{ inputs.base_branch }}" \
             --head "${{ inputs.branch_name }}" \
-            --title "feat(ai): implement #${{ inputs.issue_number }}" \
-            --body "$PR_BODY"
+            --title "$PR_TITLE" \
+            --body-file pr_body.txt
 
       # ── 11. Notify Cloudflare — SUCCESS ───────────────────────────────
       - name: "Notify Cloudflare (success)"
